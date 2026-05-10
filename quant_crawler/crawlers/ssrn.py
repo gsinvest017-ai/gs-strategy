@@ -42,6 +42,17 @@ class SSRNCrawler(BaseCrawler):
             self.log.warning("ssrn: no journal_ids configured")
             return
 
+        # Probe once: if Cloudflare's anti-bot is up, every subsequent request will
+        # 403, so fail fast instead of burning the rate budget.
+        probe = self.session.get(FEED_URL.format(jid=journal_ids[0]))
+        if probe.status_code == 403 or "Just a moment" in probe.text[:500]:
+            self.log.warning(
+                "ssrn behind Cloudflare anti-bot challenge — skipping (status=%d). "
+                "To enable, run with a headless browser (Playwright) or an API key.",
+                probe.status_code,
+            )
+            return
+
         for jid in journal_ids:
             yielded = 0
             try:

@@ -33,13 +33,21 @@
 ### 進度
 - [x] 規劃 + git branch 建立 (`feat/quant-paper-crawler`)
 - [x] 目錄骨架建立
-- [ ] 核心框架 (config / storage / base / logger)
-- [ ] arXiv crawler
-- [ ] NBER crawler
-- [ ] SSRN crawler
-- [ ] 機構研究 crawler (CME / Fed / AQR / Man)
+- [x] 核心框架 (config / storage / base / logger)
+- [x] arXiv crawler — live test：10 取 → 2 keep（filter 正確）
+- [x] NBER crawler — live test：40 取 → 4 keep
+- [~] SSRN crawler — **卡關**，見下方 incident
+- [x] RePEc/NEP crawler（替代 SSRN）— live test：37 取 → 9 keep
+- [ ] 機構研究 crawler (CME / Fed)
 - [ ] CLI orchestrator
 - [ ] tests + 一次 live 小量驗證
 - [ ] README + 收尾
+
+### Incident: SSRN 被 Cloudflare anti-bot 擋
+- 兩個 endpoint（feed / html）都回 403，回應 body 是 `Just a moment...` Cloudflare 挑戰頁
+- 代表純 `requests` 無法繞過，必須 headless browser（Playwright）才行
+- **決定**：不在此版本啟用 SSRN（成本 vs. 效益不划算）。`config.SOURCES['ssrn'].enabled=False`
+- **替代**：用 RePEc/NEP 的 `nep-fmk` (Financial Markets) / `nep-rmg` (Risk Management) / `nep-mst` (Microstructure) / `nep-inv` (Investment) 週報，覆蓋同樣的學術論文範圍
+- **回滾點**：`feat/quant-paper-crawler` branch 上 commit `Add core framework + arXiv q-fin crawler`
 
 ---

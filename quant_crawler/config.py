@@ -78,9 +78,16 @@ SOURCES: dict[str, SourceConfig] = {
         min_delay=2.0,
         max_items_per_run=50,
     ),
+    "repec": SourceConfig(
+        name="repec",
+        min_delay=2.0,
+        max_items_per_run=80,
+        extras={"topics": ["nep-fmk", "nep-rmg", "nep-mst", "nep-inv"]},
+    ),
     "ssrn": SourceConfig(
         name="ssrn",
-        min_delay=4.0,  # SSRN is sensitive
+        enabled=False,  # SSRN now behind Cloudflare; needs headless browser. See EXPERIMENT_LOG.
+        min_delay=4.0,
         max_items_per_run=30,
         extras={
             # SSRN journal IDs (FEN main journals on derivatives / futures)
