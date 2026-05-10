@@ -15,6 +15,9 @@ from quant_crawler.utils.text import is_relevant, relevance_hits
 
 class BaseCrawler(ABC):
     name: str = "base"
+    # If True, skip the keyword relevance filter — useful for sources like AQR
+    # whose entire research output is in-scope (curated by the publisher).
+    bypass_relevance: bool = False
 
     def __init__(self, config: SourceConfig, storage: Storage) -> None:
         self.config = config
@@ -37,8 +40,9 @@ class BaseCrawler(ABC):
             for rec in self.fetch():
                 seen += 1
                 hits = relevance_hits(rec.title, rec.abstract, " ".join(rec.categories))
-                if not hits and not is_relevant(rec.title, rec.abstract):
-                    continue
+                if not self.bypass_relevance:
+                    if not hits and not is_relevant(rec.title, rec.abstract):
+                        continue
                 rec.keywords_hit = hits
                 self.storage.upsert(rec)
                 kept += 1

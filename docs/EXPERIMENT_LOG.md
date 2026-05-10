@@ -38,7 +38,11 @@
 - [x] NBER crawler — live test：40 取 → 4 keep
 - [~] SSRN crawler — **卡關**，見下方 incident
 - [x] RePEc/NEP crawler（替代 SSRN）— live test：37 取 → 9 keep
-- [ ] 機構研究 crawler (CME / Fed)
+- [x] Fed FEDS crawler — live test：15 取 → 2 keep
+- [x] AQR crawler（bypass_relevance）— 10 全收（publisher curates）
+- [x] Wiley *Journal of Futures Markets* crawler — 10/10 全部相關（最高命中率！）
+- [~] CME — 同樣 Cloudflare 擋；停用
+- [~] Man AHL — JS-rendered；停用
 - [ ] CLI orchestrator
 - [ ] tests + 一次 live 小量驗證
 - [ ] README + 收尾

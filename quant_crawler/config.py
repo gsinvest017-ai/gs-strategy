@@ -96,6 +96,7 @@ SOURCES: dict[str, SourceConfig] = {
     ),
     "cme": SourceConfig(
         name="cme",
+        enabled=False,  # Cloudflare-blocked
         min_delay=2.0,
         max_items_per_run=20,
     ),
@@ -109,8 +110,19 @@ SOURCES: dict[str, SourceConfig] = {
         min_delay=3.0,
         max_items_per_run=20,
     ),
+    "wiley": SourceConfig(
+        name="wiley",
+        min_delay=3.0,
+        max_items_per_run=40,
+        extras={
+            "journals": [
+                {"jc": "10969934", "name": "Journal of Futures Markets"},
+            ]
+        },
+    ),
     "man_ahl": SourceConfig(
         name="man_ahl",
+        enabled=False,  # JS-rendered; needs headless browser
         min_delay=3.0,
         max_items_per_run=20,
     ),
