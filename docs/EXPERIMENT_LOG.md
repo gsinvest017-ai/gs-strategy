@@ -40,10 +40,12 @@
 - [x] RePEc/NEP crawler（替代 SSRN）— live test：37 取 → 9 keep
 - [x] Fed FEDS crawler — live test：15 取 → 2 keep
 - [x] AQR crawler（bypass_relevance）— 10 全收（publisher curates）
-- [x] Wiley *Journal of Futures Markets* crawler — 10/10 全部相關（最高命中率！）
+- [x] Wiley *Journal of Futures Markets* crawler — 28/28 全部相關（最高命中率！）
 - [~] CME — 同樣 Cloudflare 擋；停用
 - [~] Man AHL — JS-rendered；停用
-- [ ] CLI orchestrator
+- [x] CLI orchestrator (`quant-crawl run|list|search|stats|sources`)
+- [x] tests — 10/10 通過（offline fixture + storage + text utils）
+- [x] README + 初版完成
 - [ ] tests + 一次 live 小量驗證
 - [ ] README + 收尾
 
@@ -54,4 +56,35 @@
 - **替代**：用 RePEc/NEP 的 `nep-fmk` (Financial Markets) / `nep-rmg` (Risk Management) / `nep-mst` (Microstructure) / `nep-inv` (Investment) 週報，覆蓋同樣的學術論文範圍
 - **回滾點**：`feat/quant-paper-crawler` branch 上 commit `Add core framework + arXiv q-fin crawler`
 
+### 收尾總結（Day 0 結束）
+- **6 個 enabled source 全綠**：arxiv / nber / repec / fed_feds / aqr / wiley
+- **首次 cold-start full run**：seen=230, kept=87
+- **每個來源命中率**：
+  - wiley: 28/28 (100%) — 最高 signal/noise，因為是專門 futures 期刊
+  - aqr: 10/10 (100%) — bypass relevance（publisher-curated）
+  - arxiv: 34/100 (34%) — 寬廣 q-fin 池
+  - repec: 9/37 (24%)
+  - nber: 4/40 (10%) — 一般經濟學論文居多
+  - fed_feds: 2/15 (13%) — 央行論文偏宏觀
+- **關鍵設計決策**：
+  1. SQLite 而非 JSONL — 即用 即查 即過濾
+  2. `BaseCrawler.bypass_relevance` — 為 publisher-curated 來源開後門
+  3. 每個來源 ≥ 2 秒 host-level delay — 不打擾人
+  4. 失敗隔離 — 單一 source 炸不會殺整個 run
+- **未解決**：
+  - SSRN / CME / Man → 需 Playwright（開頭就決定不在此版本做）
+  - NBER 的 `published` 欄位是 HTTP date 字串，沒做日期 normalize
+  - AQR / Wiley 沒抓 abstract（要 follow-up 個別抓）
+
 ---
+
+## Run @ 2026-05-10T13:53:02Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 34 | — |
+| nber | 40 | 4 | — |
+| repec | 37 | 9 | — |
+| fed_feds | 15 | 2 | — |
+| aqr | 10 | 10 | — |
+| wiley | 28 | 28 | — |

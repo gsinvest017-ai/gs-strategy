@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 
@@ -25,7 +25,9 @@ class PaperRecord:
 
     def __post_init__(self) -> None:
         if not self.fetched_at:
-            self.fetched_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+            self.fetched_at = (
+                datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            )
 
     def as_row(self) -> dict:
         d = asdict(self)

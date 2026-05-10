@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterable
 
 from quant_crawler.config import SourceConfig
@@ -32,7 +32,7 @@ class BaseCrawler(ABC):
 
     # ---- shared run loop ----
     def run(self) -> dict:
-        started = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        started = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         run_id = self.storage.start_run(self.name, started)
         seen, kept = 0, 0
         error = None
@@ -54,7 +54,7 @@ class BaseCrawler(ABC):
             error = f"{type(e).__name__}: {e}"
             self.log.exception("crawler %s failed: %s", self.name, error)
         finally:
-            finished = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+            finished = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             self.storage.finish_run(run_id, finished, seen, kept, error)
 
         return {

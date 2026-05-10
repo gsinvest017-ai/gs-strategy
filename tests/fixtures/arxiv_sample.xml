@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>arXiv Query: search_query=cat:q-fin.TR</title>
+  <id>http://arxiv.org/api/query/sample</id>
+  <updated>2026-05-09T00:00:00Z</updated>
+  <entry>
+    <id>http://arxiv.org/abs/2605.12345v1</id>
+    <updated>2026-05-08T10:00:00Z</updated>
+    <published>2026-05-06T08:00:00Z</published>
+    <title>Trend Following with Term-Structure Carry in Commodity Futures</title>
+    <summary>We study a managed futures strategy combining trend signals
+      with term-structure carry across 24 commodity contracts.</summary>
+    <author><name>Alice Researcher</name></author>
+    <author><name>Bob Quant</name></author>
+    <link href="http://arxiv.org/abs/2605.12345v1" rel="alternate" type="text/html"/>
+    <link title="pdf" href="http://arxiv.org/pdf/2605.12345v1" rel="related" type="application/pdf"/>
+    <category term="q-fin.TR" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="q-fin.PM" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2605.99999v1</id>
+    <updated>2026-05-07T10:00:00Z</updated>
+    <published>2026-05-05T08:00:00Z</published>
+    <title>Childhood Education Outcomes in Rural Districts</title>
+    <summary>Unrelated paper used to verify the relevance filter rejects it.</summary>
+    <author><name>Some Author</name></author>
+    <link href="http://arxiv.org/abs/2605.99999v1" rel="alternate" type="text/html"/>
+    <category term="q-fin.GN" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+</feed>
