@@ -3,3 +3,14 @@
 __pycache__/
 node_modules/
 .venv/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# crawler outputs
+data/papers.db
+data/papers.db-journal
+data/pdfs/
+data/raw/
+data/cache/

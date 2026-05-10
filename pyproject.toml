@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quant_crawler"
+version = "0.1.0"
+description = "Crawler for authoritative quant futures research papers"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31",
+    "feedparser>=6.0",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
+]
+
+[project.scripts]
+quant-crawl = "quant_crawler.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["quant_crawler*"]
+exclude = ["tests*", "scripts*"]
