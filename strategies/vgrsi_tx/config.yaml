@@ -1,0 +1,28 @@
+# VGRSI on TX continuous future — config
+# Reference paper: arxiv 2605.01300 (Rak 2026)
+#
+# Default parameters tuned to a 30-day VGRSI with the canonical 30/70 RSI
+# thresholds. Paper used a 30-day optimisation + 7-day test window; we adopt
+# the 30-day window directly since for daily futures we update less often.
+
+start: '2020-01-01'
+end:   '2026-04-30'
+capital_base: 5_000_000   # NTD
+bundle: tquant_future
+calendar: TEJ_XTAI
+
+params:
+  root_symbol: TX               # 大台 (also try MTX for smaller capital)
+  window: 30                    # number of recent daily closes used to build VG
+  upper_threshold: 70.0         # exit/short trigger
+  lower_threshold: 30.0         # long entry trigger
+  allow_short: false            # set true for long/short variant
+  position_contracts: 1         # number of TX contracts per signal
+  days_before_close: 10         # roll calendar offset
+
+  # Cost overrides (optional)
+  per_contract_cost:
+    TX: 200      # NTD per contract round-trip-ish
+    MTX: 100
+  spread_points: 6.0            # TX point slippage
+  benchmark: IR0001             # 加權報酬指數

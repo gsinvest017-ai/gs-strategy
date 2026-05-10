@@ -1,0 +1,25 @@
+# Time-Series Momentum on TX & MTX
+# Reference: wiley fut.70093 (Curve Momentum in China) +
+#            Moskowitz/Ooi/Pedersen (2012) classic 12-1 TSMOM.
+
+start: '2018-01-01'
+end:   '2026-04-30'
+capital_base: 10_000_000
+bundle: tquant_future
+calendar: TEJ_XTAI
+
+params:
+  roots: [TX, MTX]
+  lookback: 252         # 12 months
+  skip: 21              # skip last month (the "1" in 12-1)
+  vol_com: 60           # EWMA vol center-of-mass (~60 daily bars)
+  target_vol: 0.15      # 15% annualised vol target per leg
+  max_gross_leverage: 1.5
+  allow_short: true     # TSMOM goes long & short symmetrically
+  days_before_close: 10
+
+  per_contract_cost:
+    TX: 200
+    MTX: 100
+  spread_points: 6.0
+  benchmark: IR0001

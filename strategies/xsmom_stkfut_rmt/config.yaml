@@ -1,0 +1,37 @@
+# Cross-sectional momentum on Taiwan single-stock futures, gated by RMT regime
+# References:
+#   arxiv 2604.19107 (RMT Complexity Gap, Mukhia et al. 2026)
+#   Jegadeesh & Titman 1993 (cross-sectional momentum)
+
+start: '2020-01-01'
+end:   '2026-04-30'
+capital_base: 30_000_000
+bundle: tquant_future
+calendar: TEJ_XTAI
+
+params:
+  # universe_roots: []   # leave empty -> auto-discover via TEJ helper
+  universe_start: '2020-01-01'
+  universe_end:   '2026-04-30'
+
+  lookback: 126        # 6-month formation
+  skip: 21             # skip last month
+  long_decile: 0.10
+  short_decile: 0.10
+  gross_target: 1.0    # gross exposure target = 100% (50% long + 50% short)
+
+  rmt_window: 60       # rolling correlation window for complexity gap
+  rmt_threshold: 0.20  # gap >= 0.20 -> full position
+  rmt_low_threshold: 0.05   # gap below this -> de-risk to zero
+
+  min_universe: 20     # below this number of available stock futures, skip
+  hedge_with_tx: true  # short TX equal-notional to neutralise net beta
+
+  days_before_close: 10
+
+  per_contract_cost:
+    TX: 200
+    MTX: 100
+    # Stock futures default 100 NTD/contract; tune per broker
+  spread_points: 6.0
+  benchmark: IR0001

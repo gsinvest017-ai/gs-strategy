@@ -87,10 +87,11 @@ from zipline.TQresearch.futures_package import (
 | 記錄 session id | ✅ commit 60e8349 |
 | 研究 TQuant-Lab API | ✅ |
 | 篩選 87 篇 paper | ✅ |
-| 寫進度紀錄 (本文件) | 🟡 持續更新 |
-| 建立 strategies/ 目錄與共用 utils | ⏳ |
-| 撰寫 4 支策略 + config | ⏳ |
-| py_compile 自我驗證 | ⏳ |
+| 寫進度紀錄 (本文件) | ✅ |
+| 建立 strategies/ 目錄與共用 utils | ✅ commit 97e20a1 |
+| 撰寫 4 支策略 + config | ✅ |
+| py_compile 自我驗證 | ✅ |
+| numpy 數值自我驗證 (VGRSI / cubic / RMT) | ✅ tests/test_strategy_math.py |
 | 各階段 git commit | 🟡 進行中 |
 
 ---
@@ -150,6 +151,17 @@ python strategy.py --config config.yaml
 `xsmom_stkfut_rmt` 額外需要 `get_stock_futures_universe` 取得個股期清單，再把 ticker/future env 補進來重新 ingest。
 
 ---
+
+## 6.1 自我驗證結果
+
+`tests/test_strategy_math.py` (跑 `/tmp/venv/bin/python tests/test_strategy_math.py`)：
+
+- **VGRSI**: 嚴格遞增收盤 → 100.00；嚴格遞減 → 0.00；持平 → 50.00 ✅
+- **Cubic signal**: f(0,1.5)=0；f(1.5,1.5)=1 (peak)；f(3.0,1.5)<0 (cubic flip) ✅
+- **RMT complexity gap**: 1-factor 退化 collapse 時 gap≈0；IID 50 資產 gap≈+0.06 ✅
+
+`py_compile` + `ast` 結構檢查 (4 支策略皆有 initialize/handle_data，
+4 個 config.yaml 皆含 start/end/capital_base/bundle/calendar/params) ✅
 
 ## 7. 已知限制與後續 TODO
 

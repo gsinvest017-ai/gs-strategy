@@ -1,0 +1,22 @@
+# Cubic-Momentum trend & crash on TX continuous future
+# Reference: arxiv 2605.00854 (Yoshida 2026)
+
+start: '2018-01-01'
+end:   '2026-04-30'
+capital_base: 5_000_000
+bundle: tquant_future
+calendar: TEJ_XTAI
+
+params:
+  root_symbol: TX
+  lookback: 20            # bars summed for raw momentum
+  sigma_window: 60        # rolling vol for z-score normalisation
+  z_crit: 1.5             # critical |z| where cubic flips sign (paper-style)
+  max_contracts: 2        # absolute cap on contract count, both directions
+  allow_short: true       # cubic flip implies short signals -> useful
+  days_before_close: 10
+
+  per_contract_cost:
+    TX: 200
+  spread_points: 6.0
+  benchmark: IR0001
