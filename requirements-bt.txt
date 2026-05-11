@@ -1,0 +1,15 @@
+# Backtest venv (.venv-bt) requirements.
+#
+# Top-level: zipline-tej pulls everything else (exchange_calendars,
+# tejapi, pyfolio-tej, etc.). We additionally pin pandas<3.0 because
+# zipline-tej 2.2.2 + exchange_calendars rely on the pandas 2.x
+# behaviour where `series[0]` on a DatetimeIndex falls back to
+# positional access. pandas 3.0 removed that fallback and breaks
+# bcolz daily-bar writing on ingest.
+#
+# numpy must be >= 2.0 (required by zipline-tej and tej-exchange-calendars).
+
+zipline-tej
+pandas>=2.2,<3.0
+numpy>=2.0,<3.0
+pyyaml

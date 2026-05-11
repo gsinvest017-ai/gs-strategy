@@ -76,7 +76,66 @@ File ".../exchange_calendar_tejxtai.py", line 2179
 
 這些留給使用者在有金鑰的環境執行 `./scripts/ingest_futures.sh` 後驗證。
 
-**Commit**: 見 `M3: ...` commit
+**Commit**: `8fd3319`
+
+### M4 — `.env` + run_strategy.sh wrapper ✅
+
+**做了什麼**
+
+- `.gitignore`: `.env` / `.env.*` 加入忽略；`.env.example` 反向 unignore 讓 template 可追蹤
+- `.env.example`: 提供 `TEJAPI_KEY` / `TEJAPI_BASE` 樣板
+- `.env`: 本地填入真實 key（**不會 commit**，已用 `git check-ignore -q` 驗過）
+- `scripts/ingest_futures.sh`: 自動 source `.env`；同步把預設 equity tickers `IR0001 IX0001` 拿掉（與 benchmark opt-in 一致）
+- `scripts/run_strategy.sh`: 新 wrapper，照名字跑單支策略，自動 source `.env`
+- `strategies/README.md`: 流程從 `export TEJAPI_KEY=...` 改成 `cp .env.example .env` + `./scripts/run_strategy.sh`
+
+**Commit**: `b083fab`
+
+### M5 — Ingest 通過 (含 2 個 upstream gotcha 修復) ✅
+
+**做了什麼**
+
+1. 第一次跑 `ingest_futures.sh` 失敗：`fetch_equity_data` 拿 `IR0001 IX0001` TEJ 回空 → pandas datetime 欄位塞 `[]` 炸
+2. 讀 bundle source 確認 ticker 是 optional，改成 futures-only ingest（`EQUITY_TICKERS` 改 opt-in）
+3. 第二次跑：fetch 過了，但 bcolz daily-bar 寫入 `KeyError: 0` 在 `first_session_open` → 認出是 pandas 3.0 移除 label→positional fallback
+4. `pip install "pandas<3.0" "numpy>=2.0"` 降版 → 第三次跑 ingest 成功
+5. 把 pin 固化到 `requirements-bt.txt`，`setup-bt.sh` 改成 `pip install -r requirements-bt.txt`
+
+**Bundle 狀態**
+- 路徑: `~/.zipline/data/tquant_future/2026-05-11T09;13;34.738913/`
+- 內容: `daily_equities.bcolz` / `future_raw.parquet` / `assets-7.sqlite` 等齊全
+- mdate: 20180101 ~ 20260510，futures: TX + MTX
+
+**Commit**: 見 `M5: ...` commit
+
+### M6 — 跑 3/4 支策略並收集 metrics ✅ (with caveat)
+
+**做了什麼**
+
+- 跑通 vgrsi_tx / cubic_momentum_tx / tsmom_tx_mtx，輸出 `/tmp/*_result.pkl`
+- 寫 `scripts/summarize_results.py` 把 pickle 轉成 metrics 表（auto-load `.env` 因為 pickle.load 會 import zipline）
+- 把結果完整寫進 `docs/backtest-results-2026-05-11.md`
+
+**摘要**
+
+| strategy          | CAGR  | Sharpe | Max_DD  | n_tx |
+|:------------------|:------|-------:|:--------|-----:|
+| vgrsi_tx          | 9.62% |  0.866 | -18.49% |  489 |
+| cubic_momentum_tx | 8.87% |  0.642 | -38.64% |  870 |
+| tsmom_tx_mtx      | 9.04% |  0.692 | -27.95% |  419 |
+
+**Caveat: xsmom_stkfut_rmt 未跑**
+
+它在 initialize 階段就需要 `CAF` 等個股期 root，bundle 沒 ingest 個股期 → 直接
+`SymbolNotFound`。要跑這支策略需要：
+
+```bash
+FUTURES_ROOTS="TX MTX CAF CBF ..." ./scripts/ingest_futures.sh
+```
+
+完整個股期 root list 待 TEJ 文件對照後補。記在 `docs/backtest-results-2026-05-11.md` 的「未跑」段。
+
+**Commit**: 見 `M6: ...` commit
 
 ## Fallback 指引
 

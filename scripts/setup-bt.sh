@@ -27,7 +27,7 @@ else
 fi
 
 "${VENV_DIR}/bin/pip" install --upgrade pip >/dev/null
-"${VENV_DIR}/bin/pip" install zipline-tej pyyaml
+"${VENV_DIR}/bin/pip" install -r "${ROOT_DIR}/requirements-bt.txt"
 
 echo "[setup-bt] done. Verify with:"
 echo "  ${VENV_DIR}/bin/python -c 'import zipline; print(zipline.__version__)'"

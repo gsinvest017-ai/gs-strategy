@@ -6,7 +6,11 @@
 # Optional env vars:
 #   TEJAPI_BASE          default https://api.tej.com.tw
 #   FUTURES_ROOTS        default "TX MTX"     (space-separated root symbols)
-#   EQUITY_TICKERS       default "IR0001 IX0001"  (for joint ingest support)
+#   EQUITY_TICKERS       default unset        (opt-in only; needed if a strategy
+#                                              sets `benchmark: IR0001` or
+#                                              trades single-stock futures whose
+#                                              underlying equity must also be
+#                                              ingested for joint analytics)
 #   MDATE                default "20180101 20260510"
 #
 # Usage: TEJAPI_KEY=xxxx ./scripts/ingest_futures.sh
@@ -34,8 +38,17 @@ fi
 export TEJAPI_BASE="${TEJAPI_BASE:-https://api.tej.com.tw}"
 
 export future="${FUTURES_ROOTS:-TX MTX}"
-export ticker="${EQUITY_TICKERS:-IR0001 IX0001}"
 export mdate="${MDATE:-20180101 20260510}"
 
-echo "[ingest] futures=${future}  tickers=${ticker}  mdate=${mdate}"
+# Equity tickers are opt-in. The bundle accepts futures-only ingest, and our
+# strategies have benchmark/IR0001 disabled by default so we skip equity here
+# unless EQUITY_TICKERS is explicitly set.
+if [[ -n "${EQUITY_TICKERS:-}" ]]; then
+    export ticker="${EQUITY_TICKERS}"
+    echo "[ingest] futures=${future}  tickers=${ticker}  mdate=${mdate}"
+else
+    unset ticker
+    echo "[ingest] futures=${future}  (no equity tickers)  mdate=${mdate}"
+fi
+
 "${VENV_DIR}/bin/zipline" ingest -b tquant_future
