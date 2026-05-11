@@ -14,26 +14,30 @@
 
 ## 執行流程
 
+回測環境與爬蟲共用 repo，但用獨立 venv（`.venv-bt`）避免 zipline-tej 與
+crawler 的 numpy/pandas pin 衝突。
+
 ```bash
-# 1. 安裝依賴
-pip install zipline-tej tejapi TejToolAPI alphalens-tej pyfolio-tej logbook ipywidgets pyyaml
+# 1. 建立回測 venv (一次性)
+./scripts/setup-bt.sh                # 預設用 python3.11，可傳參覆寫
 
-# 2. 設定 TEJ API
+# 2. 設定 TEJ API 並 ingest 期貨資料 (一次性 / 定期更新)
 export TEJAPI_KEY="<your-key>"
-export TEJAPI_BASE="https://api.tej.com.tw"
+./scripts/ingest_futures.sh           # 內含 future=TX MTX / mdate 預設值
 
-# 3. ingest 期貨資料
-export ticker="IR0001 IX0001"
-export future="TX MTX"
-export mdate="20180101 20260510"
-zipline ingest -b tquant_future
-
-# 4. 跑單一策略
-cd strategies
-python -m _common.runner \
-    --strategy vgrsi_tx/strategy.py \
-    --config   vgrsi_tx/config.yaml \
+# 3. 跑單一策略 (從 repo root)
+.venv-bt/bin/python strategies/_common/runner.py \
+    --strategy strategies/vgrsi_tx/strategy.py \
+    --config   strategies/vgrsi_tx/config.yaml \
     --output   /tmp/vgrsi_tx_result.pkl
 ```
+
+### Calendar / Benchmark 預設
+
+- **Calendar** 由 `runner.py` 預設為 `TEJ_morning_future`（`tquant_future`
+  bundle 註冊的 calendar）。各策略的 `config.yaml` 不再設定 `calendar:`，
+  除非要對接其他 bundle。
+- **Benchmark** 預設不設定（zipline 採 zero-returns）。想對標 IR0001 時，
+  必須同時 ingest `tquant` equity bundle 並在 config.yaml 加 `benchmark: IR0001`。
 
 每個子目錄都有獨立 README 解釋假設、變數、限制。

@@ -28,7 +28,21 @@
 
 預設值改完後，跑 backtest 不再需要每次手動覆寫；想要對標 IR0001 的場景仍可在 config.yaml 加回 `benchmark: IR0001`（同時也要 ingest `tquant` bundle）。
 
-**Commit**: 見 `M1: ...` commit
+**Commit**: `0fcda98`
+
+### M2 — 工具腳本與 README ✅
+
+**做了什麼**
+
+- `scripts/setup-bt.sh`: 建立 `.venv-bt/` (預設 python3.11)，裝 `zipline-tej` + `pyyaml`；可重入（已存在的 venv 直接 reuse）
+- `scripts/ingest_futures.sh`: 包好 TEJAPI_KEY 檢查 + 期貨/股票/日期 env 預設，呼叫 `.venv-bt/bin/zipline ingest -b tquant_future`
+- `strategies/README.md`: 改寫「執行流程」段，從手動 `pip install` 一長串改成 3 步 (`setup-bt.sh` → `ingest_futures.sh` → 直接呼叫 `runner.py`)；新增「Calendar / Benchmark 預設」說明區塊
+
+**為何用獨立 venv**
+
+避開 zipline-tej 對 numpy/pandas 嚴格 pin 與 crawler 既有 `.venv/` 衝突；兩個 venv 各自重建都很快。
+
+**Commit**: 見 `M2: ...` commit
 
 ## Fallback 指引
 
