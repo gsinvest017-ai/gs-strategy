@@ -9,7 +9,8 @@ start: '2020-01-01'
 end:   '2026-04-30'
 capital_base: 5_000_000   # NTD
 bundle: tquant_future
-calendar: TEJ_XTAI
+# calendar omitted -> runner defaults to TEJ_morning_future (the calendar the
+# tquant_future bundle is registered against).
 
 params:
   root_symbol: TX               # 大台 (also try MTX for smaller capital)
@@ -25,4 +26,5 @@ params:
     TX: 200      # NTD per contract round-trip-ish
     MTX: 100
   spread_points: 6.0            # TX point slippage
-  benchmark: IR0001             # 加權報酬指數
+  # benchmark intentionally omitted: IR0001 lives in `tquant` (equity) bundle,
+  # not `tquant_future`. Opt-in only if you have also ingested `tquant`.

@@ -57,7 +57,11 @@ def apply_taiwan_futures_costs(
     set_slippage(
         futures=FixedSlippage(spread=spread_points or DEFAULT_SPREAD_POINTS)
     )
-    set_benchmark(symbol(benchmark or DEFAULT_BENCHMARK))
+    if benchmark:
+        # IR0001 (加權報酬指數) lives in the `tquant` equity bundle, not
+        # `tquant_future`. Caller must opt-in *and* ensure the symbol exists
+        # in the ingested bundle, otherwise zipline raises SymbolNotFound.
+        set_benchmark(symbol(benchmark))
 
 
 def make_continuous_taiwan_futures(

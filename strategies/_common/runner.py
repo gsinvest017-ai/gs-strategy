@@ -26,8 +26,9 @@ from zipline import run_algorithm
 from zipline.utils.calendar_utils import get_calendar
 
 
-# The trading calendar shipped with TQuant-Lab for Taiwan markets.
-TAIWAN_CALENDAR_NAME = "TEJ_XTAI"
+# Futures bundle (`tquant_future`) is registered against TEJ_morning_future.
+# Using TEJ_XTAI here would cause session-mismatch errors at run_algorithm time.
+TAIWAN_CALENDAR_NAME = "TEJ_morning_future"
 
 
 def load_config(path: str | Path) -> Dict[str, Any]:
