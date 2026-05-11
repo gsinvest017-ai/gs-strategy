@@ -42,7 +42,41 @@
 
 避開 zipline-tej 對 numpy/pandas 嚴格 pin 與 crawler 既有 `.venv/` 衝突；兩個 venv 各自重建都很快。
 
-**Commit**: 見 `M2: ...` commit
+**Commit**: `d9ff51c`
+
+### M3 — 驗證安裝 ✅ (with caveat)
+
+**做了什麼**
+
+1. 跑 `./scripts/setup-bt.sh python3.12` 成功建出 `.venv-bt/`（python3.11/3.10/3.9 在系統上都沒有，3.12 是 zipline-tej 支援上限，可用）
+2. 確認 `.venv-bt/bin/{python,pip,zipline}` 三隻 binary 都齊
+3. `python -m py_compile` 把 4 支 `strategy.py` + `runner.py` + `futures_setup.py` 全部跑過，語法乾淨
+4. 用 `yaml.safe_load` 載入 4 份 `config.yaml`，斷言 `bundle == 'tquant_future'` 且 `calendar` / `benchmark` 都已不存在 → 全部 PASS
+
+**Caveat — `import zipline` 需要 TEJAPI_KEY**
+
+驗證過程中發現 `zipline-tej` 依賴的 `exchange_calendars.exchange_calendar_tejxtai`
+**在 import 時就呼叫 TEJ API** 抓最新交易日，沒設 `TEJAPI_KEY` 連
+`import zipline` 都會直接丟 `AuthenticationError`：
+
+```
+File ".../exchange_calendar_tejxtai.py", line 2179
+  dynamic_close_dates = get_dynamic_close_days(...)
+  tejapi.errors.tej_error.AuthenticationError: (Status 404) 請輸入您的api_key
+```
+
+這是 upstream 套件的行為，不是這次改動造成。已在 `strategies/README.md`
+加 `⚠️ TEJAPI_KEY 是 import-time 必要條件` 段落提醒。
+
+**還沒做**（需要 `TEJAPI_KEY` 才能繼續）
+
+- 實際 `zipline ingest -b tquant_future`
+- 跑任一支 strategy 拿到 result.pkl
+- 比對 metrics 是否合理
+
+這些留給使用者在有金鑰的環境執行 `./scripts/ingest_futures.sh` 後驗證。
+
+**Commit**: 見 `M3: ...` commit
 
 ## Fallback 指引
 

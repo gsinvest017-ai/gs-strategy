@@ -32,6 +32,15 @@ export TEJAPI_KEY="<your-key>"
     --output   /tmp/vgrsi_tx_result.pkl
 ```
 
+### ⚠️ TEJAPI_KEY 是 import-time 必要條件
+
+`zipline-tej` 依賴的 `exchange_calendars.exchange_calendar_tejxtai` 模組
+在 **import 時**就會打 TEJ API 取得最新交易日。沒設 `TEJAPI_KEY`，連
+`import zipline` 都會丟 `AuthenticationError`。
+
+也就是說：**任何呼叫到 runner.py / zipline 的指令，shell 內必須先有
+`TEJAPI_KEY`**，不只 `zipline ingest` 而已。
+
 ### Calendar / Benchmark 預設
 
 - **Calendar** 由 `runner.py` 預設為 `TEJ_morning_future`（`tquant_future`

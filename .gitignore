@@ -3,6 +3,7 @@
 __pycache__/
 node_modules/
 .venv/
+.venv-bt/
 *.pyc
 *.egg-info/
 .pytest_cache/
