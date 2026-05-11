@@ -21,15 +21,17 @@ crawler 的 numpy/pandas pin 衝突。
 # 1. 建立回測 venv (一次性)
 ./scripts/setup-bt.sh                # 預設用 python3.11，可傳參覆寫
 
-# 2. 設定 TEJ API 並 ingest 期貨資料 (一次性 / 定期更新)
-export TEJAPI_KEY="<your-key>"
-./scripts/ingest_futures.sh           # 內含 future=TX MTX / mdate 預設值
+# 2. 設定 TEJ API key (一次性)
+cp .env.example .env                  # 然後編輯 .env 填入真的 key
+# 注：scripts/ingest_futures.sh 與 scripts/run_strategy.sh 會自動 source .env
 
-# 3. 跑單一策略 (從 repo root)
-.venv-bt/bin/python strategies/_common/runner.py \
-    --strategy strategies/vgrsi_tx/strategy.py \
-    --config   strategies/vgrsi_tx/config.yaml \
-    --output   /tmp/vgrsi_tx_result.pkl
+# 3. ingest 期貨資料 (一次性 / 定期更新)
+./scripts/ingest_futures.sh           # 預設 future="TX MTX"，可用 FUTURES_ROOTS 覆寫
+
+# 4. 跑單一策略
+./scripts/run_strategy.sh vgrsi_tx
+# 或指定輸出路徑:
+./scripts/run_strategy.sh tsmom_tx_mtx /tmp/tsmom.pkl
 ```
 
 ### ⚠️ TEJAPI_KEY 是 import-time 必要條件

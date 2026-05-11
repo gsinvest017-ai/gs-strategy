@@ -16,13 +16,21 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="${ROOT_DIR}/.venv-bt"
 
+# Auto-source .env if present so callers don't have to remember.
+if [[ -f "${ROOT_DIR}/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "${ROOT_DIR}/.env"
+    set +a
+fi
+
 if [[ ! -x "${VENV_DIR}/bin/zipline" ]]; then
     echo "[ingest] ${VENV_DIR}/bin/zipline not found." >&2
     echo "[ingest] run ./scripts/setup-bt.sh first" >&2
     exit 1
 fi
 
-: "${TEJAPI_KEY:?TEJAPI_KEY must be exported before running}"
+: "${TEJAPI_KEY:?TEJAPI_KEY must be set (via .env or exported)}"
 export TEJAPI_BASE="${TEJAPI_BASE:-https://api.tej.com.tw}"
 
 export future="${FUTURES_ROOTS:-TX MTX}"
