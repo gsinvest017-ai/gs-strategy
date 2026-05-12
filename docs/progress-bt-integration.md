@@ -152,6 +152,33 @@ FUTURES_ROOTS="TX MTX CAF CBF ..." ./scripts/ingest_futures.sh
 每支期貨 ingest 都要拉 TEJ 月合約資料 × 5+ 年；257 支等同 KOSPI 級別流量，
 夜間預算內不可能跑完。先用 top 30 ingest，確認 pipeline 通；之後可依需求擴充。
 
+**Commit**: `2db5c6b`
+
+### M8 — 重 ingest tquant_future (TX + MTX + 30 個股期) ✅
+
+**做了什麼**
+
+```bash
+FUTURES_ROOTS="TX MTX CAF CBF CCF QFF CEF CFF CGF CHF CJF CKF CLF CMF CNF CQF \
+    CRF CSF CUF CWF CXF CYF CZF DAF DBF DCF DDF DEF DFF DGF DHF DIF" \
+MDATE="20180101 20260510" ./scripts/ingest_futures.sh
+```
+
+**結果**
+
+- 新 bundle: `~/.zipline/data/tquant_future/2026-05-12T16;03;04.279177/`
+- Root 數: 32 (TX + MTX + 30 個股期)
+- 每 root 50-106 contracts，覆蓋 2018-01 ~ 2026-05
+- Ingest 耗時 ~30 秒（比預期快，TEJ API 對個股期回得很快）
+- 有 ~25 條 `Couldn't compute ratio for dividend` warning — 是 TEJ 端股利資料對應問題，
+  不影響期貨價格，可忽略
+
+**驗證**
+
+直接 `sqlite3` 開 `assets-7.sqlite` 的 `futures_contracts` table 確認 32 個 root 都有 contracts。
+`get_stock_futures_universe()` 跑出 257 支，但 ingest 只放 top 30；策略 config 要鎖 `universe_roots`
+否則 `continuous_future()` 會對沒 ingest 的 root 丟 SymbolNotFound。
+
 **Commit**: 待補
 
 ## Fallback 指引
