@@ -179,6 +179,28 @@ MDATE="20180101 20260510" ./scripts/ingest_futures.sh
 `get_stock_futures_universe()` 跑出 257 支，但 ingest 只放 top 30；策略 config 要鎖 `universe_roots`
 否則 `continuous_future()` 會對沒 ingest 的 root 丟 SymbolNotFound。
 
+**Commit**: `ef15077`
+
+### M9 — 跑 xsmom_stkfut_rmt + 記錄 metrics ✅ (策略 calibration 不合適)
+
+**做了什麼**
+
+- 把 30 個 ingest 過的 root 鎖進 `strategies/xsmom_stkfut_rmt/config.yaml` 的 `universe_roots`
+  （配上中文 ticker 對照註解），避免 auto-discover 撞 SymbolNotFound
+- 跑通 `./scripts/run_strategy.sh xsmom_stkfut_rmt` 拿到 result.pkl
+- 用既有 `scripts/summarize_results.py` 出 markdown 摘要
+- 把結果寫進 `docs/backtest-results-2026-05-13-xsmom.md`，並把 5/11 的「未跑」段指過去
+
+**結果**
+
+| name | CAGR | Sharpe | Max_DD | n_tx |
+|---|---|---|---|---|
+| xsmom_stkfut_rmt | **-46.35%** | **-3.302** | **-98.05%** | 565 |
+
+策略**慘賠**，但 pipeline 通了。Root cause: RMT gap 閾值（0.20 / 0.05）是論文 G5 全市場
+50+ 資產的尺度，套到 30 檔藍籌縮小宇宙時 gap max=0.097，永遠進不了全倉，
+780 天甚至 de-risk 到零。Calibration 是 `/review-strategy` 階段的事，不在這次 integration scope。
+
 **Commit**: 待補
 
 ## Fallback 指引

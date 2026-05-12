@@ -10,7 +10,42 @@ bundle: tquant_future
 # calendar omitted -> runner defaults to TEJ_morning_future.
 
 params:
-  # universe_roots: []   # leave empty -> auto-discover via TEJ helper
+  # Hard-coded to the 30 roots ingested in tquant_future bundle (top of TEJ's
+  # get_stock_futures_universe). Leaving universe_roots empty would auto-discover
+  # 257 roots, but continuous_future() raises SymbolNotFound on any root that
+  # isn't in the bundle. To widen the universe, ingest more roots first then
+  # extend this list. See data/stock_futures_universe.json for the full set.
+  universe_roots:
+    - CAF  # 1303 南亞
+    - CBF  # 2002 中鋼
+    - CCF  # 2303 聯電
+    - QFF  # 2330 TSMC
+    - CEF  # 2881 富邦金
+    - CFF  # 1301 台塑
+    - CGF  # 2324 仁寶
+    - CHF  # 2409 友達
+    - CJF  # 2880 華南金
+    - CKF  # 2882 國泰金
+    - CLF  # 2886 兆豐金
+    - CMF  # 2887 台新金
+    - CNF  # 2891 中信金
+    - CQF  # 1216 統一
+    - CRF  # 1402 遠東新
+    - CSF  # 1605 華新
+    - CUF  # 2323 中環
+    - CWF  # 2352 佳世達
+    - CXF  # 2371 大同
+    - CYF  # 2408 南科
+    - CZF  # 2603 長榮
+    - DAF  # 2609 陽明
+    - DBF  # 2610 華航
+    - DCF  # 2801 彰銀
+    - DDF  # 2888 新光金
+    - DEF  # 2890 永豐金
+    - DFF  # 1101 台泥
+    - DGF  # 1326 台化
+    - DHF  # 2317 鴻海
+    - DIF  # 2337 旺宏
   universe_start: '2020-01-01'
   universe_end:   '2026-04-30'
 

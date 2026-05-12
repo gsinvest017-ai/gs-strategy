@@ -36,24 +36,9 @@
 
 三支都正報酬、Sharpe > 0.6，但都還沒做 OOS 切割 / Walk-Forward / 多重檢定校正 — 這些屬於 `/review-strategy` 階段該做的事，不在此次 integration scope。
 
-## 未跑：xsmom_stkfut_rmt
+## 未跑：xsmom_stkfut_rmt → 2026-05-13 已跑
 
-需要個股期 universe (TX + 至少 `min_universe: 20` 支個股期) 才能 initialize。
-目前只 ingest TX/MTX，跑下去在 `continuous_future("CAF", ...)` 階段直接
-`SymbolNotFound`。
-
-要跑這支策略，需擴充 ingest：
-
-```bash
-# 1. 收集要 ingest 的個股期 roots (CAF, CBF, ... 等台灣個股期)
-FUTURES_ROOTS="TX MTX CAF CBF CCF CDF ..." \
-    ./scripts/ingest_futures.sh
-
-# 2. 跑 xsmom
-./scripts/run_strategy.sh xsmom_stkfut_rmt
-```
-
-完整個股期 root list 與 TEJ symbol 對照需另外查 TEJ 文件；列為後續工作。
+見 `docs/backtest-results-2026-05-13-xsmom.md`。
 
 ## 重大發現
 
