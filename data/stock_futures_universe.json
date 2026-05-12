@@ -1,0 +1,1069 @@
+{
+  "fetched_at": "2026-05-13T00:02:10",
+  "start": "2020-01-01",
+  "end": "2026-04-30",
+  "n_total": 257,
+  "n_head": 30,
+  "all": [
+    {
+      "code": "1303",
+      "root": "CAF"
+    },
+    {
+      "code": "2002",
+      "root": "CBF"
+    },
+    {
+      "code": "2303",
+      "root": "CCF"
+    },
+    {
+      "code": "2330",
+      "root": "QFF"
+    },
+    {
+      "code": "2881",
+      "root": "CEF"
+    },
+    {
+      "code": "1301",
+      "root": "CFF"
+    },
+    {
+      "code": "2324",
+      "root": "CGF"
+    },
+    {
+      "code": "2409",
+      "root": "CHF"
+    },
+    {
+      "code": "2880",
+      "root": "CJF"
+    },
+    {
+      "code": "2882",
+      "root": "CKF"
+    },
+    {
+      "code": "2886",
+      "root": "CLF"
+    },
+    {
+      "code": "2887",
+      "root": "CMF"
+    },
+    {
+      "code": "2891",
+      "root": "CNF"
+    },
+    {
+      "code": "1216",
+      "root": "CQF"
+    },
+    {
+      "code": "1402",
+      "root": "CRF"
+    },
+    {
+      "code": "1605",
+      "root": "CSF"
+    },
+    {
+      "code": "2323",
+      "root": "CUF"
+    },
+    {
+      "code": "2352",
+      "root": "CWF"
+    },
+    {
+      "code": "2371",
+      "root": "CXF"
+    },
+    {
+      "code": "2408",
+      "root": "CYF"
+    },
+    {
+      "code": "2603",
+      "root": "CZF"
+    },
+    {
+      "code": "2609",
+      "root": "DAF"
+    },
+    {
+      "code": "2610",
+      "root": "DBF"
+    },
+    {
+      "code": "2801",
+      "root": "DCF"
+    },
+    {
+      "code": "2888",
+      "root": "DDF"
+    },
+    {
+      "code": "2890",
+      "root": "DEF"
+    },
+    {
+      "code": "1101",
+      "root": "DFF"
+    },
+    {
+      "code": "1326",
+      "root": "DGF"
+    },
+    {
+      "code": "2317",
+      "root": "DHF"
+    },
+    {
+      "code": "2337",
+      "root": "DIF"
+    },
+    {
+      "code": "2357",
+      "root": "QRF"
+    },
+    {
+      "code": "2382",
+      "root": "DKF"
+    },
+    {
+      "code": "2412",
+      "root": "DLF"
+    },
+    {
+      "code": "2884",
+      "root": "DNF"
+    },
+    {
+      "code": "2885",
+      "root": "DOF"
+    },
+    {
+      "code": "2892",
+      "root": "DPF"
+    },
+    {
+      "code": "3481",
+      "root": "DQF"
+    },
+    {
+      "code": "2353",
+      "root": "DSF"
+    },
+    {
+      "code": "2448",
+      "root": "DUF"
+    },
+    {
+      "code": "2454",
+      "root": "PUF"
+    },
+    {
+      "code": "2915",
+      "root": "DWF"
+    },
+    {
+      "code": "3231",
+      "root": "DXF"
+    },
+    {
+      "code": "1102",
+      "root": "DYF"
+    },
+    {
+      "code": "1210",
+      "root": "DZF"
+    },
+    {
+      "code": "1312",
+      "root": "EEF"
+    },
+    {
+      "code": "1314",
+      "root": "EGF"
+    },
+    {
+      "code": "1319",
+      "root": "EHF"
+    },
+    {
+      "code": "1440",
+      "root": "EKF"
+    },
+    {
+      "code": "1504",
+      "root": "EMF"
+    },
+    {
+      "code": "1560",
+      "root": "EOF"
+    },
+    {
+      "code": "1590",
+      "root": "EPF"
+    },
+    {
+      "code": "1702",
+      "root": "ERF"
+    },
+    {
+      "code": "1718",
+      "root": "EYF"
+    },
+    {
+      "code": "1722",
+      "root": "EZF"
+    },
+    {
+      "code": "2006",
+      "root": "FBF"
+    },
+    {
+      "code": "2014",
+      "root": "FCF"
+    },
+    {
+      "code": "2027",
+      "root": "FEF"
+    },
+    {
+      "code": "2049",
+      "root": "QMF"
+    },
+    {
+      "code": "2059",
+      "root": "SVF"
+    },
+    {
+      "code": "2105",
+      "root": "FKF"
+    },
+    {
+      "code": "2201",
+      "root": "FNF"
+    },
+    {
+      "code": "2301",
+      "root": "FQF"
+    },
+    {
+      "code": "2308",
+      "root": "RVF"
+    },
+    {
+      "code": "2312",
+      "root": "FSF"
+    },
+    {
+      "code": "2313",
+      "root": "FTF"
+    },
+    {
+      "code": "2331",
+      "root": "FVF"
+    },
+    {
+      "code": "2332",
+      "root": "FWF"
+    },
+    {
+      "code": "2340",
+      "root": "FYF"
+    },
+    {
+      "code": "2344",
+      "root": "FZF"
+    },
+    {
+      "code": "2347",
+      "root": "GAF"
+    },
+    {
+      "code": "2354",
+      "root": "GCF"
+    },
+    {
+      "code": "2376",
+      "root": "SLF"
+    },
+    {
+      "code": "2377",
+      "root": "GIF"
+    },
+    {
+      "code": "2379",
+      "root": "QHF"
+    },
+    {
+      "code": "2385",
+      "root": "GKF"
+    },
+    {
+      "code": "2392",
+      "root": "GLF"
+    },
+    {
+      "code": "2393",
+      "root": "GMF"
+    },
+    {
+      "code": "2401",
+      "root": "GNF"
+    },
+    {
+      "code": "2404",
+      "root": "UZF"
+    },
+    {
+      "code": "2449",
+      "root": "GRF"
+    },
+    {
+      "code": "2455",
+      "root": "GUF"
+    },
+    {
+      "code": "2457",
+      "root": "GVF"
+    },
+    {
+      "code": "2458",
+      "root": "GWF"
+    },
+    {
+      "code": "2474",
+      "root": "GXF"
+    },
+    {
+      "code": "2481",
+      "root": "GYF"
+    },
+    {
+      "code": "2485",
+      "root": "GZF"
+    },
+    {
+      "code": "2489",
+      "root": "HAF"
+    },
+    {
+      "code": "2492",
+      "root": "HBF"
+    },
+    {
+      "code": "2498",
+      "root": "HCF"
+    },
+    {
+      "code": "2515",
+      "root": "HHF"
+    },
+    {
+      "code": "2520",
+      "root": "HIF"
+    },
+    {
+      "code": "2542",
+      "root": "HLF"
+    },
+    {
+      "code": "2548",
+      "root": "HOF"
+    },
+    {
+      "code": "2605",
+      "root": "HQF"
+    },
+    {
+      "code": "2618",
+      "root": "HSF"
+    },
+    {
+      "code": "2823",
+      "root": "HYF"
+    },
+    {
+      "code": "2834",
+      "root": "IAF"
+    },
+    {
+      "code": "2913",
+      "root": "IHF"
+    },
+    {
+      "code": "3006",
+      "root": "IIF"
+    },
+    {
+      "code": "3008",
+      "root": "OLF"
+    },
+    {
+      "code": "3019",
+      "root": "IMF"
+    },
+    {
+      "code": "3034",
+      "root": "QHF"
+    },
+    {
+      "code": "3035",
+      "root": "IPF"
+    },
+    {
+      "code": "3036",
+      "root": "IQF"
+    },
+    {
+      "code": "3037",
+      "root": "IRF"
+    },
+    {
+      "code": "3042",
+      "root": "ITF"
+    },
+    {
+      "code": "3189",
+      "root": "IXF"
+    },
+    {
+      "code": "3376",
+      "root": "IYF"
+    },
+    {
+      "code": "3380",
+      "root": "IZF"
+    },
+    {
+      "code": "3443",
+      "root": "RWF"
+    },
+    {
+      "code": "3533",
+      "root": "RFF"
+    },
+    {
+      "code": "3653",
+      "root": "RGF"
+    },
+    {
+      "code": "3673",
+      "root": "JNF"
+    },
+    {
+      "code": "3702",
+      "root": "JPF"
+    },
+    {
+      "code": "4938",
+      "root": "JSF"
+    },
+    {
+      "code": "5534",
+      "root": "JWF"
+    },
+    {
+      "code": "6005",
+      "root": "JXF"
+    },
+    {
+      "code": "6153",
+      "root": "JZF"
+    },
+    {
+      "code": "6176",
+      "root": "KAF"
+    },
+    {
+      "code": "6213",
+      "root": "KBF"
+    },
+    {
+      "code": "6239",
+      "root": "KCF"
+    },
+    {
+      "code": "6271",
+      "root": "KDF"
+    },
+    {
+      "code": "6278",
+      "root": "KEF"
+    },
+    {
+      "code": "6282",
+      "root": "KFF"
+    },
+    {
+      "code": "6285",
+      "root": "KGF"
+    },
+    {
+      "code": "8039",
+      "root": "KIF"
+    },
+    {
+      "code": "8163",
+      "root": "KKF"
+    },
+    {
+      "code": "9904",
+      "root": "KLF"
+    },
+    {
+      "code": "9939",
+      "root": "KOF"
+    },
+    {
+      "code": "9945",
+      "root": "KPF"
+    },
+    {
+      "code": "1477",
+      "root": "SCF"
+    },
+    {
+      "code": "1802",
+      "root": "KUF"
+    },
+    {
+      "code": "2328",
+      "root": "KWF"
+    },
+    {
+      "code": "3044",
+      "root": "LBF"
+    },
+    {
+      "code": "3045",
+      "root": "LCF"
+    },
+    {
+      "code": "3406",
+      "root": "QJF"
+    },
+    {
+      "code": "6269",
+      "root": "LIF"
+    },
+    {
+      "code": "9914",
+      "root": "LMF"
+    },
+    {
+      "code": "5880",
+      "root": "LOF"
+    },
+    {
+      "code": "2356",
+      "root": "LQF"
+    },
+    {
+      "code": "2883",
+      "root": "LRF"
+    },
+    {
+      "code": "4904",
+      "root": "LTF"
+    },
+    {
+      "code": "4958",
+      "root": "LUF"
+    },
+    {
+      "code": "5871",
+      "root": "LVF"
+    },
+    {
+      "code": "1476",
+      "root": "LWF"
+    },
+    {
+      "code": "2327",
+      "root": "QEF"
+    },
+    {
+      "code": "8046",
+      "root": "QSF"
+    },
+    {
+      "code": "1707",
+      "root": "MAF"
+    },
+    {
+      "code": "2355",
+      "root": "MBF"
+    },
+    {
+      "code": "3698",
+      "root": "MCF"
+    },
+    {
+      "code": "2360",
+      "root": "VDF"
+    },
+    {
+      "code": "2439",
+      "root": "MKF"
+    },
+    {
+      "code": "6214",
+      "root": "MPF"
+    },
+    {
+      "code": "6257",
+      "root": "MQF"
+    },
+    {
+      "code": "9938",
+      "root": "MVF"
+    },
+    {
+      "code": "1565",
+      "root": "OMF"
+    },
+    {
+      "code": "3105",
+      "root": "QIF"
+    },
+    {
+      "code": "3152",
+      "root": "NBF"
+    },
+    {
+      "code": "3211",
+      "root": "NCF"
+    },
+    {
+      "code": "3260",
+      "root": "NDF"
+    },
+    {
+      "code": "3264",
+      "root": "NEF"
+    },
+    {
+      "code": "3691",
+      "root": "NGF"
+    },
+    {
+      "code": "4105",
+      "root": "NHF"
+    },
+    {
+      "code": "4123",
+      "root": "NIF"
+    },
+    {
+      "code": "5009",
+      "root": "NJF"
+    },
+    {
+      "code": "5347",
+      "root": "NLF"
+    },
+    {
+      "code": "5371",
+      "root": "NMF"
+    },
+    {
+      "code": "5478",
+      "root": "NNF"
+    },
+    {
+      "code": "5483",
+      "root": "NOF"
+    },
+    {
+      "code": "6121",
+      "root": "NQF"
+    },
+    {
+      "code": "6147",
+      "root": "NSF"
+    },
+    {
+      "code": "8044",
+      "root": "NUF"
+    },
+    {
+      "code": "8069",
+      "root": "NVF"
+    },
+    {
+      "code": "8299",
+      "root": "QNF"
+    },
+    {
+      "code": "8942",
+      "root": "NXF"
+    },
+    {
+      "code": "2231",
+      "root": "ODF"
+    },
+    {
+      "code": "6116",
+      "root": "OEF"
+    },
+    {
+      "code": "5349",
+      "root": "OGF"
+    },
+    {
+      "code": "6279",
+      "root": "OHF"
+    },
+    {
+      "code": "2345",
+      "root": "SEF"
+    },
+    {
+      "code": "6414",
+      "root": "OQF"
+    },
+    {
+      "code": "1536",
+      "root": "ORF"
+    },
+    {
+      "code": "1909",
+      "root": "OSF"
+    },
+    {
+      "code": "3081",
+      "root": "OTF"
+    },
+    {
+      "code": "3552",
+      "root": "OUF"
+    },
+    {
+      "code": "6274",
+      "root": "OVF"
+    },
+    {
+      "code": "6488",
+      "root": "PBF"
+    },
+    {
+      "code": "6510",
+      "root": "OYF"
+    },
+    {
+      "code": "3711",
+      "root": "OZF"
+    },
+    {
+      "code": "3227",
+      "root": "PAF"
+    },
+    {
+      "code": "4162",
+      "root": "PCF"
+    },
+    {
+      "code": "4736",
+      "root": "PDF"
+    },
+    {
+      "code": "5425",
+      "root": "PEF"
+    },
+    {
+      "code": "2633",
+      "root": "PGF"
+    },
+    {
+      "code": "5269",
+      "root": "PNF"
+    },
+    {
+      "code": "3529",
+      "root": "RSF"
+    },
+    {
+      "code": "2383",
+      "root": "SFF"
+    },
+    {
+      "code": "6173",
+      "root": "PKF"
+    },
+    {
+      "code": "6182",
+      "root": "PLF"
+    },
+    {
+      "code": "8436",
+      "root": "PMF"
+    },
+    {
+      "code": "6462",
+      "root": "POF"
+    },
+    {
+      "code": "5457",
+      "root": "PPF"
+    },
+    {
+      "code": "8358",
+      "root": "PQF"
+    },
+    {
+      "code": "8086",
+      "root": "PRF"
+    },
+    {
+      "code": "3706",
+      "root": "PSF"
+    },
+    {
+      "code": "3324",
+      "root": "ULF"
+    },
+    {
+      "code": "6669",
+      "root": "PWF"
+    },
+    {
+      "code": "3293",
+      "root": "PYF"
+    },
+    {
+      "code": "5274",
+      "root": "QAF"
+    },
+    {
+      "code": "3714",
+      "root": "QBF"
+    },
+    {
+      "code": "2606",
+      "root": "QCF"
+    },
+    {
+      "code": "3532",
+      "root": "QDF"
+    },
+    {
+      "code": "1907",
+      "root": "QKF"
+    },
+    {
+      "code": "3374",
+      "root": "QLF"
+    },
+    {
+      "code": "1717",
+      "root": "QOF"
+    },
+    {
+      "code": "1904",
+      "root": "QPF"
+    },
+    {
+      "code": "3078",
+      "root": "QQF"
+    },
+    {
+      "code": "2441",
+      "root": "QTF"
+    },
+    {
+      "code": "8150",
+      "root": "QUF"
+    },
+    {
+      "code": "2338",
+      "root": "QVF"
+    },
+    {
+      "code": "2388",
+      "root": "QWF"
+    },
+    {
+      "code": "2615",
+      "root": "QXF"
+    },
+    {
+      "code": "6547",
+      "root": "QYF"
+    },
+    {
+      "code": "6770",
+      "root": "QZF"
+    },
+    {
+      "code": "3017",
+      "root": "UHF"
+    },
+    {
+      "code": "5388",
+      "root": "RBF"
+    },
+    {
+      "code": "2634",
+      "root": "RCF"
+    },
+    {
+      "code": "4128",
+      "root": "RDF"
+    },
+    {
+      "code": "4919",
+      "root": "REF"
+    },
+    {
+      "code": "1609",
+      "root": "RJF"
+    },
+    {
+      "code": "2368",
+      "root": "VGF"
+    },
+    {
+      "code": "6443",
+      "root": "RLF"
+    },
+    {
+      "code": "8454",
+      "root": "RQF"
+    },
+    {
+      "code": "4743",
+      "root": "RNF"
+    },
+    {
+      "code": "6245",
+      "root": "ROF"
+    },
+    {
+      "code": "5904",
+      "root": "RRF"
+    },
+    {
+      "code": "9958",
+      "root": "SWF"
+    },
+    {
+      "code": "1795",
+      "root": "SAF"
+    },
+    {
+      "code": "1905",
+      "root": "SBF"
+    },
+    {
+      "code": "1513",
+      "root": "SDF"
+    },
+    {
+      "code": "3005",
+      "root": "SJF"
+    },
+    {
+      "code": "8112",
+      "root": "SKF"
+    },
+    {
+      "code": "3680",
+      "root": "SZF"
+    },
+    {
+      "code": "1503",
+      "root": "UAF"
+    },
+    {
+      "code": "6139",
+      "root": "UBF"
+    },
+    {
+      "code": "6188",
+      "root": "UCF"
+    },
+    {
+      "code": "5876",
+      "root": "UEF"
+    },
+    {
+      "code": "6505",
+      "root": "UFF"
+    },
+    {
+      "code": "6526",
+      "root": "UIF"
+    },
+    {
+      "code": "3661",
+      "root": "UOF"
+    },
+    {
+      "code": "6472",
+      "root": "UQF"
+    },
+    {
+      "code": "2486",
+      "root": "UTF"
+    },
+    {
+      "code": "6757",
+      "root": "UUF"
+    },
+    {
+      "code": "6223",
+      "root": "UWF"
+    },
+    {
+      "code": "2329",
+      "root": "UXF"
+    },
+    {
+      "code": "6290",
+      "root": "UYF"
+    },
+    {
+      "code": "3665",
+      "root": "VFF"
+    }
+  ],
+  "head": [
+    "CAF",
+    "CBF",
+    "CCF",
+    "QFF",
+    "CEF",
+    "CFF",
+    "CGF",
+    "CHF",
+    "CJF",
+    "CKF",
+    "CLF",
+    "CMF",
+    "CNF",
+    "CQF",
+    "CRF",
+    "CSF",
+    "CUF",
+    "CWF",
+    "CXF",
+    "CYF",
+    "CZF",
+    "DAF",
+    "DBF",
+    "DCF",
+    "DDF",
+    "DEF",
+    "DFF",
+    "DGF",
+    "DHF",
+    "DIF"
+  ]
+}

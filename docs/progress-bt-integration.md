@@ -137,6 +137,23 @@ FUTURES_ROOTS="TX MTX CAF CBF ..." ./scripts/ingest_futures.sh
 
 **Commit**: 見 `M6: ...` commit
 
+### M7 — 個股期 universe discovery ✅
+
+**做了什麼**
+
+- 新增 `scripts/discover_stock_futures_universe.py`：呼叫 TEJ `get_stock_futures_universe()`
+  抓出 (stock_code, future_root) pairs，輸出到 `data/stock_futures_universe.json`
+- 跑出 257 支個股期，前 30 名都是龍頭：TSMC (2330→QFF)、鴻海 (2317→DHF)、聯電 (2303→CCF)、
+  鴻準 (2354 周邊)、台塑 (1301→CFF) 等
+- `--limit N` 控制 head 切片大小，給 ingest 用；30 支足以滿足策略的 `min_universe: 20`
+
+**為何不全跑 257 支**
+
+每支期貨 ingest 都要拉 TEJ 月合約資料 × 5+ 年；257 支等同 KOSPI 級別流量，
+夜間預算內不可能跑完。先用 top 30 ingest，確認 pipeline 通；之後可依需求擴充。
+
+**Commit**: 待補
+
 ## Fallback 指引
 
 任務拆成 3 個 commit，每個都獨立可回滾：
