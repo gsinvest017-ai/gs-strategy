@@ -130,6 +130,9 @@ def initialize(context):
     context.rmt_low_threshold = float(p.get("rmt_low_threshold", 0.05))
     context.min_universe = int(p.get("min_universe", 20))
     context.hedge_with_tx = bool(p.get("hedge_with_tx", True))
+    # M11 ablation flag: when True, long the bottom decile and short the top
+    # decile (i.e. trade short-horizon reversal instead of momentum).
+    context.reverse_momentum = bool(p.get("reverse_momentum", False))
 
     apply_taiwan_futures_costs(
         per_contract_cost=p.get("per_contract_cost"),
@@ -229,6 +232,8 @@ def _rebalance(context, data):
     n_long = max(1, int(round(n * context.long_decile)))
     shorts = [r for r, _ in sorted_roots[:n_short]]
     longs = [r for r, _ in sorted_roots[-n_long:]]
+    if context.reverse_momentum:
+        longs, shorts = shorts, longs
 
     long_w = (context.gross_target * regime_scale) / 2.0 / max(len(longs), 1)
     short_w = -(context.gross_target * regime_scale) / 2.0 / max(len(shorts), 1)

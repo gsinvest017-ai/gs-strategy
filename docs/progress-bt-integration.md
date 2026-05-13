@@ -235,7 +235,54 @@ G5 大市場結論相反。
 3. **Decile=0.1 太集中（3 long + 3 short）**：6 檔個股期承受 30M NTD 暴露，單支大
    gap 就讓策略翻車
 
-**Commit**: 見 M10 commit
+**Commit**: `c7ca015`
+
+### M11 — xsmom_stkfut_rmt ablation suite ⚠️ (negative finding)
+
+**做了什麼**
+
+- `strategies/xsmom_stkfut_rmt/strategy.py`: 加 `reverse_momentum` flag（4 行：initialize 讀
+  param + rebalance 時 `longs, shorts = shorts, longs`）
+- `scripts/run_xsmom_ablation.py`: 用 yaml deep copy + override `params`，跑 5 個變體，
+  各存獨立 result.pkl，最後吐 markdown 表
+
+**5 個變體（M10 校準閾值為基準，6.32 年、30M 起始）**
+
+| variant | CAGR | Sharpe | Max_DD | final |
+|---|---:|---:|---:|---:|
+| baseline_m10 | -57.91% | -3.037 | -99.58% | 125,896 |
+| no_hedge | -57.91% | -3.037 | -99.58% | 125,896 |
+| wide_decile (0.2/0.2) | -51.71% | -3.213 | -99.00% | 300,548 |
+| reverse | -56.43% | -2.833 | -99.48% | 156,701 |
+| reverse_no_hedge | -56.43% | -2.833 | -99.48% | 156,701 |
+
+**3 個結論**
+
+1. **`hedge_with_tx` flag 是 no-op**：baseline_m10 和 no_hedge 數字逐位元相同。
+   原因：dollar-neutral L/S construction 下 `net_w = sum(target_pct) = +(gross/2)
+   - (gross/2) ≈ 0`，所以 `order_target_percent(tx_front, -net_w)` 永遠下零單。
+   想真的 hedge 大盤 beta，要改用 basket 加權的 ex-ante beta 算 hedge ratio
+   (e.g. CAPM-style)，不是 net dollar exposure。
+2. **反轉動量沒救**：CAGR -57.91% → -56.43%（微改善），Sharpe -3.037 → -2.833。
+   方向略有 alpha 但被成本吃掉。論文 G5 大市場的 momentum direction 不一定適用
+   台股個股期 2020-2026 視窗。
+3. **Wider decile 改善最大**：long/short 0.1 → 0.2（6 long + 6 short），最終
+   resid 從 125k 漲到 300k (2.4x)，但仍然大虧。代表 decile=0.1 的 3-on-3 暴露
+   過度集中，但 6-on-6 也只是減少波動、不是創造 alpha。
+
+**Open question（不在這次 scope）**
+
+策略本身在 Taiwan stock-fut universe (2020-2026) **不存在 alpha**，
+不管 momentum/reversal、寬窄 decile、有無 TX hedge 都虧錢。可能原因：
+- 個股期換月、流動性、保證金 levy 的成本被論文低估
+- 30 檔藍籌的 cross-section dispersion 不夠，alpha 訊號被 commission 噪音淹沒
+- COVID + AI 多頭循環打壞了傳統 X-sectional momentum 假設
+
+若要救活這支策略，需要：(1) 擴充 universe ≥ 60 檔；(2) 動態 hedge ratio
+（不能用 dollar-neutral 直接代替 beta-neutral）；(3) 把 commission 和滑價校準
+到實際券商 spec，再重評。這些是 `/review-strategy` 階段的工作。
+
+**Commit**: 見 M11 commit
 
 ## Fallback 指引
 
