@@ -282,7 +282,46 @@ G5 大市場結論相反。
 （不能用 dollar-neutral 直接代替 beta-neutral）；(3) 把 commission 和滑價校準
 到實際券商 spec，再重評。這些是 `/review-strategy` 階段的工作。
 
-**Commit**: 見 M11 commit
+**Commit**: `ee70772`
+
+### M12 — long-only 變體也沒救 ⚠️
+
+**做了什麼**
+
+- `strategy.py`: 加 `long_only` flag（initialize 讀 param + rebalance 時 `shorts=[]` +
+  把整個 `gross_target` 放長邊）
+- `scripts/run_xsmom_ablation.py`: 多 3 個變體 → 8 個總共
+- 動機：台股個股期短邊保證金 + 借券成本明顯高於長邊，剝掉 short leg 可能能省成本
+
+**新加 3 個變體**
+
+| variant | CAGR | Sharpe | Max_DD | final |
+|---|---:|---:|---:|---:|
+| long_only_mom | -57.54% | -2.553 | -99.56% | 133,124 |
+| long_only_mom_wide | -54.44% | -3.008 | -99.31% | 207,950 |
+| long_only_reverse | -63.66% | -2.392 | -99.83% | 49,791 |
+
+**結論**
+
+- Long-only momentum 跟 baseline 幾乎一樣（-57.54% vs -57.91%）— short leg
+  不是核心成本來源，假設證偽
+- 長邊 reverse 反而更慘（-63.66%）— 在這個 universe 短期 mean-reversion
+  不在 momentum-formation 視窗（lookback=126, skip=21）作用
+- **沒有任何變體能把策略救活**。8 個變體 CAGR 全在 [-63.66%, -51.71%] 區間，
+  Sharpe 全是 -2.39 到 -3.21 的負值
+
+整個 calibration / ablation 過程（M10-M12）證實：xsmom_stkfut_rmt 在
+**現有 30-root TX-stockfut universe + 2020-2026 視窗** 內無 alpha。
+參數調整不會改變這個結論。要真的部署，需要：
+
+1. Universe 擴到 ≥ 60 檔（M7 已 prep universe.json，可隨時擴 ingest）
+2. Beta-neutral hedge（M11 已揭示 dollar-neutral 構造下 TX hedge 是 no-op）
+3. 校準 commission / 滑價到真實券商 spec
+4. 不同時段 walk-forward（COVID + AI 多頭可能不代表全週期）
+
+這些屬於 `/review-strategy` 範疇，integration M-series 在此結束。
+
+**Commit**: 見 M12 commit
 
 ## Fallback 指引
 

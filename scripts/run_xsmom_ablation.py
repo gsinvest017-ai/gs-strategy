@@ -38,6 +38,11 @@ VARIANTS = [
     ("wide_decile", {"long_decile": 0.2, "short_decile": 0.2}),
     ("reverse", {"reverse_momentum": True}),
     ("reverse_no_hedge", {"reverse_momentum": True, "hedge_with_tx": False}),
+    # M12 long-only variants — drop the short leg, since Taiwan stock-fut
+    # shorts plausibly carry materially higher cost than longs.
+    ("long_only_mom", {"long_only": True}),
+    ("long_only_mom_wide", {"long_only": True, "long_decile": 0.2}),
+    ("long_only_reverse", {"long_only": True, "reverse_momentum": True}),
 ]
 
 BASE_CONFIG = _ROOT / "strategies" / "xsmom_stkfut_rmt" / "config.yaml"

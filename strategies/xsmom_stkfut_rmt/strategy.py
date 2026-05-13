@@ -133,6 +133,9 @@ def initialize(context):
     # M11 ablation flag: when True, long the bottom decile and short the top
     # decile (i.e. trade short-horizon reversal instead of momentum).
     context.reverse_momentum = bool(p.get("reverse_momentum", False))
+    # M12 ablation flag: when True, drop the short leg entirely. Taiwan stock
+    # futures shorts have higher margin + borrowing cost than longs in practice.
+    context.long_only = bool(p.get("long_only", False))
 
     apply_taiwan_futures_costs(
         per_contract_cost=p.get("per_contract_cost"),
@@ -234,9 +237,16 @@ def _rebalance(context, data):
     longs = [r for r, _ in sorted_roots[-n_long:]]
     if context.reverse_momentum:
         longs, shorts = shorts, longs
+    if context.long_only:
+        shorts = []
 
-    long_w = (context.gross_target * regime_scale) / 2.0 / max(len(longs), 1)
-    short_w = -(context.gross_target * regime_scale) / 2.0 / max(len(shorts), 1)
+    # long_only puts the full gross_target on the long side; L/S splits 50/50.
+    if context.long_only:
+        long_w = (context.gross_target * regime_scale) / max(len(longs), 1)
+        short_w = 0.0
+    else:
+        long_w = (context.gross_target * regime_scale) / 2.0 / max(len(longs), 1)
+        short_w = -(context.gross_target * regime_scale) / 2.0 / max(len(shorts), 1)
 
     target_pct: Dict[str, float] = {}
     for r in longs:
