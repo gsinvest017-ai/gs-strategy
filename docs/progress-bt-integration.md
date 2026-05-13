@@ -201,7 +201,41 @@ MDATE="20180101 20260510" ./scripts/ingest_futures.sh
 50+ 資產的尺度，套到 30 檔藍籌縮小宇宙時 gap max=0.097，永遠進不了全倉，
 780 天甚至 de-risk 到零。Calibration 是 `/review-strategy` 階段的事，不在這次 integration scope。
 
-**Commit**: 待補
+**Commit**: `79652c6`
+
+### M10 — xsmom_stkfut_rmt RMT 閾值校準 (negative finding) ⚠️
+
+**做了什麼**
+
+- 從 M9 的 `/tmp/xsmom_stkfut_rmt_result.pkl` 把 `record(gap=...)` 的完整序列拉出來，
+  寫成 `scripts/inspect_xsmom_gap.py`（auto-load `.env`、輸出 percentiles + regime_scale 分布）
+- 觀察分布：mean=0.050 / std=0.015 / max=0.097，p33=0.045 / p75=0.058，
+  原 `0.20 / 0.05` 閾值對這個 universe 永遠抓不到 full position
+- 把 `strategies/xsmom_stkfut_rmt/config.yaml` 的閾值改成 `rmt_threshold: 0.058 (p75)` /
+  `rmt_low_threshold: 0.045 (p33)`，註解寫明校準依據
+- 重跑 `./scripts/run_strategy.sh xsmom_stkfut_rmt`，存到 `/tmp/xsmom_stkfut_rmt_m10_result.pkl`
+
+**結果**
+
+| version | CAGR | Sharpe | Max_DD | n_tx | regime_scale 分布 |
+|---|---|---|---|---|---|
+| M9 (paper 0.20/0.05) | -46.35% | -3.302 | -98.05% | 565 | 51% zero / 49% half / **0% full** |
+| M10 (p75/p33: 0.058/0.045) | **-57.91%** | -3.037 | -99.58% | 457 | 36% zero / 39% half / 25% full |
+
+**校準後反而更慘**。Regime filter 終於有 1/4 時間進全倉，但底層 momentum signal
+本身在這個 universe 期間（2020-2026，COVID rebound + 升息熊市 + AI 多頭）是
+負 alpha。閾值不是核心問題、是策略在這個資料集 doesn't work — 跟 paper
+G5 大市場結論相反。
+
+**推測**（待 M11+ 或 `/review-strategy` 細查）
+
+1. **Cross-sectional momentum 在台灣個股期是 reversal**：可能反轉策略才對
+2. **TX hedge 在這個 universe 反向放大損失**：30 檔藍籌 vs TX 的 beta 不穩定，
+   靜態 1:1 對沖在多頭時 net short TX 等於放空大盤
+3. **Decile=0.1 太集中（3 long + 3 short）**：6 檔個股期承受 30M NTD 暴露，單支大
+   gap 就讓策略翻車
+
+**Commit**: 見 M10 commit
 
 ## Fallback 指引
 
