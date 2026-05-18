@@ -68,7 +68,17 @@ params:
   rmt_low_threshold: 0.045 # gap below this -> de-risk to zero (p33)
 
   min_universe: 20     # below this number of available stock futures, skip
-  hedge_with_tx: true  # short TX equal-notional to neutralise net beta
+  hedge_with_tx: true  # master switch; off => no TX hedge at all
+
+  # M13 beta-neutral hedge (2026-05-19). M11 ablation revealed the original
+  # dollar-net hedge is identically zero under a balanced L/S book
+  # (sum of long weights + sum of short weights ≈ 0). To actually hedge market
+  # beta, set beta_neutral_hedge=true: at each rebalance the strategy estimates
+  # each stock-future's beta to TX over the last `beta_window` days via OLS,
+  # then orders TX with target weight = -sum(w_i * beta_i). The TX leg is
+  # clipped to ±2.0 portfolio weight so a regime shock can't blow up margin.
+  beta_neutral_hedge: true
+  beta_window: 60      # rolling OLS lookback (trading days) for per-asset beta
 
   days_before_close: 10
 

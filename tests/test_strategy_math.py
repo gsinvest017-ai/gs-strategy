@@ -81,8 +81,45 @@ def test_rmt_gap_iid_vs_one_factor() -> None:
     assert g_iid > g_one
 
 
+def test_ols_beta_recovers_known_slope() -> None:
+    _stub_zipline()
+    m = _load(STRAT / "xsmom_stkfut_rmt" / "strategy.py")
+    rng = np.random.default_rng(7)
+    market = rng.standard_normal(200) * 0.01
+    # Construct asset with true beta = 1.5 and small idiosyncratic noise.
+    asset = 1.5 * market + 0.0005 * rng.standard_normal(200)
+    beta = m._ols_beta(asset, market)
+    assert abs(beta - 1.5) < 0.05
+
+
+def test_ols_beta_nan_guards() -> None:
+    _stub_zipline()
+    m = _load(STRAT / "xsmom_stkfut_rmt" / "strategy.py")
+    # Too few points
+    assert not np.isfinite(m._ols_beta(np.arange(5.0), np.arange(5.0)))
+    # Zero-variance market
+    flat = np.zeros(30)
+    asset = np.linspace(-0.01, 0.01, 30)
+    assert not np.isfinite(m._ols_beta(asset, flat))
+
+
+def test_basket_beta_linearity() -> None:
+    _stub_zipline()
+    m = _load(STRAT / "xsmom_stkfut_rmt" / "strategy.py")
+    weights = {"A": 0.25, "B": 0.25, "C": -0.5}
+    betas = {"A": 1.0, "B": 0.5, "C": 1.2}
+    # 0.25 * 1.0 + 0.25 * 0.5 + (-0.5) * 1.2 = 0.25 + 0.125 - 0.6 = -0.225
+    assert abs(m._basket_beta(weights, betas) - (-0.225)) < 1e-12
+    # NaN beta on one asset should be dropped, not poison the sum.
+    betas_with_nan = {"A": 1.0, "B": float("nan"), "C": 1.2}
+    assert abs(m._basket_beta(weights, betas_with_nan) - (0.25 - 0.6)) < 1e-12
+
+
 if __name__ == "__main__":
     test_vgrsi_extreme_cases()
     test_cubic_signal_shape()
     test_rmt_gap_iid_vs_one_factor()
+    test_ols_beta_recovers_known_slope()
+    test_ols_beta_nan_guards()
+    test_basket_beta_linearity()
     print("ALL MATH TESTS PASS")

@@ -31,8 +31,13 @@ Idea
         gap in [low, threshold]    -> half position
         gap <= rmt_low_threshold   -> de-risk to zero
 
-4. Hedge with TX continuous future: keep cross-section beta neutral by short
-   TX equal in notional to net long stock-fut book minus net short.
+4. Hedge with TX continuous future:
+   - default `hedge_with_tx` does dollar-net hedge (degenerate under a balanced
+     L/S book — see M11 finding in docs/progress-bt-integration.md)
+   - `beta_neutral_hedge` (added M13) computes ex-ante basket beta against TX
+     using a rolling window OLS regression of each stock-future's daily log
+     returns on TX's, then shorts TX with weight = -sum(w_i * beta_i) so the
+     net portfolio beta to TX is ~0. This is the CAPM-style hedge ratio.
 """
 from __future__ import annotations
 
@@ -73,6 +78,46 @@ def _safe_log_return(closes: np.ndarray) -> np.ndarray:
     if len(pos) < 2:
         return np.array([])
     return np.diff(np.log(pos))
+
+
+def _ols_beta(asset_returns: np.ndarray, market_returns: np.ndarray) -> float:
+    """OLS beta of `asset_returns` on `market_returns` (single-factor CAPM).
+
+    beta = cov(a, m) / var(m). Returns NaN if either series is too short or
+    market variance is non-positive.
+    """
+    if asset_returns.ndim != 1 or market_returns.ndim != 1:
+        return float("nan")
+    n = min(len(asset_returns), len(market_returns))
+    if n < 10:
+        return float("nan")
+    a = asset_returns[-n:]
+    m = market_returns[-n:]
+    mask = np.isfinite(a) & np.isfinite(m)
+    if mask.sum() < 10:
+        return float("nan")
+    a = a[mask]
+    m = m[mask]
+    m_var = float(np.var(m, ddof=1))
+    if m_var <= 0:
+        return float("nan")
+    cov = float(np.cov(a, m, ddof=1)[0, 1])
+    return cov / m_var
+
+
+def _basket_beta(weights: Dict[str, float], betas: Dict[str, float]) -> float:
+    """Weighted sum of per-asset betas. Skips entries with NaN beta.
+
+    Returns the basket's ex-ante beta to TX. With long-short construction
+    `weights` may contain negative entries; their contribution flips sign,
+    which is what we want for a portfolio-beta-neutral hedge.
+    """
+    total = 0.0
+    for root, w in weights.items():
+        b = betas.get(root, float("nan"))
+        if np.isfinite(b):
+            total += float(w) * float(b)
+    return total
 
 
 def _complexity_gap(returns_matrix: np.ndarray) -> float:
@@ -136,6 +181,12 @@ def initialize(context):
     # M12 ablation flag: when True, drop the short leg entirely. Taiwan stock
     # futures shorts have higher margin + borrowing cost than longs in practice.
     context.long_only = bool(p.get("long_only", False))
+    # M13: when True, replace dollar-net TX hedge with beta-weighted hedge.
+    # `beta_window` controls the rolling-OLS lookback (in trading days) used
+    # to estimate each stock-future's beta to TX. 60d ≈ 3 months — short
+    # enough to track regime shifts, long enough for stable OLS.
+    context.beta_neutral_hedge = bool(p.get("beta_neutral_hedge", False))
+    context.beta_window = int(p.get("beta_window", 60))
 
     apply_taiwan_futures_costs(
         per_contract_cost=p.get("per_contract_cost"),
@@ -185,10 +236,15 @@ def _scale_from_gap(gap: float, ctx) -> float:
 
 
 def _rebalance(context, data):
-    needed = max(context.lookback + context.skip + 5, context.rmt_window + 5)
+    needed = max(
+        context.lookback + context.skip + 5,
+        context.rmt_window + 5,
+        context.beta_window + 5,
+    )
     rows: List[np.ndarray] = []
     momentum_scores: Dict[str, float] = {}
     last_prices: Dict[str, float] = {}
+    asset_returns: Dict[str, np.ndarray] = {}
 
     for root, cont in zip(context.universe_roots, context.continuous):
         try:
@@ -209,6 +265,11 @@ def _rebalance(context, data):
         ret = _safe_log_return(closes[-context.rmt_window - 1:])
         if len(ret) >= context.rmt_window - 1:
             rows.append(ret[-context.rmt_window:])
+
+        if context.beta_neutral_hedge:
+            beta_ret = _safe_log_return(closes[-context.beta_window - 1:])
+            if len(beta_ret) >= 10:
+                asset_returns[root] = beta_ret
 
     if len(momentum_scores) < context.min_universe:
         record(regime_scale=0.0, gap=float("nan"), n_universe=len(momentum_scores))
@@ -272,12 +333,38 @@ def _rebalance(context, data):
             continue
         order_target_percent(front, w)
 
-    # TX hedge: short notional equal to net long basket
+    # TX hedge
     if context.hedge_with_tx:
-        net_w = sum(target_pct.values())
         tx_front = data.current(context.tx_cont, "contract")
         if tx_front is not None:
-            order_target_percent(tx_front, -net_w)
+            if context.beta_neutral_hedge:
+                # Pull TX returns over the same window we used per-asset, then
+                # compute basket beta = sum(w_i * beta_i to TX).
+                try:
+                    tx_closes = (
+                        data.history(context.tx_cont, "close", context.beta_window + 5, "1d")
+                        .dropna().values
+                    )
+                except Exception:
+                    tx_closes = np.array([])
+                tx_ret = _safe_log_return(tx_closes[-context.beta_window - 1:])
+
+                betas: Dict[str, float] = {}
+                if len(tx_ret) >= 10:
+                    for root, a_ret in asset_returns.items():
+                        n = min(len(a_ret), len(tx_ret))
+                        betas[root] = _ols_beta(a_ret[-n:], tx_ret[-n:])
+
+                basket_beta = _basket_beta(target_pct, betas)
+                record(basket_beta=float(basket_beta))
+                # Cap to ±2.0 to bound margin draw during regime shocks.
+                hedge_w = float(np.clip(-basket_beta, -2.0, 2.0))
+                order_target_percent(tx_front, hedge_w)
+            else:
+                # Legacy dollar-net hedge (M11 showed this is a no-op for a
+                # dollar-neutral L/S book; kept for backwards-compat).
+                net_w = sum(target_pct.values())
+                order_target_percent(tx_front, -net_w)
 
 
 def _flatten_all(context):
