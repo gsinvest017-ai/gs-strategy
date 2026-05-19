@@ -10,11 +10,11 @@ bundle: tquant_future
 # calendar omitted -> runner defaults to TEJ_morning_future.
 
 params:
-  # Hard-coded to the 30 roots ingested in tquant_future bundle (top of TEJ's
-  # get_stock_futures_universe). Leaving universe_roots empty would auto-discover
-  # 257 roots, but continuous_future() raises SymbolNotFound on any root that
-  # isn't in the bundle. To widen the universe, ingest more roots first then
-  # extend this list. See data/stock_futures_universe.json for the full set.
+  # M14 (2026-05-20): expanded from 30 -> 60 roots. Bundle ingested at
+  # ~/.zipline/data/tquant_future/2026-05-19T16;01;16.781143 covers
+  # TX + MTX + top-60 stock-futures from data/stock_futures_universe.json.
+  # Auto-discover (universe_roots empty) would pick 257 roots and raise
+  # SymbolNotFound on those not ingested, so we hard-pin to what is available.
   universe_roots:
     - CAF  # 1303 南亞
     - CBF  # 2002 中鋼
@@ -46,6 +46,36 @@ params:
     - DGF  # 1326 台化
     - DHF  # 2317 鴻海
     - DIF  # 2337 旺宏
+    - QRF  # 2357 華碩
+    - DKF  # 2382 廣達
+    - DLF  # 2412 中華電
+    - DNF  # 2884 玉山金
+    - DOF  # 2885 元大金
+    - DPF  # 2892 第一金
+    - DQF  # 3481 群創
+    - DSF  # 2353 宏碁
+    - DUF  # 2448 晶電
+    - PUF  # 2454 聯發科
+    - DWF  # 2915 潤泰全
+    - DXF  # 3231 緯創
+    - DYF  # 1102 亞泥
+    - DZF  # 1210 大成
+    - EEF  # 1312 國喬
+    - EGF  # 1314 中石化
+    - EHF  # 1319 東陽
+    - EKF  # 1440 南紡
+    - EMF  # 1504 東元
+    - EOF  # 1560 中砂
+    - EPF  # 1590 亞德客-KY
+    - ERF  # 1702 南僑
+    - EYF  # 1718 中纖
+    - EZF  # 1722 台肥
+    - FBF  # 2006 東和鋼鐵
+    - FCF  # 2014 中鴻
+    - FEF  # 2027 大成鋼
+    - QMF  # 2049 上銀
+    - SVF  # 2059 川湖
+    - FKF  # 2105 正新
   universe_start: '2020-01-01'
   universe_end:   '2026-04-30'
 

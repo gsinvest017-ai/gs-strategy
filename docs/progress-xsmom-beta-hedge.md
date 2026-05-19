@@ -138,28 +138,129 @@ M13 的 4 個檔案改動皆獨立可逆：
 最差情況：`git reset --hard 46707c3`（M12 commit），再
 `rm /tmp/xsmom_m13_*_result.pkl`，回到任務開始狀態。
 
-## 後續可選 milestone（不在本次 scope）
+## M14 — 擴 universe 30 → 60 檔 ✅ (diversification works, alpha 仍缺席)
 
-對應 M12 列出的四個方向，本 M13 只處理項目 2，剩下：
+> 夜間無人值守任務（claude/nightly-2026-05-20）。接續 M13 結論「策略
+> 機械上對了，但 30-stock universe 沒有 alpha」，這次把 M12 列出的
+> 四項剩餘方向中**最具體的第 1 項**做完：擴 universe 從 30 → 60 檔，
+> 重 ingest tquant_future，重跑 xsmom 看 diversification 帶來什麼。
 
-1. **擴 universe 到 ≥ 60 檔** — 跑 `scripts/discover_stock_futures_universe.py --limit 60`
-   + 重 ingest（`FUTURES_ROOTS=…`）。此後 30 → 60 後重跑 M13 即可看
-   beta hedge 在更大 universe 上的差異。
-2. ~~Beta-neutral hedge~~ — **本 M13 完成**
+### 做了什麼
+
+1. 從 `data/stock_futures_universe.json` 拿出 top-60 (code,root) pairs，
+   手工對照 Taiwan 上市公司中文名建 `universe_roots:` YAML 區塊
+2. 跑 `FUTURES_ROOTS="TX MTX <60-roots>" ./scripts/ingest_futures.sh`，
+   ingest 成功，新 bundle 落在
+   `~/.zipline/data/tquant_future/2026-05-19T16;01;16.781143`
+   （共 62 個 root，每 root 105 contracts，2018-01 ~ 2026-05）
+3. `strategies/xsmom_stkfut_rmt/config.yaml` 的 `universe_roots:` 從 30 行
+   擴到 60 行（沿用 M9 的中文 ticker 對照註解格式）
+4. `./scripts/run_strategy.sh xsmom_stkfut_rmt /tmp/xsmom_m14_60root_result.pkl`
+5. 用 `scripts/summarize_results.py` + 自製 inline script 拉 metrics +
+   basket_beta + regime_scale + gap 分布
+
+### 結果：30-root vs 60-root
+
+| universe | CAGR | ann_vol | Sharpe | Max_DD | n_tx | final |
+|---|---:|---:|---:|---:|---:|---:|
+| 30 (M13 beta_neutral) | -57.34% | 27.72% | -3.037 | -99.54% | 479 | 137,073 |
+| **60 (M14)** | **-43.26%** | **20.15%** | **-2.812** | **-97.28%** | **748** | **833,362** |
+
+### 三個發現
+
+1. **Diversification 確實有效**：CAGR 從 -57.34% 改善到 -43.26%
+   （+14.08 pp）、vol 從 27.72% 降到 20.15%（-7.57 pp，相對 27%）。
+   final portfolio value 從 137k 漲到 833k（6 倍）。但 Sharpe 只從
+   -3.04 → -2.81，因為 return 和 vol 改善幅度大致同比例。
+2. **basket_beta 範圍縮小但仍偏正**：mean 0.10 → 0.13、std 0.21 → 0.19、
+   range [-0.36, +0.81] → [-0.20, +0.48]。60 檔的 long/short basket
+   net beta 偏離 0 的程度比 30 檔小，符合 cross-sectional 構造下
+   籃子分散度提升的預期。
+3. **RMT gap 分布顯著左移 → 60-stock universe 上原 thresholds 變得
+   過嚴**：
+
+   | universe | gap mean | gap std | gap p33 | gap p75 | gap max |
+   |---|---:|---:|---:|---:|---:|
+   | 30 | 0.050 | 0.015 | 0.045 | 0.058 | 0.097 |
+   | **60** | **0.042** | **0.011** | **0.037** | **0.049** | **0.069** |
+
+   regime_scale 分布也對應變化：
+
+   | universe | scale=0 | scale=0.5 | scale=1.0 |
+   |---|---:|---:|---:|
+   | 30 (M10) | 36% | 39% | 25% |
+   | **60 (M14)** | **62%** | **27%** | **11%** |
+
+   策略現在 62% 時間 de-risk 到零（30-root 時只有 36%），因為 M10
+   校的 thresholds (0.045/0.058) 對應 30-root 分布的 p33/p75，現在
+   不再是 60-root 的 p33/p75。若要在 60-root 重新校準：p33≈0.037、
+   p75≈0.049。
+
+### 為何 alpha 仍未出現
+
+擴 universe 是 M11/M12 列的可能因素中**機械上效果最大**的一個（vol
+顯著降），但 Sharpe 仍 -2.8 而非接近 0。結合 M11/M12 ablation 結果：
+
+- 不是 hedge 問題（M13 已修，本次保留 beta_neutral）
+- 不是 signal direction 問題（M11 reverse 沒救）
+- 不是 portfolio concentration（wider decile + 60 檔 ≈ 6→12 stocks per leg）
+- **可能是訊號本身在台股個股期 2020-2026 視窗根本不存在**，加上
+  RMT regime filter 在新 universe 上需要重新校準才公平比較
+
+### 後續可選 milestone
+
+M12 列的四項，本次完成第 1 項（擴 universe）。剩下：
+
+1. ~~擴 universe 到 ≥ 60 檔~~ — **本 M14 完成**
+2. ~~Beta-neutral hedge~~ — M13 完成
 3. **校準 commission/滑價到真實券商 spec** — 拿券商實際 fee schedule
-   (台股個股期約 110-120 NTD/口 + 0.002% 交易稅)，把
-   `per_contract_cost` 與 `spread_points` 重新設定再跑一次
-4. **Walk-forward (2020-2022 / 2022-2024 / 2024-2026)** — 把 6.32 年
-   切三段獨立跑，看不同 regime 表現
+   (台股個股期約 110-120 NTD/口 + 0.002% 交易稅)，重設
+   `per_contract_cost` 與 `spread_points`
+4. **Walk-forward (2020-2022 / 2022-2024 / 2024-2026)** — 切三段
+   獨立跑，看不同 regime 表現
 
-這些屬 `/review-strategy` 階段，由人類研究員或下次的 `/safe-yolo`
-排程繼續推進。
+額外副產品 (從 M14 衍生)：
+
+5. **RMT thresholds 在 60-root universe 重新校準** —
+   p33≈0.037 / p75≈0.049（vs 30-root 的 0.045/0.058），預期能讓
+   regime_scale 分布從 62/27/11 重回 35/40/25 的平衡
+
+這些仍屬 `/review-strategy` 階段。
+
+### Commit
+
+`M14: expand xsmom universe 30 -> 60 — vol -7.6pp / CAGR +14pp but Sharpe still negative`
+
+## Fallback 指引
+
+M13 與 M14 的改動皆獨立可逆：
+
+**M14 (本次)**:
+
+1. **config.yaml** — 把 `universe_roots:` 後 30 行刪掉（保留 CAF~DIF
+   前 30 個），回到 M13 行為。或 `git revert <M14 commit>`。
+2. **bundle** — 刪 `~/.zipline/data/tquant_future/2026-05-19T16;01;16.781143/`
+   並執行原 30-root 的 ingest 即可回到 M8 bundle 狀態（M8 bundle
+   `2026-05-12T16;03;04.279177` 仍在，沒被刪）。
+3. **docs/progress-xsmom-beta-hedge.md** — 本檔；revert M14 commit。
+
+**M13**:
+
+1. **strategy.py** — `git revert <M13 commit>` 還原 helper 函式與
+   `_rebalance` hedge 分支替換
+2. **config.yaml** — 移除 `beta_neutral_hedge:` 與 `beta_window:` 兩行
+3. **tests/test_strategy_math.py** — 三個新測試自含 stub，可獨立刪除
+4. **docs/progress-xsmom-beta-hedge.md** — 純 docs，刪掉不影響執行
+
+最差情況：`git reset --hard 46707c3`（M12 commit），再
+`rm /tmp/xsmom_m1[34]_*_result.pkl`，回到任務開始狀態。
 
 ## 相關檔案
 
-- `strategies/xsmom_stkfut_rmt/strategy.py` — 編輯 (helpers + 新 hedge 邏輯)
-- `strategies/xsmom_stkfut_rmt/config.yaml` — 編輯 (新 flags + 註解)
-- `tests/test_strategy_math.py` — 編輯 (3 個新測試)
-- `docs/progress-xsmom-beta-hedge.md` — 新增 (本檔)
-- `/tmp/xsmom_m13_beta_neutral_result.pkl` — 產出 (不入 repo)
-- `/tmp/xsmom_m13_no_hedge_result.pkl` — 產出 (不入 repo)
+- `strategies/xsmom_stkfut_rmt/strategy.py` — M13 編輯（helpers + 新 hedge 邏輯）
+- `strategies/xsmom_stkfut_rmt/config.yaml` — M13 + M14 編輯（hedge flags + 60-root universe）
+- `tests/test_strategy_math.py` — M13 編輯（3 個新測試）
+- `docs/progress-xsmom-beta-hedge.md` — M13 新增 / M14 append（本檔）
+- `/tmp/xsmom_m13_beta_neutral_result.pkl`、`/tmp/xsmom_m13_no_hedge_result.pkl` — M13 產出
+- `/tmp/xsmom_m14_60root_result.pkl` — M14 產出
+- `~/.zipline/data/tquant_future/2026-05-19T16;01;16.781143/` — M14 新 bundle
