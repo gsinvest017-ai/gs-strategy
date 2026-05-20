@@ -258,9 +258,129 @@ M13 與 M14 的改動皆獨立可逆：
 ## 相關檔案
 
 - `strategies/xsmom_stkfut_rmt/strategy.py` — M13 編輯（helpers + 新 hedge 邏輯）
-- `strategies/xsmom_stkfut_rmt/config.yaml` — M13 + M14 編輯（hedge flags + 60-root universe）
+- `strategies/xsmom_stkfut_rmt/config.yaml` — M13 + M14 + M15 編輯（hedge flags + 60-root universe + 重新校準 RMT thresholds）
 - `tests/test_strategy_math.py` — M13 編輯（3 個新測試）
-- `docs/progress-xsmom-beta-hedge.md` — M13 新增 / M14 append（本檔）
+- `docs/progress-xsmom-beta-hedge.md` — M13 新增 / M14 / M15 append（本檔）
 - `/tmp/xsmom_m13_beta_neutral_result.pkl`、`/tmp/xsmom_m13_no_hedge_result.pkl` — M13 產出
 - `/tmp/xsmom_m14_60root_result.pkl` — M14 產出
-- `~/.zipline/data/tquant_future/2026-05-19T16;01;16.781143/` — M14 新 bundle
+- `/tmp/xsmom_m15_60root_recal_result.pkl` — M15 產出
+- `~/.zipline/data/tquant_future/2026-05-19T16;01;16.781143/` — M14 新 bundle (M15 沿用)
+
+## M15 — RMT thresholds 在 60-root universe 重新校準 ⚠️ (negative finding)
+
+> 夜間無人值守任務（claude/nightly-2026-05-21）。M14 揭示 30-root 校的
+> `rmt_threshold/rmt_low_threshold = 0.058/0.045` 用在 60-root universe 上
+> 過嚴：regime_scale 變成 62% zero / 27% half / 11% full，策略 62% 時間
+> de-risk 到零。本 milestone 是 M14 列出的 5 個 follow-up 中最機械可控
+> 的一項——把閾值改成 60-root 分布的 p33/p75。
+
+### 計畫 Milestone
+
+| # | 名稱 | 預期產出 |
+|---|---|---|
+| M15a | 改 config | `rmt_threshold: 0.049` / `rmt_low_threshold: 0.037`，註解寫明 dual-universe calibration 軌跡 |
+| M15b | 重跑 backtest | `/tmp/xsmom_m15_60root_recal_result.pkl` |
+| M15c | 拉 metrics + gap/scale/beta 分布，比 M14 | 表 + 結論 |
+| M15d | 本段 + commit | `M15: recalibrate RMT thresholds for 60-root` |
+
+### 結果：M14 vs M15 (同 60-root universe，同 beta-neutral hedge)
+
+| variant | thresholds | CAGR | ann_vol | Sharpe | Max_DD | n_tx | final |
+|---|---|---:|---:|---:|---:|---:|---:|
+| M14 (30-root cal) | 0.058 / 0.045 | -43.26% | 20.15% | -2.812 | -97.28% | 748 | 833,362 |
+| **M15 (60-root cal)** | **0.049 / 0.037** | **-52.05%** | **25.48%** | **-2.852** | **-99.04%** | **742** | **287,303** |
+
+### regime_scale 分布變化
+
+| version | scale=0 | scale=0.5 | scale=1.0 |
+|---|---:|---:|---:|
+| M10 (30-root, 0.058/0.045) | 36% | 39% | 25% |
+| M14 (60-root, 0.058/0.045) | 62% | 27% | 11% |
+| **M15 (60-root, 0.049/0.037)** | **31%** | **43%** | **25%** |
+
+校準達到設計目的：M15 的 31/43/25 跟 M10 的 36/39/25 在「分布形狀」
+上等價（策略約三分之一時間 risk-off / 一半時間 half-pos / 四分之一時間
+full-pos）。Mechanically the regime filter is now apples-to-apples
+comparable to the 30-root world.
+
+### gap 分布 sanity check (跟 M14 應一致——只是 thresholds 改了)
+
+| stat | M14 | M15 |
+|---|---:|---:|
+| n | 1534 | 1534 |
+| mean | 0.042 | 0.0423 |
+| std | 0.011 | 0.0111 |
+| p33 | 0.037 | 0.0374 |
+| p75 | 0.049 | 0.0493 |
+| max | 0.069 | 0.0685 |
+
+確認 gap 是 universe + window 函數，不被 threshold 改變。新 thresholds
+(0.049/0.037) 精確對應到 60-root 自身的 p75/p33——校準到位。
+
+### basket_beta 分布 (M15)
+
+| stat | M14 | M15 |
+|---|---:|---:|
+| n | ~1534 | 1534 |
+| mean | +0.13 | +0.11 |
+| std | 0.19 | 0.18 |
+| min | -0.20 | -0.38 |
+| max | +0.48 | +0.48 |
+| p50 | +0.13 | +0.14 |
+
+basket_beta 統計近似不變（mean 0.13 → 0.11），hedge layer 行為一致。
+M15 偶爾出現 -0.38 的負 beta（M14 沒低於 -0.20），可能是新分布下
+short leg 在金融股深度撤退時 net basket beta 翻負——hedge 此時下
+long TX 單，符合直覺。
+
+### 為何 mechanically correct 但 performance 更差
+
+策略現在 25% 時間進 full position（M14 只有 11%），多出來的 14 pp
+時間暴露在 momentum signal 下。但 M12 已證實：
+
+> momentum signal 本身在台股個股期 2020-2026 視窗是負 alpha。
+
+所以越「正確地」執行這個 regime filter（讓 full / half / zero 分布
+回到原始設計），就把更多資金交給負 alpha 訊號，CAGR 從 -43% 掉到
+-52%、vol 從 20% 升到 25%。Sharpe -2.81 → -2.85 變化很小，因為
+return 與 vol 同比例惡化。
+
+這是 M11/M12 ablation 結論的 **第三次獨立證實**：
+1. M11/M12: 8 個 signal/portfolio 參數變體 CAGR 全在 [-64%, -52%]
+2. M13: 修正 hedge 數學瑕疵，Sharpe 仍 -3.04
+3. M14: 擴 universe 30 → 60，diversification 把 final value 漲 6 倍但 Sharpe -2.81
+4. **M15: 把 regime filter 校到「正確分布」，仍 Sharpe -2.85**
+
+每一個 mechanical 修正都做對了（hedge 真的 hedge、universe 真的
+diversify、regime filter 真的分配 1/3 風險預算），但每一個都不會
+創造原本不存在的 alpha。**訊號層面的問題已確認**。
+
+### 後續方向（不在本 milestone）
+
+剩下 M14 列的 3 個方向中，後 2 個（commission/滑價校準、walk-forward
+切片）的預期效果都是「進一步揭示更多負面細節」，不太可能翻轉策略。
+真正的下一步應該是：
+
+- 改變 signal 構造（e.g., 短期 mean-reversion + 長期 momentum 結合、
+  earnings drift 因子、retail flow 反向 — TQuant-Lab 已提供
+  `retail_long_short_ratio`）
+- 換 universe（小型股、半導體子集 vs 金融子集分別跑）
+- 進入 `/review-strategy` 階段做正式統計顯著性檢定（block bootstrap
+  Sharpe CI、permutation test against zero-pred null），把 negative
+  finding 量化成 publishable result
+
+M-series 整合 (M1-M15) 至此**真的可以結束了**：pipeline 完整、所有
+mechanical 修正都已驗證、四個策略的 baseline metrics 都有了，下一階段
+是 research 而非 integration。
+
+### Commit
+
+`M15: recalibrate xsmom RMT thresholds for 60-root universe — regime filter mechanically correct, third confirmation of M12 no-alpha finding`
+
+### M15 Fallback 指引
+
+1. **config.yaml** — 把 `rmt_threshold: 0.049` 改回 0.058，`rmt_low_threshold: 0.037` 改回 0.045，回到 M14 行為。或 `git revert <M15 commit>`。
+2. **產出 pkl** — `rm /tmp/xsmom_m15_60root_recal_result.pkl`。
+3. **bundle / strategy.py / 測試** — M15 不動這些，零回滾成本。
+
+最差情況：`git reset --hard cdb6aca`（M14 commit），回到任務開始狀態。

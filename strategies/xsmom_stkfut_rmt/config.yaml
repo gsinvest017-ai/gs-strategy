@@ -89,13 +89,17 @@ params:
   # M10 calibration (2026-05-14): empirical gap distribution over 2020-2026 on
   # the 30-root TX-stockfut universe has mean=0.050, std=0.015, max=0.097, so
   # the paper's 0.20 / 0.05 thresholds (sized for G5 50+ assets) make the
-  # strategy permanently sub-full. We rescale to observed percentiles:
-  #   p75 ≈ 0.058 -> full position (top quartile = "structurally rich")
-  #   p33 ≈ 0.045 -> de-risk to zero (bottom third = panic synchronisation)
-  # See docs/backtest-results-2026-05-13-xsmom.md for the original distribution
-  # and docs/progress-bt-integration.md M10 for re-run metrics.
-  rmt_threshold: 0.058     # gap >= 0.058 -> full position (p75 of empirical)
-  rmt_low_threshold: 0.045 # gap below this -> de-risk to zero (p33)
+  # strategy permanently sub-full. We rescale to observed percentiles.
+  # M15 recalibration (2026-05-21): with M14's 60-root universe the gap
+  # distribution shifted left (mean=0.042, std=0.011, max=0.069). The 30-root
+  # thresholds (0.058/0.045) over-restrict the new universe: regime_scale
+  # collapses to 62% zero / 27% half / 11% full vs the intended ~quartile mix.
+  # Rescale again to the 60-root universe's empirical percentiles:
+  #   p75 ≈ 0.049 -> full position (top quartile = "structurally rich")
+  #   p33 ≈ 0.037 -> de-risk to zero (bottom third = panic synchronisation)
+  # See docs/progress-xsmom-beta-hedge.md M14/M15 for the dual distribution.
+  rmt_threshold: 0.049     # M15: 60-root p75 (was 0.058 = 30-root p75)
+  rmt_low_threshold: 0.037 # M15: 60-root p33 (was 0.045 = 30-root p33)
 
   min_universe: 20     # below this number of available stock futures, skip
   hedge_with_tx: true  # master switch; off => no TX hedge at all
