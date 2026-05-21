@@ -384,3 +384,117 @@ mechanical 修正都已驗證、四個策略的 baseline metrics 都有了，下
 3. **bundle / strategy.py / 測試** — M15 不動這些，零回滾成本。
 
 最差情況：`git reset --hard cdb6aca`（M14 commit），回到任務開始狀態。
+
+## M16 — Walk-forward across 3 non-overlapping sub-periods ⚠️ (negative finding, 4th confirmation)
+
+> 夜間無人值守任務（claude/nightly-2026-05-22）。延續 M15 結尾「下一個
+> 可機械執行的 follow-up 是 walk-forward 切片」。M14 列的 4 項剩餘
+> 方向中，這是不需要外部 broker fee 資料、純用現有 bundle + config
+> 就能跑完的最後一項。
+
+### 計畫 Milestone
+
+| # | 名稱 | 預期產出 |
+|---|---|---|
+| M16a | 寫 walk-forward runner | `scripts/run_xsmom_walkforward.py`：3 個非重疊 ~2-year 子期間，每段 deep-copy config 後覆寫 top-level start/end |
+| M16b | 跑回測 + 收集 regime diagnostics | 3 個 `/tmp/xsmom_m16_walkforward_*_result.pkl` + metrics 表 + scale/gap/basket_beta 分布表 |
+| M16c | 寫進度文檔 + commit | 即本段 + git commit `M16:` |
+
+### 子期間切分
+
+| period | range | regime label |
+|---|---|---|
+| P1_2020_2021 | 2020-01-01 .. 2021-12-31 | COVID drawdown + V-rebound + 半導體缺貨多頭 |
+| P2_2022_2023 | 2022-01-01 .. 2023-12-31 | Fed 升息熊市 + 2023 Q4 反彈 |
+| P3_2024_2026 | 2024-01-01 .. 2026-04-30 | AI 多頭主導 + 末段震盪 |
+
+每段都 ≥ 2 年，足夠讓 lookback=126 / skip=21 / beta_window=60 暖機後仍有
+~350 個交易日真正下單。
+
+### 結果：per-period metrics
+
+| period | range | years | CAGR | ann_vol | Sharpe | Max_DD | final |
+|---|---|---:|---:|---:|---:|---:|---:|
+| P1_2020_2021 | 2020-01-01 .. 2021-12-31 | 1.99 | -77.65% | 40.34% | **-3.580** | -94.99% | 1,513,485 |
+| P2_2022_2023 | 2022-01-01 .. 2023-12-31 | 1.98 | -65.51% | 25.40% | **-4.180** | -87.96% | 3,626,669 |
+| P3_2024_2026 | 2024-01-01 .. 2026-04-30 | 2.32 | -58.17% | 27.61% | **-3.151** | -87.06% | 3,956,223 |
+
+### Regime diagnostics
+
+| period | scale=0 | scale=0.5 | scale=1.0 | gap_mean | basket_beta_mean | basket_beta_std |
+|---|---:|---:|---:|---:|---:|---:|
+| P1_2020_2021 | 25.6% | 44.2% | 30.3% | 0.0419 | +0.144 | 0.163 |
+| P2_2022_2023 | 30.9% | 52.0% | 17.1% | 0.0423 | +0.049 | 0.180 |
+| P3_2024_2026 | 36.4% | 35.0% | 28.6% | 0.0426 | +0.136 | 0.173 |
+
+### 五個觀察
+
+1. **每段 Sharpe 都顯著為負**（-3.58 / -4.18 / -3.15），策略不只是「2020-2026
+   平均無 alpha」，而是**任何 2-year 子視窗都在主動賠錢**。沒有任何 regime
+   讓 cross-sectional momentum 在這個 universe 翻正。
+2. **P2 (2022-2023) 是最差**：Sharpe -4.18，雖然 vol 最低 (25.4%)，return
+   也最穩定地往下走。Fed 升息週期下台股藍籌 dispersion 變窄、
+   momentum-formation 訊號失效；同期 basket_beta_mean 也最低 (+0.049)，
+   代表 long/short 構造本身在這段時間「比較中性」——但中性不代表沒虧，
+   因為 momentum 方向本身就錯。
+3. **P1 (2020-2021) 是最高 vol (40%)、最差 CAGR (-77.65%) 但 Sharpe 不是最差**：
+   COVID drawdown + V-rebound 把月 return whipsaw 拉大，相對虧損絕對值
+   被高 vol 「壓低」了 Sharpe 比例。Max_DD -94.99% 直接逼近清盤。
+4. **P3 (2024-2026) 是 "least bad"**：Sharpe -3.15，AI 多頭下 regime_scale=1.0
+   時間最多 (28.6%)，理論上策略最敢加倉。可是即便最敢加倉的子視窗也虧
+   58.17% CAGR——再次印證底層 signal 在這個 universe 不工作。
+5. **gap_mean 三段幾乎相等** (0.0419 / 0.0423 / 0.0426)：RMT complexity gap
+   在三個截然不同 regime 下竟然分布幾乎一樣——意味著 M15 校的閾值
+   (p33/p75=0.037/0.049) 在任一子視窗都仍是合理門檻。Regime filter
+   mechanically 是穩定的，問題不在它身上。
+
+### 第四次獨立證實
+
+加上 M11/M12 ablation、M13 hedge fix、M14 universe expansion、M15 threshold
+recal，現在這是**第四個**獨立 axis 上看 xsmom_stkfut_rmt 在
+台股個股期 universe 上的負 alpha：
+
+1. M11/M12: 8 個 signal/portfolio 參數變體 → CAGR 全 [-64%, -52%]
+2. M13: 修正 hedge 數學瑕疵 → Sharpe -3.04
+3. M14: 擴 universe 30 → 60 → Sharpe -2.81
+4. M15: 校準 regime filter → Sharpe -2.85
+5. **M16: walk-forward 3 個 2-year 子視窗 → Sharpe ∈ [-4.18, -3.15]，全段都負**
+
+每個維度都檢查過了，策略**確定不能用**。任何後續工作必須在更基礎的
+層面動工——換 signal 構造 / 換 universe 分群 / 重新做 paper-level
+hypothesis testing。M-series integration 正式告終於 M16。
+
+### 為何此 milestone 值得做
+
+雖然結論是預期內的負面確認，walk-forward 仍有獨立價值：
+
+1. **揭露 regime stability 的微觀結構**：gap_mean 跨三段幾乎不變，
+   證明 RMT complexity gap 在台股 2020-2026 是個結構穩定的訊號——
+   它測的是「整個 universe 的同步度」，**而非個別 regime label**。
+   這對未來想拿 RMT gap 當風控 overlay 的策略是好消息（即使 xsmom
+   本身死了）。
+2. **暴露 basket_beta 在 P2 的下移**：P2 mean +0.049 vs P1/P3 ~+0.14。
+   升息熊市下藍籌 long basket 與金融 short basket 的 beta 差縮小，
+   long/short 構造在這個 regime 比其他時段更接近真正 market-neutral。
+   值得後續策略借鏡：可能 P2 是這個 universe 上 long/short alpha
+   最公平的測試窗。
+3. **印證所有 mechanical fix 的穩健性**：M13 hedge / M15 thresholds
+   在每個子視窗都按設計 mechanism 工作（regime_scale 分布合理、
+   basket_beta 範圍合理、gap_mean 一致）。如果未來把 strategy.py
+   的 hedge layer 拆到 `_common/futures_setup.py` 共用，這次的 3-段
+   walk-forward 是 hedge contract 的隱含 regression test。
+
+### Commit
+
+- M16a: `M16a: add xsmom walk-forward runner script`（已合入：49409db）
+- M16b/c: 本段 + `M16: walk-forward confirms no alpha across 3 sub-periods`
+
+### M16 Fallback 指引
+
+1. **scripts/run_xsmom_walkforward.py** — `git rm` 或 `git revert <M16a commit>`。
+2. **產出 pkl** — `rm /tmp/xsmom_m16_walkforward_*_result.pkl`（3 個檔案）。
+3. **docs/progress-xsmom-beta-hedge.md** — 本段；`git revert <M16b commit>`。
+4. **strategy.py / config.yaml / bundle** — M16 不動，零回滾成本。
+
+最差情況：`git reset --hard 1c5528c`（M15 commit），再
+`rm /tmp/xsmom_m16_walkforward_*_result.pkl`，回到 M16 開始前狀態。
