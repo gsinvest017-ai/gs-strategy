@@ -498,3 +498,160 @@ hypothesis testing。M-series integration 正式告終於 M16。
 
 最差情況：`git reset --hard 1c5528c`（M15 commit），再
 `rm /tmp/xsmom_m16_walkforward_*_result.pkl`，回到 M16 開始前狀態。
+
+## M17 — Cost calibration: realistic broker fee + 期交稅 ⚠️ (negative finding, 5th confirmation + slippage model flaw exposed)
+
+> 夜間無人值守任務 (claude/nightly-2026-05-23)。M14 列的 4 項
+> follow-up 中最後一個機械可控項——「校準 commission/滑價到真實
+> 券商 spec」。同時偵測到一個 pre-existing bug：自 M14 擴 60-root
+> universe 以來，60 個 stock-fut roots 從未進過 `per_contract_cost`
+> 映射表，於是 fall back 到 zipline 的 `DEFAULT_PER_CONTRACT_COST =
+> 0.85`（USD 預設，實質約等於免費）。本 milestone 同時修這個 bug。
+
+### 動機
+
+從 `.venv-bt/lib/python3.12/site-packages/zipline/finance/commission.py`
+讀 PerContract source 確認三件事：
+
+1. `cost` 是 **per side**（line 123: `additional_commission =
+   abs(transaction.amount * cost_per_unit)`），不是 round-trip
+2. Cost map 中不存在的 root 會 fall back 到
+   `DEFAULT_PER_CONTRACT_COST = 0.85`
+3. M14 擴 universe 後，60 個 stock-fut roots 都沒進 cost map →
+   全部以 0.85 NTD/side 計算，等於免費
+
+### 計畫 Milestone
+
+| # | 名稱 | 預期產出 |
+|---|---|---|
+| M17a | 確認成本模型 | 從 zipline source 確認 PerContract 行為；蒐集 broker + 期交稅典型值 |
+| M17b | 更新 config.yaml | TX/MTX/60 stock-fut 全部進 cost map；含中文 ticker 註解 |
+| M17c | 跑回測 + 比 M15 | metrics 表 + slippage 8 vs 6 的 ablation 揭示模型缺陷 |
+| M17d | 寫進度文檔 + commit | 本段 |
+
+### 成本模型（per-side NTD）
+
+| Root | M15 cost | M17 cost | 來源 |
+|---|---:|---:|---|
+| TX | 200 | **150** | broker ~80 + 期交稅 ~70 (= 17000pt × 200 × 0.00002) |
+| MTX | 100 | **60** | broker ~40 + 期交稅 ~17 (= 17000pt × 50 × 0.00002) |
+| 60 stock-fut | (none → 0.85) | **120 each** | broker ~110 + 期交稅 ~10 (per M14 doc 註解 "110-120 NTD/口 + 0.002% 交易稅") |
+
+### 結果：3 組對照
+
+| variant | spread (pts) | stock-fut cost | CAGR | ann_vol | Sharpe | Max_DD | n_tx | final |
+|---|---|---|---:|---:|---:|---:|---:|---:|
+| M15 (baseline) | 6.0 | 0.85 (default) | -52.05% | 25.48% | -2.852 | -99.04% | 742 | 287,303 |
+| **M17a (commission-only)** | **6.0** | **120** | **-52.49%** | **25.98%** | **-2.829** | **-99.10%** | **721** | **270,821** |
+| M17 ablation (cost + slippage 8) | 8.0 | 120 | -56.23% | 34.55% | -2.272 | -99.46% | 488 | 161,243 |
+
+**M17 canonical run**: commission-only (`/tmp/xsmom_m17_commonly_result.pkl`).
+Config.yaml 鎖在 `spread_points: 6.0`；slippage 8.0 變體保留在
+`/tmp/xsmom_m17_cost_realistic_result.pkl` 供 audit。
+
+### 四個發現
+
+1. **真實 commission 對策略的衝擊極小**：CAGR 從 -52.05% 變
+   -52.49%（−0.44 pp，~7 bp/年）、Sharpe 微差到不可察覺
+   (-2.852 → -2.829)。**證實 M15 結論不是被低估的成本撐起來的**——
+   即使按真實 broker fee + 期交稅，策略仍然是 6 年 -52% CAGR 的
+   負 alpha bottom。
+2. **n_tx 微降 (742 → 721)**：commission 多收一點現金，rebalance
+   時 buying power 微縮 → `order_target_percent` 切出來的合約數
+   被 floor 截尾稍多。沒有結構性變化。
+3. **slippage 6→8 是真正的劇變來源**：CAGR 從 -52.5% 掉到 -56.2%
+   （-3.74 pp），portfolio 9 個月跌到 10%、1 年跌到 5%、2 年跌到 1%。
+   ann_vol 從 26% 飆到 34.5% 因為早期巨幅 daily drawdown。
+4. **slippage model 結構缺陷揭露**：`FixedSlippage(spread=X)` 套用
+   **單一** spread 到所有資產 price units。對 TX (~17000 pt)，
+   6 pts = 0.035% per side；對 100 NTD 個股期，6 NTD/share = **6%
+   per side**。同一個 spread 數值在 mixed universe (index futures +
+   stock futures) 下對兩類資產的相對影響差 170×。8.0 的 ablation
+   顯示這個 mismatch 並非線性 — bump 33% 就 wreck portfolio。
+
+### 為何 commit 用 spread_points=6.0 而非 8.0
+
+實際 stock-fut bid/ask 在台灣多落在 0.05-0.10 NTD/share（小型成份股）
+到 0.5-1.0 NTD/share（流動性差的小尾）。6 NTD/share 已經是 60-600
+ticks，遠超實況；8 NTD/share 更誇張。M15 的 6.0 在 stock-fut 上
+已經 over-charges，但至少 M15 baseline 的所有對照都用它，
+apples-to-apples 比較成立。M17 在 commission 結構修正之後，
+保留 6.0 維持 cross-version 比較性；slippage 模型本身的問題
+留給未來 milestone（需要 per-root slippage 或 percentage-based
+slippage model）。
+
+### diagnostic 統計 (M17 commission-only vs M15)
+
+basket_beta 與 regime_scale 統計**基本不變**（commission 不影響
+訊號或 regime filter）：
+
+| stat | M15 | M17 |
+|---|---:|---:|
+| basket_beta mean | +0.11 | +0.111 |
+| basket_beta std | 0.18 | 0.177 |
+| basket_beta min/max | -0.38 / +0.48 | -0.383 / +0.475 |
+| gap mean / std | 0.0423 / 0.0111 | 0.0423 / 0.0111 |
+| regime_scale 0 / 0.5 / 1.0 | 31% / 43% / 25% | 31.2% / 43.3% / 25.5% |
+
+Trade flow by year (M17 commission-only):
+`{2020: 291, 2021: 233, 2022: 114, 2023: 42, 2024: 31, 2025: 10, 2026: 0}`
+— 跟 M15 同樣前重後輕，因為 portfolio 越打越小、合約 floor 截尾越多。
+
+### 為什麼這仍然重要（即使數字慘）
+
+M11 / M12 / M13 / M14 / M15 / M16 都是「mechanical 修正但 alpha
+仍缺席」的累積證據。M17 是第 5 次獨立確認，但有兩個新貢獻：
+
+1. **修掉 pre-existing cost-undercount bug**：自 M14 擴 universe 後
+   60 個 stock-fut roots 都跑在 0.85 NTD/side 預設。現在所有 root
+   都有明確成本標註，未來改 universe 或加新 root 不會再隱性繼承
+   這個 default fallback。
+2. **暴露 slippage model 結構缺陷**：FixedSlippage 對 mixed price-
+   scale universe 失效。這是任何想在 TX + stock-futures 上做 L/S
+   策略都會撞到的問題，不只 xsmom_stkfut_rmt。下個 milestone 若要
+   做正確的 slippage layer，需要：(a) 用
+   `VolumeShareSlippage` 把 spread 縮成「fraction of price」；
+   (b) 或寫 custom slippage 模型按 root_symbol 套不同 spread；
+   (c) 或乾脆把 stock-fut slippage 移到 commission 內（per-contract
+   slippage 預估）。
+
+### M14 列的 5 項 follow-up 至此全部完成
+
+| # | 項目 | milestone | 結論 |
+|---|---|---|---|
+| 1 | universe 擴 30 → 60 | M14 ✅ | vol -7.6 pp，但 Sharpe 仍 -2.81 |
+| 2 | Beta-neutral hedge | M13 ✅ | hedge 機制現在正確，但不創造 alpha |
+| 3 | 成本/滑價校準 | **M17 ✅** | commission 真實化只多 -0.44 pp/年；slippage model 結構缺陷待修 |
+| 4 | Walk-forward 切片 | M16 ✅ | 3 個子視窗全負 Sharpe，沒有「壞 regime + 好 regime」可拆 |
+| 5 | RMT thresholds 60-root 校準 | M15 ✅ | regime filter 分布回到設計值，performance 反而變差 |
+
+### Open follow-ups（不在 integration M-series scope）
+
+- **Slippage model rewrite**：寫 per-root spread map 或 percentage-based
+  slippage，把 stock-fut spread 設為合理 0.05-0.1 NTD/share 範圍
+- **訊號層 redesign**：M15 / M16 已確認 cross-sectional momentum 在
+  台股個股期 2020-2026 全期 + 各子視窗都無 alpha；需換訊號（短期
+  reversal、retail flow、earnings drift）或換 universe（小型股、
+  半導體子集 vs 金融子集）
+- **正式統計顯著性**：block bootstrap Sharpe CI、permutation test
+  against zero-pred null，把 negative finding 量化成 publishable
+  result
+
+進入 `/review-strategy` 階段，這些屬於 research 而非 integration。
+
+### Commit
+
+`M17: calibrate commission/slippage to realistic broker spec — confirms M15 finding + reveals FixedSlippage structural mismatch`
+
+### M17 Fallback 指引
+
+1. **config.yaml** — `git revert <M17 commit>` 還原 cost map。或手動：
+   - `per_contract_cost.TX` 改回 200、`MTX` 改回 100
+   - 刪除 60 個 stock-fut 的 cost entries
+   - slippage 不變（一直保持 6.0；M17 末段已 revert）
+2. **產出 pkl** — `rm /tmp/xsmom_m17_*_result.pkl`（2 個檔案）。
+3. **strategy.py / bundle / 測試** — M17 不動，零回滾成本。
+4. **docs/progress-xsmom-beta-hedge.md** — 本段，`git revert <M17 commit>`。
+
+最差情況：`git reset --hard 2d6427f`（M16 commit），再
+`rm /tmp/xsmom_m17_*_result.pkl`，回到 M17 開始前狀態。

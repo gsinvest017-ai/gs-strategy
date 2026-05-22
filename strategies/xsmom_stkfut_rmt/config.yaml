@@ -116,9 +116,91 @@ params:
 
   days_before_close: 10
 
+  # M17 cost calibration (2026-05-23). Per zipline.finance.commission.PerContract
+  # source (.venv-bt/.../commission.py:123), `cost` is applied **per side**
+  # (transaction.amount * cost_per_unit), and roots NOT in the map fall back to
+  # DEFAULT_PER_CONTRACT_COST = 0.85 (USD, originally). Before M17 the 60 stock-
+  # futures roots had no entry => they traded at ~0.85 NTD/side (essentially
+  # free). M17 explicitly maps every traded root using realistic Taiwan broker +
+  # 期交稅 (transaction tax 0.00002 of contract value) figures:
+  #
+  #   TX:   broker ~80 + tax ~70 (= 17000pt * 200/pt * 0.00002)  ->  150 NTD/side
+  #   MTX:  broker ~40 + tax ~17 (= 17000pt *  50/pt * 0.00002)  ->   60 NTD/side
+  #   stockfut: broker ~110 + tax ~10 (~300K notional)           ->  120 NTD/side
+  #
+  # (M14 doc note: "台股個股期約 110-120 NTD/口 + 0.002% 交易稅")
   per_contract_cost:
-    TX: 200
-    MTX: 100
-    # Stock futures default 100 NTD/contract; tune per broker
+    TX: 150
+    MTX: 60
+    # Stock futures (all 60 roots ingested in M14 bundle). Same 120 NTD/side
+    # applied uniformly — per-root broker discounts not modelled.
+    CAF: 120  # 1303 南亞
+    CBF: 120  # 2002 中鋼
+    CCF: 120  # 2303 聯電
+    QFF: 120  # 2330 TSMC
+    CEF: 120  # 2881 富邦金
+    CFF: 120  # 1301 台塑
+    CGF: 120  # 2324 仁寶
+    CHF: 120  # 2409 友達
+    CJF: 120  # 2880 華南金
+    CKF: 120  # 2882 國泰金
+    CLF: 120  # 2886 兆豐金
+    CMF: 120  # 2887 台新金
+    CNF: 120  # 2891 中信金
+    CQF: 120  # 1216 統一
+    CRF: 120  # 1402 遠東新
+    CSF: 120  # 1605 華新
+    CUF: 120  # 2323 中環
+    CWF: 120  # 2352 佳世達
+    CXF: 120  # 2371 大同
+    CYF: 120  # 2408 南科
+    CZF: 120  # 2603 長榮
+    DAF: 120  # 2609 陽明
+    DBF: 120  # 2610 華航
+    DCF: 120  # 2801 彰銀
+    DDF: 120  # 2888 新光金
+    DEF: 120  # 2890 永豐金
+    DFF: 120  # 1101 台泥
+    DGF: 120  # 1326 台化
+    DHF: 120  # 2317 鴻海
+    DIF: 120  # 2337 旺宏
+    QRF: 120  # 2357 華碩
+    DKF: 120  # 2382 廣達
+    DLF: 120  # 2412 中華電
+    DNF: 120  # 2884 玉山金
+    DOF: 120  # 2885 元大金
+    DPF: 120  # 2892 第一金
+    DQF: 120  # 3481 群創
+    DSF: 120  # 2353 宏碁
+    DUF: 120  # 2448 晶電
+    PUF: 120  # 2454 聯發科
+    DWF: 120  # 2915 潤泰全
+    DXF: 120  # 3231 緯創
+    DYF: 120  # 1102 亞泥
+    DZF: 120  # 1210 大成
+    EEF: 120  # 1312 國喬
+    EGF: 120  # 1314 中石化
+    EHF: 120  # 1319 東陽
+    EKF: 120  # 1440 南紡
+    EMF: 120  # 1504 東元
+    EOF: 120  # 1560 中砂
+    EPF: 120  # 1590 亞德客-KY
+    ERF: 120  # 1702 南僑
+    EYF: 120  # 1718 中纖
+    EZF: 120  # 1722 台肥
+    FBF: 120  # 2006 東和鋼鐵
+    FCF: 120  # 2014 中鴻
+    FEF: 120  # 2027 大成鋼
+    QMF: 120  # 2049 上銀
+    SVF: 120  # 2059 川湖
+    FKF: 120  # 2105 正新
+  # Slippage stays at 6.0 (= M15). FixedSlippage applies a single `spread` in
+  # the asset's price units, so for TX (index ~17000) 6 pts = 0.035% per side
+  # while for a 100 NTD stock-future 6 NTD/share = 6% per side. This mismatch
+  # already over-charges stock-futures slippage; bumping to 8.0 was tested in
+  # M17 and produced a non-linear 4 pp CAGR worsening that dominates the cost-
+  # realistic commission story. Documented as a known structural limitation
+  # (FixedSlippage cannot differ by asset); proper fix requires a per-root
+  # VolumeShareSlippage or a custom slippage model — out of M17 scope.
   spread_points: 6.0
   # benchmark omitted: IR0001 is in `tquant` bundle, not `tquant_future`.
