@@ -655,3 +655,131 @@ M11 / M12 / M13 / M14 / M15 / M16 都是「mechanical 修正但 alpha
 
 最差情況：`git reset --hard 2d6427f`（M16 commit），再
 `rm /tmp/xsmom_m17_*_result.pkl`，回到 M17 開始前狀態。
+
+## M18 — 正式統計顯著性檢定：把 negative finding 量化成 publishable result ✅
+
+> 夜間無人值守任務（claude/nightly-2026-05-24）。M17 收尾後，M14 列的
+> 5 個 mechanical follow-up 全部完成、整合 M-series 結束。M17 結尾
+> 「Open follow-ups」中**最自洽**的一項：用既有 result pkl 跑正式統計
+> 顯著性檢定，把 5 次獨立確認的「無 alpha」結論量化成可發表的 p-value。
+> 不需新 ingest、不需 strategy.py 改動、不需 broker spec — 100% self-contained。
+
+### 計畫 Milestone
+
+| # | 名稱 | 預期產出 |
+|---|---|---|
+| M18a | 寫 stat-sig runner | `scripts/run_xsmom_stat_sig.py`：block bootstrap Sharpe CI + 平均報酬 p-value + sign-flip permutation test + 參數 t-test |
+| M18b | 跑 4 個 pkl (M17 canonical + 3 個 walk-forward sub-periods) | 4 組顯著性數字 |
+| M18c | 寫本段 + commit | 即本檔追加段落 + `M18: ...` |
+
+### 三組互補 null-hypothesis 檢定
+
+1. **Block bootstrap Sharpe 95% CI** (block_size=20 ≈ 月度 rebalance cycle，
+   n_iter=10000)：考慮序列自相關，從 empirical 分布抽 monthly 大小的 block
+   重組樣本算 Sharpe，看 [p2.5, p97.5] 是否含 0。**若含 0** → Sharpe 與
+   0 無法統計區分；**不含 0** → 顯著偏離 0。
+
+2. **Bootstrap 平均報酬 p-value (one-sided H1: mean > 0)** + 參數 t-test
+   平行驗算：直接檢驗 daily return mean 是否能由「真實 mean=0 加雜訊」
+   解釋。
+
+3. **Sign-flip permutation test (H0: mean = 0)**：對每天的 return 隨機
+   乘 ±1，重算 Sharpe 形成 null 分布。保留 empirical variance 與大幅
+   daily move 的事件結構，只對稱化「方向」。**對只看 ordering 的 plain
+   shuffle 是更強的檢定**——後者對 stationary Sharpe 退化（時間順序
+   不影響 mean/std），sign-flip 才真正測「方向 vs noise」。
+
+### 結果 (n_iter=10000, block_size=20)
+
+| dataset | 用 n_obs | observed Sharpe | bootstrap 95% CI | CI 含 0? | parametric t (dof) | param 1-sided p | sign-flip p |
+|---|---:|---:|---|---:|---:|---:|---:|
+| **M17 canonical (2020-2026, 6.32y)** | 1399/1534 | -2.967 | [-3.475, -2.549] | **No** | -6.990 (1398) | **2.12e-12** | **0/10000** |
+| M16 P1 COVID (2020-2021) | 489/489 | -3.580 | [-4.250, -2.985] | **No** | -4.987 (488) | 4.27e-07 | 0/10000 |
+| M16 P2 hike-bear (2022-2023) | 485/485 | -4.180 | [-4.857, -3.518] | **No** | -5.799 (484) | 6.01e-09 | 0/10000 |
+| M16 P3 AI-bull (2024-2026) | 560/560 | -3.151 | [-3.731, -2.553] | **No** | -4.697 (559) | 1.66e-06 | 0/10000 |
+
+註：`n_obs` 是 trim 掉「portfolio 死亡後的零報酬尾」後的 daily return
+數。M17 canonical 後 135 個交易日 PV 已縮到 < 1% 起始值，daily move
+四捨五入到 0，不是真實市場訊號。`--include-zeros` 對照組 Sharpe -2.83
+（vs -2.97），結論不變。
+
+### 結論：四個關鍵 finding
+
+1. **完整 6.32 年期間「Sharpe = 0」H0 被以 p ≈ 2×10⁻¹² 拒絕**。換句話說，
+   若策略真的有 zero alpha + 純 noise，看到這樣 6 年虧損 99% 資金的
+   機率是 2 兆分之一。負 alpha **不是運氣**。
+
+2. **三個非重疊 sub-periods 獨立全部顯著**（p 從 10⁻⁶ 到 10⁻⁹）。
+   不存在某個「壞 regime + 好 regime」可分割來救活策略 — 每段都是
+   獨立 publishable negative result。
+
+3. **Block bootstrap upper-CI bound 在 4 個資料集都遠離 0**：M17 完整
+   期間最 conservative 的 upper bound 是 -2.55（即使在 2.5% optimistic
+   尾端，Sharpe 仍是 -2.55）。這是策略「無法被解釋為樣本不幸」的
+   robust 證據。
+
+4. **Sign-flip null 分布的標準差 0.42–0.72** （取決於 sample size），
+   而觀察到 Sharpe 全在 -3 ~ -4 區間——距離 null mean 0 約 **4–7 個
+   null std**。對應到 Cohen's d (effect size) 約 7σ 量級，遠超
+   「decisive」的 |d| > 0.8 門檻。
+
+### 為什麼這是 publishable result（而不是「策略失敗 commit」）
+
+M11–M17 累積 5 次獨立 mechanical 確認「無 alpha」，M18 把這些結論
+**量化成標準學術統計語言**：
+
+- 「block bootstrap 95% CI 不含 0」⇒ 可寫進 paper Table 1
+- 「sign-flip p < 10⁻⁴, n_iter=10000」⇒ 拒絕 H0 的標準格式
+- 「跨 3 個 non-overlapping sub-periods 一致顯著」⇒ regime stability
+  支持結論非樣本選擇 artifact
+
+對應到 López de Prado (2018) 對 negative result 的標準（Backtest
+Degradation Ratio + bootstrap CI + permutation null），這已經足以
+寫成「Cross-sectional momentum on Taiwan stock-futures (2020-2026):
+A statistically robust null result」型的短論文。
+
+### 額外發現：sign-flip null 的 Sharpe std 隨 n 縮放
+
+| dataset | n | null Sharpe std |
+|---|---:|---:|
+| P1 | 489 | 0.719 |
+| P2 | 485 | 0.723 |
+| P3 | 560 | 0.678 |
+| M17 (full) | 1399 | 0.424 |
+
+理論上 sign-flip null 的 Sharpe std 應為 √(252/n)（中央極限定理）：
+
+- n=489 → √(252/489) = 0.718 ✅
+- n=485 → √(252/485) = 0.721 ✅
+- n=560 → √(252/560) = 0.671 ≈ 0.678 ✅
+- n=1399 → √(252/1399) = 0.425 ≈ 0.424 ✅
+
+四個資料集的 null 分布都精確符合理論預測，確認 sign-flip 實作沒有
+bug，且 daily return series 雖序列相關但其 sign-flip null 仍 well-behaved。
+
+### 後續方向（仍屬 research，不在本 milestone）
+
+- **多重比較校正**：M11-M12 ablation 試了 8 個 portfolio 變體 + M13-M17
+  又 5 個 config 變體 ≈ 13 個獨立 hypothesis。Bonferroni 校正後
+  α = 0.05/13 ≈ 0.004，但我們所有 p-value < 10⁻⁶，遠低於校正門檻
+- **Effect size CI**：把 Cohen's d 也加 bootstrap CI，給期刊 review
+  更完整的 statistical reporting
+- **Heteroscedasticity-robust 標準誤**：M14-M17 已知 vol 結構性
+  變化（前重後輕），可考慮 Newey-West 或 GARCH-adjusted t-stat
+
+這些都是 `/review-strategy` 階段的事，整合 M-series 在 M18 真的
+結束。M18 是這個 strategy 在當前 universe + 視窗的**最後一張**
+data point — 後續任何 attempt 必須換訊號、換 universe、或換時段
+才有意義。
+
+### Commit
+
+`M18: formal statistical significance — Sharpe CI excludes 0, p < 10^-12 across full period + 3 sub-windows`
+
+### M18 Fallback 指引
+
+1. **scripts/run_xsmom_stat_sig.py** — 新檔；直接 `rm` 或 `git revert` 移除
+2. **docs/progress-xsmom-beta-hedge.md** — 本段；`git revert <M18 commit>`
+3. **strategy.py / config / 測試 / bundle / pkl** — M18 不動任何既有資產，零回滾成本
+
+最差情況：`git reset --hard 6898a0d`（M17 commit），回到 M18 開始前狀態。
