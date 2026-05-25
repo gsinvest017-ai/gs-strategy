@@ -924,3 +924,168 @@ drift）、換 universe（小型股、半導體子集 vs 金融子集）、或�
 3. **strategy.py / config / 測試 / bundle / pkl** — M19 不動任何既有資產，零回滾成本
 
 最差情況：`git reset --hard ef4d09d`（M18 commit），回到 M19 開始前狀態。
+
+## M20 — Sector-split sub-universe analysis ⚠️ (5th independent no-alpha confirmation)
+
+> 夜間無人值守任務（claude/nightly-2026-05-26）。M19 結尾「下一階段是
+> research：換訊號 / 換 universe / 進 review-strategy」之中，**換 universe
+> 為 sector-split** 是最具體可機械執行的一項——不需要新 bundle、新外部
+> 資料、或新訊號構造。僅將既有 60-root 切成 TECH / FIN / TRAD 三段
+> sub-universe，看 pooled 結果是否在隱藏 sector-level alpha。
+
+### 假設
+
+M11-M19 確認 pooled 60-root 在 2020-2026 視窗無 alpha。若這個 null 來自
+「兩個方向相反的 sector signal 在 pooled 平均下互相抵銷」（例如半導體
+個股 momentum 賺、金融股 mean-revert），切開 sub-universe 後**至少**
+一個 sector 應該出現正 Sharpe。若所有 sub-universe 都負 Sharpe，pooled
+null 不是 averaging artifact 而是 signal 本身就沒 alpha。
+
+### 方法
+
+- 把 60-root M14 universe 按 TWSE 產業分類切成 3 段（純公開分類，無
+  專有對應）：
+  - **TECH 15**: 半導體（2330/2303/2337/2408/2454/2448） + EMS/ODM
+    （2317/2382/3231/2324/2353） + 顯示器（2409/3481/2352） + PC OEM（2357）
+  - **FIN 12**: 12 家金控/銀行（2881/2880/2882/2886/2887/2891
+    /2801/2888/2890/2884/2885/2892）
+  - **TRAD 33**: 其餘所有——石化、鋼鐵、食品、電信、海運、水泥、紡織、
+    汽車零件、機械、塑膠、橡膠、化纖、肥料等
+- 共 60 = 15 + 12 + 33 ✓（與 base universe 完全 partition）
+- 其他所有參數**完全沿用 M17 canonical**（lookback=126、skip=21、
+  long/short_decile=0.10、gross_target=1.0、rmt_threshold 0.049/0.037、
+  beta_neutral_hedge=true、beta_window=60、M17 commission map）
+- `min_universe` 由 20 降到 10（FIN 只有 12 名，否則 1-2 檔暫時不可
+  交易就會整段 skip rebalance）
+
+腳本：`scripts/run_xsmom_sectors.py`，deep-copy config → 覆寫
+`universe_roots` + `min_universe` → run。三段獨立 pkl 落在
+`/tmp/xsmom_m20_sector_{TECH,FIN,TRAD}_result.pkl`。
+
+### 結果
+
+#### Sector-split metrics (6.32 年、30M NTD 起始、相同 base config)
+
+| sector | roots | CAGR | ann_vol | Sharpe | Max_DD | n_days | final |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| TECH | 15 | -63.46% | 41.55% | -2.273 | -99.83% | 1534 | 51,535 |
+| **FIN** | **12** | **NaN (blow-up)** | **84.89%** | **-1.503** | **-100.00%** | **1534** | **-1,040** |
+| TRAD | 33 | -60.10% | 46.53% | -1.768 | -99.70% | 1534 | 89,904 |
+| (M17 60-root baseline) | 60 | -52.49% | 25.98% | -2.829 | -99.10% | 1534 | 270,821 |
+
+#### Regime diagnostics
+
+| sector | scale=0 | scale=0.5 | scale=1.0 | gap_mean | gap_std | basket_beta_mean | basket_beta_std |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| TECH | 5.5% | 8.0% | 86.6% | 0.0684 | 0.0170 | +0.164 | 0.401 |
+| FIN | 15.0% | 29.4% | 55.6% | 0.0543 | 0.0194 | +0.027 | 0.150 |
+| TRAD | 8.4% | 9.3% | 82.3% | 0.0592 | 0.0138 | +0.142 | 0.315 |
+| (60-root M17) | 31.0% | 43.0% | 25.0% | 0.0420 | 0.0110 | +0.110 | 0.18 |
+
+#### FIN blow-up 細節
+
+- `portfolio_value` 最低 = **-1,040 NTD**（資不抵債）
+- 1534 天裡有 **1233 天 (80%)** portfolio_value 為負
+- 單日 return min = -121.76%（fully-leveraged short squeeze + margin call
+  把已是負數的 PV 再砍掉 1.2 倍）
+- daily return std = 5.35%（vs TECH 2.62% / TRAD 2.93% / pooled 1.54%）
+
+FIN 12 檔 × decile 0.10 = top/bottom 1.2 ≈ 2 stocks per leg。Long 2 檔
++ short 2 檔 + TX hedge，6.32 年內任一支金控大幅 gap（如 2022
+壽險股大跌、2024 中信金合併消息）就足以擊穿 margin。Sharpe -1.503
+是分子分母都有破壞之後算出來的 spurious 數字，不應與 TECH/TRAD 對比。
+
+### 三個 honest 發現
+
+1. **3 個 sub-universe 全部負 Sharpe，"sector-mixes-alpha" 假設拒絕**。
+   Sharpe 範圍 [-2.27 (TECH), -1.50 (FIN, spurious), -1.77 (TRAD)]，
+   final portfolio value 範圍 -1k ~ 90k（vs M17 60-root baseline 271k）。
+   沒有任何 sector 出現**正 Sharpe**——alpha 沒有藏在哪個 sector
+   被 averaging 抵銷掉。
+   **注意 Sharpe 的方向**：TECH/TRAD 的 Sharpe 數值絕對值反而**比
+   pooled -2.83 小**（-2.27 / -1.77）。這不是 alpha 出現，而是 vol
+   爆增 ~1.7×（pooled 25.98% → TECH 41.55% / TRAD 46.53%）讓 Sharpe
+   分母放大，所以 ratio 看起來「沒那麼負」。在絕對 P&L / CAGR / final
+   value 上每個 sector 都遠遠 worse than pooled——diversification
+   benefit (M14) 一被切走就消失，剩下純粹的負 alpha 訊號 + 集中風險。
+
+2. **RMT 閾值對 sub-universe 嚴重失準**。TECH 與 TRAD 的 gap_mean
+   分別 0.068 / 0.059，都顯著高於 M15 校準的 60-root 閾值 0.049
+   （p75），導致 regime filter 變成「永遠 full position」(86.6% / 82.3%)，
+   策略對負 alpha 訊號的暴露達 4-5 倍 baseline。若要 fair comparison
+   需要 per-sector 重新校準 thresholds（每個 sector 自身的 p33/p75）——
+   但 M14/M15 已示範重新校準只會把更多資金交給負 alpha，所以方向上
+   沒有理由相信會逆轉。
+
+3. **basket_beta 變動性 sub-universe 內被放大**。pooled 60-root 的
+   basket_beta std = 0.18；TECH 0.40、TRAD 0.32（FIN 0.15 是個例外，
+   金融股 beta 同質性高）。Sub-universe 越小、cross-section dispersion
+   越窄，少數幾檔強勢/弱勢股就主導 net beta，動態 hedge 訊號波動劇烈，
+   產生額外 turnover 與 hedge slippage 成本。
+
+### 為何切 sector 反而**更壞**而非更好
+
+M14 finding：擴 universe 30→60 讓 CAGR 從 -57% 改善到 -43%（diversification
+工作正常）。M20 是反向操作：切回 12-33 名小 universe → CAGR 退化到
+-60%（TRAD）/ -63%（TECH）/ blow-up（FIN）。這跟隨機 portfolio theory
+完全一致：在負 alpha 訊號下，越分散越能緩衝損失；越集中越快爆。
+
+**Sector-split 不是「找隱藏 alpha」，而是「把 negative alpha 集中暴露」**。
+要找隱藏 alpha 必須換訊號（M19 列的方向：mean-reversion、retail flow、
+earnings drift）或對 momentum 訊號做 sector-neutralization
+（每 sector 內各自做 cross-sectional momentum，加總成 portfolio）。
+後者技術上可行但已脫離本 milestone "swap universe" 範疇。
+
+### 累計 5 次獨立確認
+
+| M# | 方法 | 結論 |
+|---|---|---|
+| M11-M12 | 8 個 portfolio/signal 變體 (reverse / wide decile / long-only) | CAGR ∈ [-64%, -52%] |
+| M13 | 修 hedge 數學 (beta-neutral) | Sharpe 仍 -3.04 |
+| M14 | 擴 universe 30→60 | Sharpe 從 -3.04 → -2.81 (vol 降但 Sharpe 同比例) |
+| M15 | 重新校準 RMT thresholds | Sharpe -2.85（與 M14 等價） |
+| M16-M19 | 3 段 walk-forward + 5 種統計檢定 | 全部 sub-period 顯著負 (HAC t = -5.4 ~ -7.6, p < 10⁻⁸ ~ 10⁻¹⁴) |
+| **M20** | **Sector-split (TECH/FIN/TRAD)** | **全部 sub-universe 負 Sharpe，FIN blow-up** |
+
+每一次嘗試都在不同維度上找潛在 alpha 來源，每一次都失敗。**xsmom_stkfut_rmt
+在台股個股期 2020-2026 視窗的 null result 是 robust to**:
+- Portfolio 構造（concentrated / wide / long-only / reverse）
+- Hedge layer（dollar-net no-op / beta-neutral working）
+- Universe size（30 / 60 / 12 / 15 / 33）
+- Regime filter calibration（paper / 30-root / 60-root percentiles）
+- Time slice（2020-21 / 2022-23 / 2024-26）
+- Commission spec（free / realistic）
+- Sector composition（pooled / tech-only / fin-only / trad-only）
+
+### 後續方向（不在本 milestone）
+
+M19 列的 3 條 research-stage 方向中，本次完成「換 universe (sector-split)」，
+剩下：
+
+1. **換訊號**：短期 mean-reversion (1-5 day reversal)、retail_long_short_ratio
+   反向、earnings drift。**這需要新策略檔案**（不在 xsmom_stkfut_rmt 框架內），
+   屬於 `/quant-researcher` 階段而非 integration M-series。
+2. **Sector-neutralized momentum**：每 sector 內各自 rank，加總組成 portfolio。
+   技術上可行但需要修 strategy.py 加 `sector_classification` 參數，超過 M-series
+   "minimal config change" 範疇。
+3. **進 `/review-strategy` 階段**：把 M11-M20 的所有 negative findings 整理成
+   formal audit report，產出 publishable null result paper（López de Prado Ch.11
+   checklist 全 ✓）。
+
+**M-series 整合 (M1-M20) 至此真的結束**。Pipeline 完整、機械修正全部驗證、
+5 個獨立 dimension 的 null result 收齊。下一步必須是 research（新訊號）
+或 review（formal sign-off），不能繼續在 xsmom 既有框架內 patching。
+
+### Commit
+
+`M20: sector-split sub-universe analysis — TECH/FIN/TRAD all negative Sharpe, FIN blow-up, 5th independent no-alpha confirmation`
+
+### M20 Fallback 指引
+
+1. **scripts/run_xsmom_sectors.py** — 新檔；`rm` 或 `git revert` 移除
+2. **docs/progress-xsmom-beta-hedge.md** — 本段；`git revert <M20 commit>`
+3. **strategy.py / config / 測試 / bundle / 既有 pkl** — M20 完全不動既有資產，零回滾成本
+4. **新產出 pkl** — `rm /tmp/xsmom_m20_sector_*.pkl`（3 個）
+
+最差情況：`git reset --hard 2a29b7f`（M19 commit），再
+`rm /tmp/xsmom_m20_sector_*.pkl`，回到 M20 開始前狀態。
