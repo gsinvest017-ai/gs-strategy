@@ -1,0 +1,42 @@
+id: {{ bundle_id }}
+name: {{ name | tojson }}
+description: |
+  {{ description_indented }}
+asset_class: future
+bundle: tquant_future
+start: '{{ start }}'
+end: '{{ end }}'
+capital_base: {{ capital_base }}
+params:
+{{ params_yaml | indent(2, True) }}
+tags:
+{% for tag in tags %}- {{ tag }}
+{% endfor %}requires_tej_key: true
+requires_review: true
+extra_deps: []
+symbols:
+{% for sym in symbols %}- {{ sym }}
+{% endfor %}spec_version: 1
+source:
+  kind: generated
+  generator: quant_crawler.strategy_gen
+  generator_version: '1.0'
+  generated_at: '{{ generated_at }}'
+  template: {{ template }}
+  matched_keywords: {{ matched_keywords | tojson }}
+  inputs:
+    paper:
+      source: {{ paper_source }}
+      source_id: {{ paper_source_id | tojson }}
+      title: {{ paper_title | tojson }}
+      authors: {{ paper_authors | tojson }}
+      published: '{{ paper_published }}'
+      url: {{ paper_url | tojson }}
+{% if paper_doi %}      doi: {{ paper_doi | tojson }}
+{% endif %}{% if paper_categories %}      categories: {{ paper_categories | tojson }}
+{% endif %}
+review_checklist:
+  - Replace `_generate_signal()` with the paper's actual signal formula
+  - Verify default params match the paper (lookback, thresholds, etc.)
+  - Confirm cost / slippage assumptions for the target instrument
+  - Set `requires_review: false` only after a human has signed off

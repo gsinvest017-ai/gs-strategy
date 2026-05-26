@@ -6,5 +6,6 @@ carry paper provenance, but their strategy.py is a no-trade placeholder
 until a human fills in the signal logic.
 """
 from .classify import TEMPLATES, classify_paper
+from .generate import generate_bundle, paper_slug
 
-__all__ = ["TEMPLATES", "classify_paper"]
+__all__ = ["TEMPLATES", "classify_paper", "generate_bundle", "paper_slug"]
