@@ -43,11 +43,23 @@ def _stub_zipline() -> None:
 
 
 def _load(path: Path):
-    spec = iu.spec_from_file_location(path.stem, path)
-    module = iu.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
+    # Mirror the dashboard's driver: sys.path[0] = bundle dir so sibling
+    # files (futures_setup.py) resolve. Pop after load so other tests stay
+    # isolated.
+    bundle_dir = str(path.parent.resolve())
+    added = False
+    if bundle_dir not in sys.path:
+        sys.path.insert(0, bundle_dir)
+        added = True
+    try:
+        spec = iu.spec_from_file_location(path.stem, path)
+        module = iu.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        if added:
+            sys.path.remove(bundle_dir)
 
 
 def test_vgrsi_extreme_cases() -> None:
