@@ -1089,3 +1089,176 @@ M19 列的 3 條 research-stage 方向中，本次完成「換 universe (sector-
 
 最差情況：`git reset --hard 2a29b7f`（M19 commit），再
 `rm /tmp/xsmom_m20_sector_*.pkl`，回到 M20 開始前狀態。
+
+## M21 — Sector-neutral selection ⚠️ (negative finding, 6th confirmation)
+
+> 夜間無人值守任務（claude/nightly-2026-05-27）。M20 結尾列了三條
+> 後續方向，其中第二項「Sector-neutralized momentum：每 sector 內各自
+> rank，加總組成 portfolio」被標為「技術上可行但需要修 strategy.py」。
+> 本 milestone 把這個機械修改做完，回答「sector-neutral 構造是否能
+> 救出被 pooled cross-section 平均掉的 alpha」這個 open question。
+
+### 動機
+
+M20 的 sub-universe split 是「restrict universe to one sector」，每個
+sector 內單獨跑策略，結果三個 sector 全部負 Sharpe，**絕對值意義上**
+沒有任何 sector 內藏 alpha。但 sector-restricted ≠ sector-neutral：
+
+- **Pooled (M11-M19)**：60 個 root 一起排名，top 6 long / bottom 6 short
+- **Sector-restricted (M20)**：只交易 sector 內 12-33 個 root，內部排名
+  top/bottom decile，**totally drops 其他 sector**
+- **Sector-neutral (M21)**：每 sector 內排名 top/bottom decile，**union
+  across sectors** 成最終 basket
+
+Sector-neutral 假設：若 TECH 內 cross-section momentum 有 alpha 但 FIN
+是 noise，pooled 排名會被 FIN 拉到中位數而稀釋 TECH 訊號；sector-neutral
+強制 TECH 永遠選 top/bottom，可能保留訊號。M20 沒檢驗這個假設——
+restricted 與 neutral 是兩個不同 portfolio construction，前者刪 universe、
+後者 enforce 等比例 representation。
+
+### 計畫 Milestone
+
+| # | 名稱 | 預期產出 |
+|---|---|---|
+| M21a | strategy.py 加 sector_neutral 模式 | `_select_by_sector` helper + initialize 讀 `sector_neutral` / `sector_map` + `_rebalance` 切換邏輯 + 4 個 unit test |
+| M21b | 跑 baseline vs sector_neutral 對照 | `scripts/run_xsmom_sector_neutral.py` 同 process 跑兩個變體；`/tmp/xsmom_m21_{baseline,sn}_result.pkl` + metrics 表 |
+| M21c | 進度檔 + commit | 即本段 + commit `M21: ...` |
+
+### M21a — strategy.py + tests ✅
+
+**做了什麼**
+
+- `_select_by_sector(scores, sector_map, long_decile, short_decile, reverse, long_only)`:
+  groupby sector → 內部 sort by momentum → 每 sector 取 `max(1, round(n*decile))`
+  個 long + short → union 成全局 longs/shorts list。Roots 缺於 `sector_map`
+  者一律 drop（caller 負責 coverage）。
+- `initialize`: 新增 `context.sector_neutral` + `context.sector_map`，
+  預設關閉，向後相容。
+- `_rebalance`: 加 if/else 分支，sector_neutral=True 路徑呼叫
+  `_select_by_sector`，否則沿用 pooled 邏輯。其他 layers
+  (RMT regime filter / beta-neutral hedge / cost) 不動。
+- 4 個新 unit test 覆蓋：balanced sectors / 1-root sector edge case /
+  reverse_momentum + long_only interaction / unmapped root exclusion
+- `.venv-bt/bin/python tests/test_strategy_math.py` → 10/10 PASS
+
+**Commit**: `e1763dc`
+
+### M21b — backtest 對照 ✅
+
+`scripts/run_xsmom_sector_neutral.py`：deep-copy config.yaml，inject
+`sector_neutral: True/False` 與 SECTOR_MAP（同 M20 partition：TECH 15 +
+FIN 12 + TRAD 33 = 60，coverage 100%）。同一個 process 內 sequential
+跑兩個變體，apples-to-apples 比較。
+
+#### 結果
+
+| variant | CAGR | ann_vol | Sharpe | Max_DD | n_tx | final |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (pooled) | -52.49% | 25.98% | -2.829 | -99.10% | 986 | 270,822 |
+| **sector_neutral** | **-55.92%** | **27.65%** | **-2.921** | **-99.44%** | **848** | **168,700** |
+
+對 M15 跑出的 -52.05% / -2.85 完全一致（baseline 含 M17 真實 commission
+所以略低 0.4 pp）。Sector-neutral 變體：
+
+- **CAGR 退 3.43 pp**（-52.49% → -55.92%）
+- **Final value 縮 38%**（270k → 169k）
+- **Sharpe 微負化**（-2.83 → -2.92）
+- **Vol 升 1.67 pp**（25.98% → 27.65%）
+- **n_tx 降 14%**（986 → 848）—— sector-neutral 一回 rebalance 約 5+5
+  vs pooled 6+6，trade count 自然較少
+
+#### Regime diagnostics 比較
+
+| variant | scale=0 | scale=0.5 | scale=1.0 | gap_mean | basket_beta_mean | basket_beta_std |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline | 31.2% | 43.3% | 25.5% | 0.0423 | +0.111 | 0.177 |
+| sector_neutral | 31.2% | 43.3% | 25.5% | 0.0423 | +0.083 | 0.178 |
+
+RMT 統計**完全相同**——gap 從 universe 整體相關性矩陣算，與 selection
+method 無關。**basket_beta_mean 從 +0.111 變 +0.083**（小 25%），代表
+sector-neutral 構造強制 sector 平均化暴露，自然抑制 net beta 偏離。
+hedge layer 仍正常運作，basket_beta_std 不變。
+
+### 為何 sector-neutral 反而**更差**而非更好
+
+三個假說，數據都不支持「alpha 存在但被 pooling 稀釋」：
+
+1. **強制等比 sector representation 引入 noise，而非揭露 alpha**。
+   Pooled rank 在某些月份可能 6 long 都來自 TECH（強勢類股集中）；
+   sector-neutral 強制每月固定 1 TECH + 1 FIN + 3 TRAD，等於把資金
+   分配給「FIN/TRAD 當月最強股票」即使該 sector 整體弱勢。在負 alpha
+   訊號下，這等同於擴大暴露面積、放大損失。
+
+2. **Sector 內 cross-section dispersion 太低**。M20 已示範：
+   - FIN 12 檔 holding ≈ 系統性同向（金融政策、利率 cycle 主導），
+     sector 內 momentum dispersion 很小，挑 top/bottom 1 檔基本上是
+     coin-flip
+   - TRAD 33 檔極度異質（船運、食品、塑化、通信），sector label 不對應
+     共同 risk factor，sector-neutral 並未真的 group "similar risk" 在一起
+   - 只有 TECH 15 檔（半導體 + EMS + 顯示器）才接近 well-defined sector，
+     但這個 sector 在 2020-2026 視窗有強烈 beta 同步（COVID rally + AI
+     boom），cross-section momentum 也被 macro factor 蓋過
+
+3. **訊號層面的 null 不會被 portfolio construction trick 救活**。
+   這跟 M14（擴 universe diversifies vol 但不創造 alpha）、M15
+   （RMT 重新校準分配 risk budget 但不創造 alpha）、M20（split universe
+   只改變集中度但不創造 alpha）一致。**negative alpha 無法被 reshuffle**——
+   任何「保留訊號方向、重新分配權重」的操作都只是把同一個訊號的損失
+   重新切片，不會憑空產生 positive expectancy。
+
+### 6 次獨立確認累計
+
+| M# | 維度 | 結論 |
+|---|---|---|
+| M11-M12 | 8 個 portfolio/signal 變體 (reverse / wide decile / long-only) | CAGR ∈ [-64%, -52%] |
+| M13 | 修 hedge 數學 (beta-neutral) | Sharpe 仍 -3.04 |
+| M14 | 擴 universe 30→60 | Sharpe -3.04 → -2.81 (vol 降但 ratio 同比例) |
+| M15 | 重新校準 RMT thresholds (60-root p33/p75) | Sharpe -2.85（與 M14 等價） |
+| M16-M19 | 3 段 walk-forward + 5 種統計檢定 | 全部 sub-period 顯著負（HAC t = -5.4 ~ -7.6, p < 10⁻⁸ ~ 10⁻¹⁴） |
+| M20 | Sector-split (TECH/FIN/TRAD restricted) | 全部 sub-universe 負 Sharpe，FIN blow-up |
+| **M21** | **Sector-neutral selection (15+12+33 union)** | **CAGR -55.92% vs baseline -52.49%；sector-neutral 反而更差** |
+
+xsmom_stkfut_rmt 在台股個股期 2020-2026 視窗的 null result 現在
+robust to:
+
+- Portfolio 構造（concentrated / wide / long-only / reverse / **sector-neutral**）
+- Hedge layer（dollar-net no-op / beta-neutral working）
+- Universe size（30 / 60 / 12 / 15 / 33）
+- Regime filter calibration（paper / 30-root / 60-root percentiles）
+- Time slice（2020-21 / 2022-23 / 2024-26）
+- Commission spec（free / realistic）
+- Sector composition（pooled / tech-only / fin-only / trad-only / **sector-balanced**）
+
+### 後續方向（再次確認在 M-series 外）
+
+M20 結尾已 honestly 列出 3 條 research-stage 方向：
+1. **換訊號** — 屬於 `/quant-researcher` 階段（新檔案、新 hypothesis）
+2. ~~**Sector-neutralized momentum**~~ — **本 M21 完成，確認不 work**
+3. **進 `/review-strategy` 階段** — 把 M11-M21 的 6 次 negative findings
+   整理成 formal audit report
+
+xsmom_stkfut_rmt 的 portfolio-construction 維度已**徹底窮舉完畢**——
+所有 mechanical 變體（concentration / sector exposure / hedge / decile）
+都試過了，6 次都是 null。下一步必須改變 **訊號層**（mean-reversion、
+retail flow、earnings drift）或進 **formal review** 階段，**不能繼續
+在 xsmom 既有框架內 patching**。
+
+### Commit
+
+`M21: sector-neutral selection — 6th independent no-alpha confirmation`
+
+### M21 Fallback 指引
+
+1. **strategy.py / tests/test_strategy_math.py** — M21a commit (`e1763dc`)；
+   `git revert e1763dc` 還原 `_select_by_sector` + `sector_neutral` flag
+   + 4 個新 unit test。Strategy 預設 `sector_neutral=False`，所以即使
+   不 revert，既有 config 行為完全不變。
+2. **scripts/run_xsmom_sector_neutral.py** — M21b 新檔；`rm` 或 revert
+   M21 commit 移除
+3. **docs/progress-xsmom-beta-hedge.md** — 本段；`git revert <M21 commit>`
+4. **config.yaml** — M21 不動 config（baseline 跑 sector_neutral=False，
+   sector_neutral 跑時由 script 注入），零回滾成本
+5. **產出 pkl** — `rm /tmp/xsmom_m21_{baseline,sn}_result.pkl`（2 個）
+
+最差情況：`git reset --hard 9498121`（M20 commit），再
+`rm /tmp/xsmom_m21_*.pkl`，回到 M21 開始前狀態。
