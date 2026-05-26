@@ -52,3 +52,56 @@ cp .env.example .env                  # 然後編輯 .env 填入真的 key
   必須同時 ingest `tquant` equity bundle 並在 config.yaml 加 `benchmark: IR0001`。
 
 每個子目錄都有獨立 README 解釋假設、變數、限制。
+
+## Dashboard import 規格相容 (2026-05-26)
+
+4 個 bundle 同時符合 `~/gs-zipline-tej/docs/strategy-import-spec.md` v1，
+可以直接被 gs-zipline-tej dashboard 載入（不需要改任何 strategy.py）。
+
+每個 bundle 內容：
+
+```
+strategies/<id>/
+├── manifest.yaml     ← spec v1 metadata (id, name, params, source, ...)
+├── config.yaml       ← legacy (跑 strategies/_common/runner.py 用)
+├── strategy.py       ← initialize(context) + handle_data(context, data)
+├── futures_setup.py  ← 共用 helpers (從 _common/ 複製，bundle-local)
+└── README.md
+```
+
+啟動 dashboard 並指向本 repo：
+
+```bash
+DASHBOARD_STRATEGY_DIRS=$HOME/gs-strategy/strategies \
+PATH="$HOME/gs-strategy/.venv-bt/bin:$PATH" \
+  ~/gs-zipline-tej/.venv-dashboard/bin/python -m dashboard.app
+```
+
+### Validator
+
+任何 bundle 是否合規：
+
+```bash
+./scripts/validate_dashboard_bundle.py strategies/vgrsi_tx
+# OK  vgrsi_tx
+```
+
+CI 用：失敗 bundle 數為 exit code。
+
+### 把舊式 config.yaml 轉成 manifest.yaml
+
+```bash
+./scripts/config_to_manifest.py strategies/new_bundle   # 單一
+./scripts/config_to_manifest.py --all                   # 掃整個 strategies/
+./scripts/config_to_manifest.py --dry-run --all         # 預覽不寫檔
+./scripts/config_to_manifest.py --force --all           # 覆寫人工編輯
+```
+
+預設 idempotent：手動編輯過的欄位（如打磨過的 `name` / `description`）會被保留，
+只補齊缺少的欄位。`--force` 才會全部重建。
+
+未來爬蟲產生器（gs-scraper / quant_crawler 的 strategy-gen pipeline）應直接
+呼叫此 script 並傳 `--generated`，自動填 `source.kind=generated` 與 paper
+provenance。
+
+設計細節與決策記錄在 [`docs/progress-strategy-import-spec.md`](../docs/progress-strategy-import-spec.md)。
