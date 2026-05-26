@@ -82,4 +82,103 @@
 
 ## 進度日誌
 
-（每完成一個 milestone 在下方追加 `## M<n> — <title>` 段落。）
+### M1 — 計畫 + 進度檔 ✅
+
+Commit `13b69bc`：建立本檔，含目標、範圍邊界（誠實宣告：只產 skeleton）、
+milestone 表、bundle dir 規劃、命名規則、fallback 指引。
+
+### M2 — paper→template 分類器 ✅
+
+- `quant_crawler/strategy_gen/__init__.py`、`classify.py`
+- 3 個 template bucket（優先級由高到低）：
+  - `momentum` — 8 個 keyword pattern (momentum/tsmom/xsmom/trend/cta/breakout)
+  - `mean_reversion` — 11 個 (rsi/oscillator/pairs/cointegration/stat-arb 等)
+  - `buy_and_hold` — fallback，empty pattern 一律 match
+- `classify_paper(paper)` 回傳 `ClassificationResult`（template, default_params,
+  matched_keywords, tags）
+- `tests/test_strategy_gen.py` 18 個分類測試全綠
+
+Commit: `M2: paper->template classifier (momentum/mean_rev/buy_and_hold)`
+
+### M3 — 模板 + 產生器 ✅
+
+- `templates/manifest.yaml.j2`：含 spec 必填欄位 + `requires_review: true`
+  擴充 + `source.{template, matched_keywords, paper}` provenance + 一個
+  `review_checklist` 區段
+- `templates/strategy_{momentum,mean_reversion,buy_and_hold}.py.j2`：
+  3 份 skeleton，**每份的訊號函數都回 no-op**（momentum 回 0、
+  mean-rev 回 50 中性值、buy_and_hold holdable 1 contract），逼使用者
+  review 並補完訊號邏輯才能上線
+- `generate.py`：
+  - `paper_slug(source, source_id)` — filesystem-safe slug + truncate 64
+  - `generate_bundle(paper, out_root, dry_run)` — render manifest +
+    strategy.py + 複製 futures_setup.py + 產生 README.md
+  - idempotent merge：手動編輯過的 manifest 欄位會保留；
+    `source.generated_at` 不會 churn，加 `updated_at` 表達 re-run
+  - `select_recent_papers(db_path, since, limit)` — DB query helper
+  - CLI: `python -m quant_crawler.strategy_gen --since YYYY-MM-DD --limit N --dry-run`
+- 新增 `__main__.py` 讓 `python -m quant_crawler.strategy_gen` 乾淨 invoke
+- pytest 33 個（含 M2 的 18 個 + 15 個新測試覆蓋 slug、3 個 template、
+  validator pass-through、idempotency、dry-run、DB selector）
+
+Commit: `M3: jinja templates + paper->bundle generator (idempotent)`
+
+### M4 — daily_refresh.sh 端到端 pipeline ✅
+
+- `scripts/daily_refresh.sh`：
+  - Step 1: `.venv/bin/python -m quant_crawler.cli run --log-run`
+  - Step 2: `python -m quant_crawler.strategy_gen --since yesterday`
+  - Step 3: 對所有 `strategies/_generated/*` 跑 validator
+  - logging：`data/logs/daily_refresh_<DATE>.log` + summary 一行寫到
+    `data/logs/daily_refresh.log`
+  - exit code：0 ok / 1 unexpected / 2 missing .env / 3 validator fail
+- 對真實 `papers.db` 跑 controlled smoke (10 papers, limit, fresh outdir)：
+  10 bundles 全部產出 + 全部 pass validator
+- `bash -n` 語法檢查通過
+
+Commit: `M4: daily_refresh.sh end-to-end pipeline (crawl + gen + validate)`
+
+### M5 — install 腳本 + 最終報告 ✅
+
+`scripts/install_daily_refresh.sh`：
+- 預設 dry-run，**不**動 crontab，列出 cron line 給人 review
+- `--apply` 才實際寫到 crontab，使用 markers (`# >>> gs-strategy daily_refresh <<<`)
+  圍住，重複 apply 自動取代不重複堆疊
+- `--uninstall` 移除 block
+- `--schedule "<cron expr>"` 自訂時間（預設 `0 6 * * *`）
+- **本任務不自動 apply** — crontab 是跨 working dir 系統變動，per /safe-yolo
+  強制停下條件，使用者必須自己跑 `./scripts/install_daily_refresh.sh --apply`
+
+Commit: `M5: install_daily_refresh.sh (dry-run by default; requires --apply)`
+
+## 後續方向
+
+1. **真的上 cron**：使用者執行
+   ```
+   ./scripts/install_daily_refresh.sh --apply
+   ```
+   建議搭配 `--schedule "30 6 * * *"` 錯開 17:30 `quantdata-daily-refresh` 與
+   00:00 `gs-claude-config night-shift`。
+
+2. **第一輪手動執行**：
+   ```
+   ./scripts/daily_refresh.sh
+   tail -50 data/logs/daily_refresh_$(date -u +%Y-%m-%d).log
+   ```
+   檢查 step 1-3 都成功，再交給 cron。
+
+3. **review workflow**：dashboard 顯示 `requires_review: true` 的 bundle 後，
+   人工編輯 `_generated/<slug>/strategy.py` 補完訊號邏輯 → 把 manifest
+   的 `requires_review` 改 `false` → 視情況把 bundle 升級到 `strategies/<id>/`
+   （非 `_generated`），讓它脫離自動覆寫範圍。
+
+4. **未做的**（spec §8 提到但暫時不需要）：
+   - `provenance.json` sidecar — generator 已經把 hash-able 資訊放
+     `manifest.source` 內，足夠 dashboard audit
+   - 老化掉的 `_generated/` bundle 自動清理：目前永遠保留；如果累積過多
+     再加 `--prune-older-than N` flag
+
+5. **進階**（換掉 rule-based classifier）：把 `classify.py` 替成
+   LLM call（Claude API + cache prompt），同樣 input/output shape，
+   pipeline 其他部分不動。`docs/progress-strategy-import-spec.md` 已把
+   spec hooks 都接好。
