@@ -38,10 +38,18 @@ Idea
      using a rolling window OLS regression of each stock-future's daily log
      returns on TX's, then shorts TX with weight = -sum(w_i * beta_i) so the
      net portfolio beta to TX is ~0. This is the CAPM-style hedge ratio.
+
+5. Sector-neutral selection (added M21):
+   - when `sector_neutral=True` and a `sector_map` is supplied, rank momentum
+     within each sector independently and take the per-sector top/bottom
+     decile, then union into the global L/S basket. Motivation: M20 showed
+     each *sector-restricted* sub-universe still has no alpha, but did not
+     test whether *per-sector relative momentum* recovers a signal that the
+     pooled cross-section averaged out.
 """
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -96,6 +104,52 @@ def _ols_beta(asset_returns: np.ndarray, market_returns: np.ndarray) -> float:
         return float("nan")
     cov = float(np.cov(a, m, ddof=1)[0, 1])
     return cov / m_var
+
+
+def _select_by_sector(
+    momentum_scores: Dict[str, float],
+    sector_map: Dict[str, str],
+    long_decile: float,
+    short_decile: float,
+    reverse_momentum: bool,
+    long_only: bool,
+) -> Tuple[List[str], List[str]]:
+    """Group `momentum_scores` by sector and pick top/bottom decile within each.
+
+    Roots absent from `sector_map` are dropped (caller is responsible for
+    coverage). For every sector with at least one root, we always include
+    one long and (unless `long_only`) one short — `max(1, round(n*decile))`
+    matches the pooled-universe sizing rule used in `_rebalance`.
+
+    The returned `longs`/`shorts` lists are the unions across sectors and
+    feed into the same sizing logic (`gross_target * regime_scale / 2 / n`)
+    as the pooled path, so total gross exposure is preserved.
+    """
+    by_sector: Dict[str, List[Tuple[str, float]]] = {}
+    for root, score in momentum_scores.items():
+        sector = sector_map.get(root)
+        if sector is None:
+            continue
+        by_sector.setdefault(sector, []).append((root, score))
+
+    longs: List[str] = []
+    shorts: List[str] = []
+    for items in by_sector.values():
+        items.sort(key=lambda kv: kv[1])
+        n = len(items)
+        if n == 0:
+            continue
+        n_long = max(1, int(round(n * long_decile)))
+        n_short = max(1, int(round(n * short_decile)))
+        sec_shorts = [r for r, _ in items[:n_short]]
+        sec_longs = [r for r, _ in items[-n_long:]]
+        if reverse_momentum:
+            sec_longs, sec_shorts = sec_shorts, sec_longs
+        if long_only:
+            sec_shorts = []
+        longs.extend(sec_longs)
+        shorts.extend(sec_shorts)
+    return longs, shorts
 
 
 def _basket_beta(weights: Dict[str, float], betas: Dict[str, float]) -> float:
@@ -180,6 +234,12 @@ def initialize(context):
     # enough to track regime shifts, long enough for stable OLS.
     context.beta_neutral_hedge = bool(p.get("beta_neutral_hedge", False))
     context.beta_window = int(p.get("beta_window", 60))
+    # M21: when True, rank momentum within each sector independently and union
+    # the per-sector top/bottom decile to form the basket. `sector_map` is a
+    # {root_symbol: sector_label} dict — roots missing from the map are
+    # excluded from selection (TX is never in the map; it's the hedge leg).
+    context.sector_neutral = bool(p.get("sector_neutral", False))
+    context.sector_map = dict(p.get("sector_map", {}))
 
     apply_taiwan_futures_costs(
         per_contract_cost=p.get("per_contract_cost"),
@@ -283,16 +343,26 @@ def _rebalance(context, data):
         _flatten_all(context)
         return
 
-    sorted_roots = sorted(momentum_scores.items(), key=lambda kv: kv[1])
-    n = len(sorted_roots)
-    n_short = max(1, int(round(n * context.short_decile)))
-    n_long = max(1, int(round(n * context.long_decile)))
-    shorts = [r for r, _ in sorted_roots[:n_short]]
-    longs = [r for r, _ in sorted_roots[-n_long:]]
-    if context.reverse_momentum:
-        longs, shorts = shorts, longs
-    if context.long_only:
-        shorts = []
+    if context.sector_neutral and context.sector_map:
+        longs, shorts = _select_by_sector(
+            momentum_scores,
+            context.sector_map,
+            context.long_decile,
+            context.short_decile,
+            context.reverse_momentum,
+            context.long_only,
+        )
+    else:
+        sorted_roots = sorted(momentum_scores.items(), key=lambda kv: kv[1])
+        n = len(sorted_roots)
+        n_short = max(1, int(round(n * context.short_decile)))
+        n_long = max(1, int(round(n * context.long_decile)))
+        shorts = [r for r, _ in sorted_roots[:n_short]]
+        longs = [r for r, _ in sorted_roots[-n_long:]]
+        if context.reverse_momentum:
+            longs, shorts = shorts, longs
+        if context.long_only:
+            shorts = []
 
     # long_only puts the full gross_target on the long side; L/S splits 50/50.
     if context.long_only:

@@ -127,6 +127,89 @@ def test_basket_beta_linearity() -> None:
     assert abs(m._basket_beta(weights, betas_with_nan) - (0.25 - 0.6)) < 1e-12
 
 
+def test_select_by_sector_balanced() -> None:
+    """Sector-neutral selection picks ≥1 long + ≥1 short per non-empty sector."""
+    _stub_zipline()
+    m = _load(STRAT / "xsmom_stkfut_rmt" / "strategy.py")
+
+    # 4 sectors, each with 4 roots. With decile=0.25 we expect exactly
+    # 1 long + 1 short per sector = 4 longs total, 4 shorts total.
+    scores = {
+        "T1": 0.10, "T2": 0.05, "T3": -0.05, "T4": -0.10,
+        "F1": 0.20, "F2": 0.10, "F3": -0.10, "F4": -0.20,
+        "R1": 0.04, "R2": 0.02, "R3": -0.02, "R4": -0.04,
+        "X1": 0.30, "X2": 0.20, "X3": -0.20, "X4": -0.30,
+    }
+    sector_map = {
+        "T1": "TECH", "T2": "TECH", "T3": "TECH", "T4": "TECH",
+        "F1": "FIN",  "F2": "FIN",  "F3": "FIN",  "F4": "FIN",
+        "R1": "TRAD", "R2": "TRAD", "R3": "TRAD", "R4": "TRAD",
+        "X1": "X",    "X2": "X",    "X3": "X",    "X4": "X",
+    }
+    longs, shorts = m._select_by_sector(
+        scores, sector_map, long_decile=0.25, short_decile=0.25,
+        reverse_momentum=False, long_only=False,
+    )
+    # 4 sectors × 1 long each = 4 longs; same for shorts. Top score per
+    # sector wins long: T1, F1, R1, X1. Bottom wins short: T4, F4, R4, X4.
+    assert set(longs) == {"T1", "F1", "R1", "X1"}
+    assert set(shorts) == {"T4", "F4", "R4", "X4"}
+
+
+def test_select_by_sector_min_one_per_sector() -> None:
+    """A 1-root sector still contributes 1 long (and 1 short unless long_only)."""
+    _stub_zipline()
+    m = _load(STRAT / "xsmom_stkfut_rmt" / "strategy.py")
+
+    scores = {"A": 0.1, "B": -0.2}
+    sector_map = {"A": "TECH", "B": "FIN"}
+    longs, shorts = m._select_by_sector(
+        scores, sector_map, 0.1, 0.1, False, False
+    )
+    # max(1, round(1*0.1)) == 1 -> each 1-root sector contributes its sole
+    # member to both long and short legs.
+    assert set(longs) == {"A", "B"}
+    assert set(shorts) == {"A", "B"}
+
+
+def test_select_by_sector_reverse_and_long_only() -> None:
+    """`reverse_momentum` swaps L/S; `long_only` empties shorts post-swap."""
+    _stub_zipline()
+    m = _load(STRAT / "xsmom_stkfut_rmt" / "strategy.py")
+
+    scores = {"A": 0.5, "B": 0.1, "C": -0.1, "D": -0.5}
+    sector_map = {k: "TECH" for k in scores}
+
+    longs, shorts = m._select_by_sector(
+        scores, sector_map, 0.25, 0.25, reverse_momentum=True, long_only=False
+    )
+    # Reverse: longs come from bottom, shorts from top.
+    assert longs == ["D"]
+    assert shorts == ["A"]
+
+    longs_lo, shorts_lo = m._select_by_sector(
+        scores, sector_map, 0.25, 0.25, reverse_momentum=False, long_only=True
+    )
+    assert longs_lo == ["A"]
+    assert shorts_lo == []
+
+
+def test_select_by_sector_drops_unmapped_roots() -> None:
+    """Roots missing from sector_map are silently excluded from selection."""
+    _stub_zipline()
+    m = _load(STRAT / "xsmom_stkfut_rmt" / "strategy.py")
+
+    scores = {"A": 0.5, "B": 0.1, "UNMAPPED": 0.9}
+    sector_map = {"A": "TECH", "B": "TECH"}  # UNMAPPED deliberately absent
+    longs, shorts = m._select_by_sector(
+        scores, sector_map, 0.5, 0.5, False, False
+    )
+    # UNMAPPED is dropped even though its score is highest.
+    assert "UNMAPPED" not in longs and "UNMAPPED" not in shorts
+    assert set(longs) == {"A"}
+    assert set(shorts) == {"B"}
+
+
 if __name__ == "__main__":
     test_vgrsi_extreme_cases()
     test_cubic_signal_shape()
@@ -134,4 +217,8 @@ if __name__ == "__main__":
     test_ols_beta_recovers_known_slope()
     test_ols_beta_nan_guards()
     test_basket_beta_linearity()
+    test_select_by_sector_balanced()
+    test_select_by_sector_min_one_per_sector()
+    test_select_by_sector_reverse_and_long_only()
+    test_select_by_sector_drops_unmapped_roots()
     print("ALL MATH TESTS PASS")
