@@ -23,18 +23,11 @@ expose `lookback` and `skip` so the user can run 6-1, 3-1, etc.
 """
 from __future__ import annotations
 
-import os
-import sys
 from typing import Dict, List
 
 import numpy as np
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_PARENT = os.path.dirname(_HERE)
-if _PARENT not in sys.path:
-    sys.path.insert(0, _PARENT)
-
-from _common.futures_setup import (
+from futures_setup import (
     apply_taiwan_futures_costs,
     make_continuous_taiwan_futures,
     make_roll_futures_handler,
