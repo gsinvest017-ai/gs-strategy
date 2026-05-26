@@ -1,0 +1,44 @@
+id: vgrsi_tx
+name: VGRSI on TX Futures
+description: |
+  Visibility-Graph RSI on the TX continuous front-month future. The signal
+  rebuilds an N-day backward visibility graph each session, normalises the
+  up/down degree counts into a 0-100 oscillator, and trades the canonical
+  30/70 cross. Long-only by default; flip allow_short=true for long/short.
+  Paper: Rak (2026), arXiv:2605.01300.
+asset_class: future
+bundle: tquant_future
+start: '2020-01-01'
+end: '2026-04-30'
+capital_base: 5000000
+params:
+  root_symbol: TX
+  window: 30
+  upper_threshold: 70.0
+  lower_threshold: 30.0
+  allow_short: false
+  position_contracts: 1
+  days_before_close: 10
+  per_contract_cost:
+    TX: 200
+    MTX: 100
+  spread_points: 6.0
+tags:
+- taiwan
+- futures
+- technical
+- paper
+requires_tej_key: true
+extra_deps: []
+symbols:
+- TX
+spec_version: 1
+source:
+  kind: manual
+  generated_at: '2026-05-26T04:33:06Z'
+  inputs:
+    paper:
+      title: Visibility graphs can make money in financial markets
+      arxiv: '2605.01300'
+      authors: [Rafał Rak]
+      year: 2026

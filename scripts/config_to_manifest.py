@@ -136,12 +136,20 @@ def _infer_requires_tej_key(bundle_name: str) -> bool:
 
 
 def _infer_extra_deps(strategy_path: Path) -> List[str]:
-    """AST-scan top-level imports; return whatever is not in ALLOW_LIST."""
+    """AST-scan top-level imports; return whatever is not in ALLOW_LIST.
+
+    Bundle-local sibling modules (any *.py in the same dir) are NOT pip deps
+    and get filtered out.
+    """
     src = strategy_path.read_text(encoding="utf-8")
     try:
         tree = ast.parse(src, filename=str(strategy_path))
     except SyntaxError:
         return []
+    local_modules = {
+        p.stem for p in strategy_path.parent.iterdir()
+        if p.is_file() and p.suffix == ".py"
+    }
     deps: List[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
@@ -149,12 +157,14 @@ def _infer_extra_deps(strategy_path: Path) -> List[str]:
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 root = alias.name.split(".")[0]
-                if root and root not in ALLOW_LIST_IMPORT_ROOTS and root not in deps:
+                if (root and root not in ALLOW_LIST_IMPORT_ROOTS
+                        and root not in local_modules and root not in deps):
                     deps.append(root)
             continue
         else:
             continue
-        if root and root not in ALLOW_LIST_IMPORT_ROOTS and root not in deps:
+        if (root and root not in ALLOW_LIST_IMPORT_ROOTS
+                and root not in local_modules and root not in deps):
             deps.append(root)
     # filter out sibling-bundle-style imports (they're a violation — we'll
     # report them but not list them as extra_deps)

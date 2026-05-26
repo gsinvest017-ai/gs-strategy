@@ -1,0 +1,45 @@
+id: cubic_momentum_tx
+name: Cubic Momentum on TX Futures
+description: |
+  Yoshida (2026) cubic-momentum trend-and-crash model on TX continuous future.
+  Standardised momentum (z = momentum / rolling-sigma) drives a cubic decision
+  function f(z) = a*z - b*z^3: trend-following for |z| < z_crit, sign-flips
+  above to model overheating / panic selling. Position size scales with
+  |f(z)|, capped at max_contracts.
+  Paper: Yoshida (2026), arXiv:2605.00854.
+asset_class: future
+bundle: tquant_future
+start: '2018-01-01'
+end: '2026-04-30'
+capital_base: 5000000
+params:
+  root_symbol: TX
+  lookback: 20
+  sigma_window: 60
+  z_crit: 1.5
+  max_contracts: 2
+  allow_short: true
+  days_before_close: 10
+  per_contract_cost:
+    TX: 200
+  spread_points: 6.0
+tags:
+- taiwan
+- futures
+- momentum
+- nonlinear
+- paper
+requires_tej_key: true
+extra_deps: []
+symbols:
+- TX
+spec_version: 1
+source:
+  kind: manual
+  generated_at: '2026-05-26T04:33:06Z'
+  inputs:
+    paper:
+      title: Dynamics of Periodic Bubbles and Crashes — Cubic Momentum Model
+      arxiv: '2605.00854'
+      authors: [Naohiro Yoshida]
+      year: 2026

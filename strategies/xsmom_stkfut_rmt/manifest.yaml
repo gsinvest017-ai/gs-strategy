@@ -1,0 +1,242 @@
+id: xsmom_stkfut_rmt
+name: XSMOM on TW Stock Futures (RMT-gated)
+description: |
+  Cross-sectional 6-1 momentum on 60 Taiwan single-stock futures, regime-gated
+  by a Random-Matrix-Theory "complexity gap" filter. Long top decile / short
+  bottom decile, monthly rebalanced. The complexity gap (lambda_max - mean
+  off-diagonal correlation) sizes the book between zero / half / full. M13
+  adds a beta-neutral TX hedge layer. Empirically confirmed null alpha on
+  2020-2026 — see docs/progress-xsmom-beta-hedge.md.
+  Papers: Mukhia et al. (2026) arXiv:2604.19107; Jegadeesh & Titman (1993).
+asset_class: future
+bundle: tquant_future
+start: '2020-01-01'
+end: '2026-04-30'
+capital_base: 30000000
+params:
+  universe_roots:
+  - CAF
+  - CBF
+  - CCF
+  - QFF
+  - CEF
+  - CFF
+  - CGF
+  - CHF
+  - CJF
+  - CKF
+  - CLF
+  - CMF
+  - CNF
+  - CQF
+  - CRF
+  - CSF
+  - CUF
+  - CWF
+  - CXF
+  - CYF
+  - CZF
+  - DAF
+  - DBF
+  - DCF
+  - DDF
+  - DEF
+  - DFF
+  - DGF
+  - DHF
+  - DIF
+  - QRF
+  - DKF
+  - DLF
+  - DNF
+  - DOF
+  - DPF
+  - DQF
+  - DSF
+  - DUF
+  - PUF
+  - DWF
+  - DXF
+  - DYF
+  - DZF
+  - EEF
+  - EGF
+  - EHF
+  - EKF
+  - EMF
+  - EOF
+  - EPF
+  - ERF
+  - EYF
+  - EZF
+  - FBF
+  - FCF
+  - FEF
+  - QMF
+  - SVF
+  - FKF
+  universe_start: '2020-01-01'
+  universe_end: '2026-04-30'
+  lookback: 126
+  skip: 21
+  long_decile: 0.1
+  short_decile: 0.1
+  gross_target: 1.0
+  rmt_window: 60
+  rmt_threshold: 0.049
+  rmt_low_threshold: 0.037
+  min_universe: 20
+  hedge_with_tx: true
+  beta_neutral_hedge: true
+  beta_window: 60
+  days_before_close: 10
+  per_contract_cost:
+    TX: 150
+    MTX: 60
+    CAF: 120
+    CBF: 120
+    CCF: 120
+    QFF: 120
+    CEF: 120
+    CFF: 120
+    CGF: 120
+    CHF: 120
+    CJF: 120
+    CKF: 120
+    CLF: 120
+    CMF: 120
+    CNF: 120
+    CQF: 120
+    CRF: 120
+    CSF: 120
+    CUF: 120
+    CWF: 120
+    CXF: 120
+    CYF: 120
+    CZF: 120
+    DAF: 120
+    DBF: 120
+    DCF: 120
+    DDF: 120
+    DEF: 120
+    DFF: 120
+    DGF: 120
+    DHF: 120
+    DIF: 120
+    QRF: 120
+    DKF: 120
+    DLF: 120
+    DNF: 120
+    DOF: 120
+    DPF: 120
+    DQF: 120
+    DSF: 120
+    DUF: 120
+    PUF: 120
+    DWF: 120
+    DXF: 120
+    DYF: 120
+    DZF: 120
+    EEF: 120
+    EGF: 120
+    EHF: 120
+    EKF: 120
+    EMF: 120
+    EOF: 120
+    EPF: 120
+    ERF: 120
+    EYF: 120
+    EZF: 120
+    FBF: 120
+    FCF: 120
+    FEF: 120
+    QMF: 120
+    SVF: 120
+    FKF: 120
+  spread_points: 6.0
+tags:
+- taiwan
+- futures
+- momentum
+- regime
+- paper
+requires_tej_key: true
+extra_deps: []
+symbols:
+- CAF
+- CBF
+- CCF
+- QFF
+- CEF
+- CFF
+- CGF
+- CHF
+- CJF
+- CKF
+- CLF
+- CMF
+- CNF
+- CQF
+- CRF
+- CSF
+- CUF
+- CWF
+- CXF
+- CYF
+- CZF
+- DAF
+- DBF
+- DCF
+- DDF
+- DEF
+- DFF
+- DGF
+- DHF
+- DIF
+- QRF
+- DKF
+- DLF
+- DNF
+- DOF
+- DPF
+- DQF
+- DSF
+- DUF
+- PUF
+- DWF
+- DXF
+- DYF
+- DZF
+- EEF
+- EGF
+- EHF
+- EKF
+- EMF
+- EOF
+- EPF
+- ERF
+- EYF
+- EZF
+- FBF
+- FCF
+- FEF
+- QMF
+- SVF
+- FKF
+spec_version: 1
+source:
+  kind: manual
+  generated_at: '2026-05-26T04:33:06Z'
+  inputs:
+    paper:
+      title: Structural Dynamics of G5 Stock Markets During Exogenous Shocks — RMT Complexity Gap
+      arxiv: '2604.19107'
+      authors: [Mukhia, Ansari, et al.]
+      year: 2026
+    related:
+      - "Jegadeesh & Titman (1993) — cross-sectional momentum"
+      - "Asness, Moskowitz, Pedersen (2013) — value & momentum everywhere"
+  notes: |
+    Confirmed null-alpha across 13 independent hypotheses (M11-M19). Bundle
+    retained for hedge-layer / regime-filter reusability. See
+    docs/progress-xsmom-beta-hedge.md for the full statistical report.

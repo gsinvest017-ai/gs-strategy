@@ -24,9 +24,10 @@ from __future__ import annotations
 
 import argparse
 import ast
-import importlib.util
 import re
+import subprocess
 import sys
+import textwrap
 from datetime import date
 from pathlib import Path
 from typing import List, Tuple
@@ -77,30 +78,33 @@ def _scan_forbidden_imports(strategy_path: Path) -> List[str]:
 
 
 def _try_import(strategy_path: Path) -> Tuple[bool, str]:
-    """Run a dashboard-style import: sys.path = [bundle_dir] only."""
+    """Run a dashboard-style import in a SUBPROCESS so zipline C-extensions
+    (which refuse to be loaded more than once per process) can be validated
+    independently across multiple bundles in the same CLI invocation."""
     bundle_dir = str(strategy_path.parent.resolve())
-    orig_path = sys.path[:]
-    orig_modules = set(sys.modules)
-    sys.path.insert(0, bundle_dir)
+    probe = textwrap.dedent(f"""
+        import sys
+        sys.path.insert(0, {bundle_dir!r})
+        import strategy
+        missing = [n for n in ("initialize", "handle_data") if not hasattr(strategy, n)]
+        if missing:
+            sys.stderr.write("missing: " + ",".join(missing))
+            sys.exit(2)
+    """)
     try:
-        spec = importlib.util.spec_from_file_location(
-            f"_validate_{strategy_path.parent.name}", strategy_path
+        r = subprocess.run(
+            [sys.executable, "-c", probe],
+            capture_output=True, text=True, timeout=60,
         )
-        mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-        assert spec is not None and spec.loader is not None
-        spec.loader.exec_module(mod)
-        if not hasattr(mod, "initialize"):
-            return False, "strategy.py missing initialize(context)"
-        if not hasattr(mod, "handle_data"):
-            return False, "strategy.py missing handle_data(context, data)"
+    except subprocess.TimeoutExpired:
+        return False, "import timed out (>60s)"
+    if r.returncode == 0:
         return True, ""
-    except Exception as exc:  # pragma: no cover - reported to user
-        return False, f"import failed: {exc!r}"
-    finally:
-        sys.path[:] = orig_path
-        for m in list(sys.modules):
-            if m not in orig_modules:
-                del sys.modules[m]
+    if r.returncode == 2:
+        return False, f"strategy.py {r.stderr.strip()}"
+    err = (r.stderr or r.stdout or "").strip().splitlines()
+    last = err[-1] if err else "no stderr"
+    return False, f"import failed: {last}"
 
 
 def validate(bundle: Path) -> List[str]:
