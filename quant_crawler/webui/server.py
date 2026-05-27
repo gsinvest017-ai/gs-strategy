@@ -141,16 +141,27 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/papers":
                 date = qs.get("date", [None])[0]
                 limit = int(qs.get("limit", ["100"])[0])
-                rows = stats.new_papers_on(date, limit=limit)
-                fallback = False
-                if not rows and date is None:
-                    rows = stats.latest_papers(limit=limit)
-                    fallback = True
-                self._send_json({
-                    "date": date or stats._today_iso(),
-                    "fallback_latest": fallback,
-                    "papers": rows,
-                })
+                pdf = qs.get("pdf", [None])[0]   # None | "any" | "local"
+                if pdf in ("any", "local"):
+                    # PDF filter spans all papers (date ignored) so downloaded
+                    # PDFs surface regardless of fetch date.
+                    rows = stats.list_papers(date=None, limit=limit, pdf=pdf)
+                    self._send_json({
+                        "date": None, "filter": pdf,
+                        "fallback_latest": False, "papers": rows,
+                    })
+                else:
+                    rows = stats.new_papers_on(date, limit=limit)
+                    fallback = False
+                    if not rows and date is None:
+                        rows = stats.latest_papers(limit=limit)
+                        fallback = True
+                    self._send_json({
+                        "date": date or stats._today_iso(),
+                        "filter": None,
+                        "fallback_latest": fallback,
+                        "papers": rows,
+                    })
             elif path == "/api/strategies":
                 self._send_json({"strategies": stats.strategy_inventory()})
             elif path == "/api/dates":

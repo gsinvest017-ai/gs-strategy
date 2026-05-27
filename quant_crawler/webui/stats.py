@@ -147,6 +147,62 @@ def _paper_row(r: sqlite3.Row) -> Dict[str, Any]:
     return d
 
 
+def list_papers(
+    date: Optional[str] = None,
+    limit: int = 100,
+    pdf: Optional[str] = None,
+    db_path: Path = DB_PATH,
+) -> List[Dict[str, Any]]:
+    """Unified paper listing with an optional PDF filter.
+
+    pdf=None  -> no filter (papers on `date` if given, else most-recent)
+    pdf="any"   -> only papers with a local OR remote PDF
+    pdf="local" -> only papers with a downloaded local PDF
+
+    When a pdf filter is active the scan spans ALL papers (date is ignored) so
+    a downloaded PDF surfaces no matter when its paper was fetched.
+    """
+    if not Path(db_path).is_file():
+        return []
+    apply_filter = pdf in ("any", "local")
+    conn = _connect(db_path)
+    try:
+        if date and not apply_filter:
+            rows = conn.execute(
+                """
+                SELECT source, source_id, title, published, url, pdf_url
+                FROM papers WHERE substr(fetched_at, 1, 10) = ?
+                ORDER BY published DESC NULLS LAST, fetched_at DESC
+                """,
+                (date,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT source, source_id, title, published, url, pdf_url
+                FROM papers
+                ORDER BY fetched_at DESC, published DESC NULLS LAST
+                """
+            ).fetchall()
+    finally:
+        conn.close()
+
+    papers = [_paper_row(r) for r in rows]
+    if pdf == "local":
+        papers = [p for p in papers if p["pdf_local"]]
+    elif pdf == "any":
+        papers = [p for p in papers if p["pdf_local"] or p["pdf_url"]]
+    return papers[:limit]
+
+
+def pdfs_downloaded(pdf_dir: Path = PDF_DIR) -> int:
+    """Count .pdf files actually present in the local PDF dir."""
+    p = Path(pdf_dir)
+    if not p.is_dir():
+        return 0
+    return sum(1 for f in p.glob("*.pdf") if f.is_file() and f.stat().st_size > 0)
+
+
 def crawl_dates(db_path: Path = DB_PATH, limit: int = 30) -> List[str]:
     """Distinct dates on which crawl_runs exist (newest first)."""
     if not Path(db_path).is_file():
@@ -259,6 +315,7 @@ def summary(
         "today": today,
         "papers_total": papers["total"],
         "papers_by_source": papers["by_source"],
+        "pdfs_downloaded": pdfs_downloaded(),
         "runs_today": len(runs_on(today, db_path)),
         "strategies_total": len(inv),
         "strategies_manual": len(manual),

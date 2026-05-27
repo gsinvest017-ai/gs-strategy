@@ -105,6 +105,25 @@ def test_api_papers_fallback_latest(server: str) -> None:
     assert len(data["papers"]) <= 5
 
 
+def test_api_papers_local_filter(server: str) -> None:
+    """pdf=local must only return papers that have a downloaded local file.
+    The repo has 2 real downloaded arxiv PDFs (from the fetch-pdfs smoke)."""
+    status, body, _ = _get(server, "/api/papers?pdf=local&limit=200")
+    assert status == 200
+    data = json.loads(body)
+    assert data["filter"] == "local"
+    # every returned paper must carry a non-null pdf_local
+    assert all(p["pdf_local"] for p in data["papers"])
+
+
+def test_api_papers_any_filter(server: str) -> None:
+    status, body, _ = _get(server, "/api/papers?pdf=any&limit=500")
+    assert status == 200
+    data = json.loads(body)
+    assert data["filter"] == "any"
+    assert all((p["pdf_local"] or p["pdf_url"]) for p in data["papers"])
+
+
 def test_api_dates(server: str) -> None:
     status, body, _ = _get(server, "/api/dates")
     assert status == 200

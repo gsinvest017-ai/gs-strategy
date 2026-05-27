@@ -182,6 +182,50 @@ def test_paper_row_attaches_pdf_local(db: Path, monkeypatch) -> None:
     assert by["2"]["pdf_local"] is None
 
 
+def test_list_papers_pdf_local_filter(db: Path, monkeypatch) -> None:
+    """pdf='local' returns only papers with a downloaded local file, across
+    ALL fetch dates (not just today)."""
+    # arxiv:1 fetched 2026-05-27, wiley:3 fetched 2026-05-10.
+    monkeypatch.setattr(
+        stats, "has_local_pdf",
+        lambda source, sid: (source, sid) in {("arxiv", "1"), ("wiley", "3")},
+    )
+    rows = stats.list_papers(date=None, pdf="local", db_path=db)
+    ids = {(r["source"], r["source_id"]) for r in rows}
+    assert ids == {("arxiv", "1"), ("wiley", "3")}
+    assert all(r["pdf_local"] for r in rows)
+
+
+def test_list_papers_any_filter(db: Path, monkeypatch) -> None:
+    """pdf='any' returns papers with local OR remote pdf. The fixture has no
+    pdf_url, so 'any' == those with a local file here."""
+    monkeypatch.setattr(stats, "has_local_pdf",
+                        lambda source, sid: (source, sid) == ("arxiv", "1"))
+    rows = stats.list_papers(date=None, pdf="any", db_path=db)
+    # fixture papers all have empty pdf_url, so only the local one qualifies
+    assert {(r["source"], r["source_id"]) for r in rows} == {("arxiv", "1")}
+
+
+def test_list_papers_no_filter_respects_date(db: Path) -> None:
+    rows = stats.list_papers(date="2026-05-10", db_path=db)
+    assert {r["source_id"] for r in rows} == {"3"}
+
+
+def test_pdfs_downloaded_counts_files(tmp_path: Path) -> None:
+    assert stats.pdfs_downloaded(tmp_path) == 0
+    (tmp_path / "a.pdf").write_bytes(b"%PDF")
+    (tmp_path / "b.pdf").write_bytes(b"%PDF")
+    (tmp_path / "empty.pdf").write_bytes(b"")     # zero-byte excluded
+    (tmp_path / "note.txt").write_bytes(b"x")     # non-pdf excluded
+    assert stats.pdfs_downloaded(tmp_path) == 2
+
+
+def test_summary_includes_pdfs_downloaded(db: Path, strat_root: Path, export_dir: Path) -> None:
+    s = stats.summary(db, strat_root, export_dir)
+    assert "pdfs_downloaded" in s
+    assert isinstance(s["pdfs_downloaded"], int)
+
+
 def test_bundle_dir_for(strat_root: Path) -> None:
     assert stats.bundle_dir_for("vgrsi_tx", strat_root) == strat_root / "vgrsi_tx"
     assert stats.bundle_dir_for("arxiv_2605_01300", strat_root) == \
