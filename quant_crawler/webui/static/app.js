@@ -121,11 +121,23 @@ async function loadPapers() {
   $("#papers-empty").hidden = rows.length > 0;
   $("#papers-table").hidden = rows.length === 0;
   for (const p of rows) {
+    // PDF link: prefer the locally-downloaded file, else the remote pdf_url.
+    let pdfCell;
+    if (p.pdf_local) {
+      pdfCell = el("a", { href: `/files/pdf/${encodeURIComponent(p.pdf_local)}`,
+                          target: "_blank", rel: "noopener", title: p.pdf_local },
+                   "📄 本地");
+    } else if (p.pdf_url) {
+      pdfCell = el("a", { href: p.pdf_url, target: "_blank", rel: "noopener" }, "⬇ 遠端");
+    } else {
+      pdfCell = document.createTextNode("—");
+    }
     tbody.append(el("tr", {},
       el("td", { class: "mono" }, p.source),
       el("td", {}, p.title || "(無標題)"),
       el("td", { class: "mono" }, p.published || "—"),
       el("td", {}, p.url ? el("a", { href: p.url, target: "_blank", rel: "noopener" }, "open") : "—"),
+      el("td", {}, pdfCell),
     ));
   }
 }
@@ -153,11 +165,28 @@ function renderStrategies(filter = "") {
     const review = s.requires_review
       ? el("span", { class: "badge review" }, "待審")
       : el("span", { class: "badge no" }, "—");
+    // spec links: README.md (the human spec) + manifest.yaml
+    const specCell = el("span", { class: "spec-links" });
+    if (s.has_spec_md) {
+      specCell.append(el("a", {
+        href: `/files/strategy/${encodeURIComponent(s.id)}/README.md`,
+        target: "_blank", rel: "noopener", title: "策略 spec markdown",
+      }, "📑 spec"));
+    }
+    if ((s.spec_files || []).includes("manifest.yaml")) {
+      if (specCell.childNodes.length) specCell.append(document.createTextNode(" · "));
+      specCell.append(el("a", {
+        href: `/files/strategy/${encodeURIComponent(s.id)}/manifest.yaml`,
+        target: "_blank", rel: "noopener", title: "manifest.yaml",
+      }, "manifest"));
+    }
+    if (!specCell.childNodes.length) specCell.append(document.createTextNode("—"));
     tbody.append(el("tr", {},
       el("td", { class: "mono" }, s.id),
       el("td", {}, el("span", { class: `badge ${s.origin}` }, s.origin)),
       el("td", { class: "mono" }, s.template || "—"),
       el("td", {}, tags),
+      el("td", {}, specCell),
       el("td", {}, review),
       el("td", {}, exported),
     ));

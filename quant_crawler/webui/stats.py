@@ -15,7 +15,8 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from quant_crawler.config import DB_PATH, PROJECT_ROOT
+from quant_crawler.config import DB_PATH, PDF_DIR, PROJECT_ROOT
+from quant_crawler.pdf_fetch import has_local_pdf, pdf_filename
 
 # gs-strategy bundle roots scanned for the strategy inventory.
 STRATEGIES_ROOT = PROJECT_ROOT / "strategies"
@@ -104,7 +105,7 @@ def new_papers_on(
     try:
         rows = conn.execute(
             """
-            SELECT source, source_id, title, published, url
+            SELECT source, source_id, title, published, url, pdf_url
             FROM papers
             WHERE substr(fetched_at, 1, 10) = ?
             ORDER BY published DESC NULLS LAST, fetched_at DESC
@@ -114,7 +115,7 @@ def new_papers_on(
         ).fetchall()
     finally:
         conn.close()
-    return [dict(r) for r in rows]
+    return [_paper_row(r) for r in rows]
 
 
 def latest_papers(limit: int = 20, db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
@@ -124,7 +125,7 @@ def latest_papers(limit: int = 20, db_path: Path = DB_PATH) -> List[Dict[str, An
     try:
         rows = conn.execute(
             """
-            SELECT source, source_id, title, published, url, fetched_at
+            SELECT source, source_id, title, published, url, pdf_url, fetched_at
             FROM papers
             ORDER BY fetched_at DESC, published DESC NULLS LAST
             LIMIT ?
@@ -133,7 +134,17 @@ def latest_papers(limit: int = 20, db_path: Path = DB_PATH) -> List[Dict[str, An
         ).fetchall()
     finally:
         conn.close()
-    return [dict(r) for r in rows]
+    return [_paper_row(r) for r in rows]
+
+
+def _paper_row(r: sqlite3.Row) -> Dict[str, Any]:
+    """Normalise a papers row + attach the local-PDF filename if downloaded."""
+    d = dict(r)
+    local = pdf_filename(d["source"], d["source_id"]) if has_local_pdf(
+        d["source"], d["source_id"]
+    ) else None
+    d["pdf_local"] = local          # filename under PDF_DIR, or None
+    return d
 
 
 def crawl_dates(db_path: Path = DB_PATH, limit: int = 30) -> List[str]:
@@ -174,6 +185,9 @@ def _bundle_record(bundle: Path, origin: str, export_dir: Path) -> Dict[str, Any
     source = manifest.get("source") or {}
     bundle_id = manifest.get("id", bundle.name)
     exported = (export_dir / bundle_id / "manifest.yaml").is_file()
+    # Spec markdown: the bundle README is the human-readable strategy spec.
+    spec_files = [f for f in ("README.md", "manifest.yaml", "strategy.py")
+                  if (bundle / f).is_file()]
     return {
         "id": bundle_id,
         "name": manifest.get("name", bundle_id),
@@ -186,6 +200,8 @@ def _bundle_record(bundle: Path, origin: str, export_dir: Path) -> Dict[str, Any
         "asset_class": manifest.get("asset_class"),
         "exported": exported,
         "path": str(bundle),
+        "has_spec_md": (bundle / "README.md").is_file(),
+        "spec_files": spec_files,               # served via /files/strategy/<id>/<f>
     }
 
 
@@ -215,6 +231,15 @@ def strategy_inventory(
                 records.append(_bundle_record(p, "generated", export_dir))
 
     return records
+
+
+def bundle_dir_for(bundle_id: str, strategies_root: Path = STRATEGIES_ROOT) -> Optional[Path]:
+    """Resolve a strategy id to its on-disk bundle dir (manual or generated)."""
+    for candidate in (strategies_root / bundle_id,
+                      strategies_root / "_generated" / bundle_id):
+        if (candidate / "manifest.yaml").is_file():
+            return candidate
+    return None
 
 
 def summary(

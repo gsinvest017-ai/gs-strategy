@@ -24,6 +24,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from quant_crawler.config import PDF_DIR
+
 from . import stats
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -33,7 +35,15 @@ _CONTENT_TYPES = {
     ".js": "application/javascript; charset=utf-8",
     ".css": "text/css; charset=utf-8",
     ".json": "application/json; charset=utf-8",
+    ".pdf": "application/pdf",
+    ".md": "text/markdown; charset=utf-8",
+    ".yaml": "text/plain; charset=utf-8",
+    ".yml": "text/plain; charset=utf-8",
+    ".py": "text/plain; charset=utf-8",
 }
+
+# Files inside a strategy bundle we are willing to serve.
+_STRATEGY_FILE_SUFFIXES = {".md", ".yaml", ".yml", ".py"}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -72,6 +82,33 @@ class Handler(BaseHTTPRequestHandler):
             "Content-Type",
             _CONTENT_TYPES.get(target.suffix, "application/octet-stream"),
         )
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_file(self, target: Path, base: Path, allowed_suffixes=None,
+                   inline: bool = True) -> None:
+        """Serve a file after confirming it stays under `base` (anti-traversal)."""
+        try:
+            target = target.resolve()
+            target.relative_to(base.resolve())
+        except (ValueError, OSError):
+            self._send_text("forbidden", 403)
+            return
+        if allowed_suffixes is not None and target.suffix.lower() not in allowed_suffixes:
+            self._send_text("unsupported file type", 403)
+            return
+        if not target.is_file():
+            self._send_text("not found", 404)
+            return
+        body = target.read_bytes()
+        self.send_response(200)
+        self.send_header(
+            "Content-Type",
+            _CONTENT_TYPES.get(target.suffix.lower(), "application/octet-stream"),
+        )
+        disp = "inline" if inline else "attachment"
+        self.send_header("Content-Disposition", f'{disp}; filename="{target.name}"')
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -118,6 +155,21 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"strategies": stats.strategy_inventory()})
             elif path == "/api/dates":
                 self._send_json({"dates": stats.crawl_dates()})
+            elif path.startswith("/files/pdf/"):
+                name = path[len("/files/pdf/"):]
+                self._send_file(PDF_DIR / name, PDF_DIR, {".pdf"})
+            elif path.startswith("/files/strategy/"):
+                rest = path[len("/files/strategy/"):]
+                parts = rest.split("/", 1)
+                if len(parts) != 2 or not parts[1]:
+                    self._send_text("usage: /files/strategy/<id>/<file>", 400)
+                    return
+                bundle_id, fname = parts
+                bundle = stats.bundle_dir_for(bundle_id)
+                if bundle is None:
+                    self._send_text("strategy not found", 404)
+                    return
+                self._send_file(bundle / fname, bundle, _STRATEGY_FILE_SUFFIXES)
             else:
                 self._send_text("not found", 404)
         except BrokenPipeError:
