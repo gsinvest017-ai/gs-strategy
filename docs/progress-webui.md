@@ -71,4 +71,70 @@ gs-zipline-tej strategies 路徑可用環境變數 `ZIPLINE_TEJ_STRATEGIES_DIR` 
 
 ## 進度日誌
 
-（每完成一個 milestone 在下方追加 `## M<n> — <title>` 段落。）
+### M1 — 計畫 + 進度檔 ✅
+
+調查資料來源：`papers` + `crawl_runs` 兩表、`fetched_at` ISO 格式、venv 無
+Flask/FastAPI（選 stdlib http.server）、gs-zipline-tej/strategies 現況（4 支
+我方 bundle 都尚未匯出）。Commit `<M1>`。
+
+### M2 — 資料層 stats.py ✅
+
+- `quant_crawler/webui/stats.py`：純函數 `papers_summary` / `runs_on` /
+  `new_papers_on` / `latest_papers` / `crawl_dates` / `strategy_inventory` /
+  `summary`，全部回 JSON-serialisable dict
+- 「已匯出」= `~/gs-zipline-tej/strategies/<id>/manifest.yaml` 存在；
+  路徑可用 `ZIPLINE_TEJ_STRATEGIES_DIR` 覆寫
+- DB 不存在時 graceful 回空
+- `tests/test_webui_stats.py` 9 個測試（temp DB + temp strategies + temp
+  export dir）；對真實資料 sanity check：87 papers、4 manual、0 exported
+
+Commit: `M2: webui data layer — papers/runs/strategy-inventory/export status`
+
+### M3 — HTTP server + API ✅
+
+- `quant_crawler/webui/server.py`：`ThreadingHTTPServer` + `BaseHTTPRequestHandler`
+  - 路由 `/`、`/static/<file>`、`/api/{summary,runs,papers,strategies,dates}`
+  - static serving 含 path-traversal 防護（resolve + relative_to）
+  - 例外轉成 JSON 500 給前端
+- `__main__.py` 入口；`scripts/run_webui.sh` 啟動器（預設 port 5057）
+- curl smoke：summary / strategies / runs?date 全部 200 + 正確 payload
+
+Commit: `M3: stdlib http server + JSON API + run_webui.sh launcher`
+
+### M4 — 前端單頁 ✅
+
+- `static/index.html` + `style.css`（深色 admin 風）+ `app.js`（vanilla fetch）
+- 區塊：5 張 summary card、來源長條圖、routine 表（日期下拉）、新增資料表
+  （無當日資料時 fallback 最近 15 筆）、策略清單（origin/template/tags/待審/
+  匯出 badge + 即時篩選框）
+- **瀏覽器實測**：shot-scraper headless Chromium 截圖確認版面與資料正確渲染
+  （論文 87 / 今日 routine 0 / 策略 4 / 已匯出 0 / 待匯出 4、6 來源長條圖、
+  策略表 4 支 manual + tags + 未匯出）
+
+Commit: `M4: single-page dashboard frontend (cards/bars/runs/papers/strategies)`
+
+### M5 — 整合測試 + docs ✅
+
+- `tests/test_webui_server.py` 9 個整合測試：在 ephemeral port 開真 server，
+  urllib 打每個 route，驗 index/static/各 API 的 shape + 404 + traversal guard
+- README 加「管理介面 (web UI)」段落
+- 本檔進度日誌補完
+- 全 webui 測試（stats 9 + server 9）= 18 綠
+
+Commit: `M5: webui integration tests + README section`
+
+## 結論
+
+- 純新增模組 `quant_crawler/webui/`，零外部依賴、唯讀，不影響既有 crawler /
+  strategy_gen。
+- 一鍵 `./scripts/run_webui.sh` 即可在 5057 看：爬了多少論文、當日跑了哪些
+  routine、新增哪些資料、策略清單、哪些已/未匯出到 gs-zipline-tej。
+
+## 後續方向
+
+1. **自動刷新**：前端可加 `setInterval(refreshAll, 60000)` 或 SSE，目前靠手動
+   ↻ 按鈕。
+2. **一鍵匯出**：面板「未匯出」列可加按鈕呼叫新 endpoint，把 bundle 複製到
+   `~/gs-zipline-tej/strategies/`（會是寫入操作，需另設權限/確認）。
+3. **接 daily_refresh log**：`data/logs/daily_refresh_*.log` 可解析後顯示
+   pipeline 最近一次執行結果（成功/失敗、產出幾個 bundle）。

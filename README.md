@@ -57,6 +57,30 @@ python3 -m venv .venv
 .venv/bin/quant-crawl sources
 ```
 
+## 管理介面 (web UI)
+
+本地網頁管理面板，彙整爬蟲 + 策略產生 pipeline 狀態。零外部依賴（stdlib
+`http.server`），唯讀（不寫 DB、不改策略檔）。
+
+```bash
+./scripts/run_webui.sh                 # http://127.0.0.1:5057
+./scripts/run_webui.sh --port 6060     # 或自訂 port
+PORT=6060 ./scripts/run_webui.sh
+```
+
+面板顯示：
+
+- **論文/報告總量** + 各來源分布（arxiv / wiley / aqr / repec / nber / fed_feds）
+- **爬蟲 routine 執行紀錄**（可選日期，來自 `crawl_runs` 表：起訖、抓取/保留數、錯誤）
+- **新增資料**（指定日 fetched 的論文；無則 fallback 顯示最近 N 筆）
+- **策略清單**：`strategies/`（手寫）+ `strategies/_generated/`（自動產生）的
+  id / 來源 / 模板 / 標籤 / 待審
+- **匯出狀態**：每支策略是否已匯出到 `~/gs-zipline-tej/strategies/<id>/`
+  （可用 `ZIPLINE_TEJ_STRATEGIES_DIR` 覆寫目標路徑）
+
+JSON API（同一 server）：`/api/summary`、`/api/runs?date=`、`/api/papers?date=`、
+`/api/strategies`、`/api/dates`。設計記錄見 `docs/progress-webui.md`。
+
 ## 架構
 
 ```
