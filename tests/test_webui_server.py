@@ -119,3 +119,35 @@ def test_static_traversal_blocked(server: str) -> None:
     # Encoded traversal must not escape the static dir.
     status = _get_status(server, "/static/%2e%2e/config.py")
     assert status in (403, 404)
+
+
+# ---- file-serving routes (PDF + strategy spec markdown) ----
+
+def test_strategy_spec_md_served(server: str) -> None:
+    # vgrsi_tx is a real hand-authored bundle with a README.md spec.
+    status, body, ctype = _get(server, "/files/strategy/vgrsi_tx/README.md")
+    assert status == 200
+    assert "text/markdown" in ctype
+    assert len(body) > 0
+
+
+def test_strategy_manifest_served(server: str) -> None:
+    status, _, _ = _get(server, "/files/strategy/vgrsi_tx/manifest.yaml")
+    assert status == 200
+
+
+def test_strategy_unknown_id_404(server: str) -> None:
+    assert _get_status(server, "/files/strategy/does_not_exist/README.md") == 404
+
+
+def test_strategy_disallowed_suffix_403(server: str) -> None:
+    # .pickle / arbitrary suffix not in the allow-list
+    assert _get_status(server, "/files/strategy/vgrsi_tx/secret.env") == 403
+
+
+def test_pdf_route_missing_is_404(server: str) -> None:
+    assert _get_status(server, "/files/pdf/definitely_absent_xyz.pdf") == 404
+
+
+def test_pdf_route_traversal_blocked(server: str) -> None:
+    assert _get_status(server, "/files/pdf/..%2f..%2fconfig.py") in (403, 404)

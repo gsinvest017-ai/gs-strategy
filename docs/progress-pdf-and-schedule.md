@@ -62,4 +62,74 @@ webui 新增的 `/files/*` 路由只 serve 兩個白名單根目錄：
 
 ## 進度日誌
 
-（每完成一個 milestone 在下方追加 `## M<n> — <title>` 段落。）
+### M1 — 計畫 + 調查 ✅
+
+確認 `data/pdfs/` 空、crawler 預設不下載、`RateLimitedSession.download` 已存在、
+4 bundle 都有 README.md、crontab 既有兩條 job 用不同 marker。Commit `<M1>`。
+
+### M2 — PDF 本地下載 ✅
+
+- `Storage.papers_with_pdf(limit, source)` — 撈有 pdf_url 的論文
+- `quant_crawler/pdf_fetch.py`：`pdf_filename` / `local_pdf_path` /
+  `has_local_pdf` / `fetch_pending`（用 RateLimitedSession 串流下載，
+  per-paper try/except 隔離，跳過已存在、刪零位元組殘檔）
+- CLI `quant-crawl fetch-pdfs [-n N] [-s SOURCE]`
+- `tests/test_pdf_fetch.py` 9 個（檔名規則、skip/limit/failure、source filter）
+- **真實下載驗證**：arxiv 2 篇 → `data/pdfs/`，`file` 確認為 valid PDF
+  （3.5MB / 1.1MB），`data/pdfs/` 已 gitignore 不入版控
+
+Commit: `M2: local PDF download — pdf_fetch + quant-crawl fetch-pdfs CLI`
+
+### M3 — 每日系統排程 ✅
+
+- `daily_refresh.sh` 升成 4 階段：crawl → **fetch-pdfs（best-effort，非致命）**
+  → strategy_gen → validate
+- **實際安裝 cron**（使用者明確要求「定期更新」）：
+  - 先備份 `crontab -l > /tmp/crontab.backup.<ts>`（16 行）
+  - `install_daily_refresh.sh --apply --schedule "30 6 * * *"`（6:30 錯開既有
+    00:00 night-shift 與 17:30 quantdata job）
+  - 驗證：三個 marker block 都在，既有兩條 job 未被動到
+- 回滾：`./scripts/install_daily_refresh.sh --uninstall`
+
+Commit: `M3: daily_refresh adds fetch-pdfs step (now 4-stage); cron installed @6:30`
+
+### M4 — dashboard 超連結 ✅
+
+- `stats.py`：`_paper_row` 補 `pdf_local`（本地檔名 or None）+ `pdf_url`；
+  bundle record 補 `has_spec_md` / `spec_files`；新增 `bundle_dir_for(id)` resolver
+- `server.py`：`/files/pdf/<name>`（限 .pdf）、`/files/strategy/<id>/<file>`
+  （限 .md/.yaml/.yml/.py），共用 `_send_file` 做 resolve+relative_to 防護 +
+  Content-Disposition inline
+- 前端：論文表加「PDF」欄（📄本地 / ⬇遠端 / —）；策略表加「spec」欄
+  （📑spec + manifest 連結）
+- **curl 驗證**：本地 PDF 200 application/pdf 3.5MB、README.md 200 text/markdown、
+  traversal 403 / 壞副檔名 403 / 未知策略 404
+- **瀏覽器截圖**：shot-scraper 確認新欄位渲染
+
+Commit: `M4: dashboard hyperlinks — local/remote PDF + strategy spec markdown`
+
+### M5 — 測試 + docs ✅
+
+- `test_webui_server.py` +7（spec md / manifest / 未知 id 404 / 壞副檔名 403 /
+  PDF 404 / traversal）；`test_webui_stats.py` +3（pdf_local 掛載、
+  `bundle_dir_for`、spec_files）
+- 全 webui+pdf 測試 36 綠
+- README 加「每日排程 + PDF 下載」與 dashboard 超連結說明
+- 本檔進度日誌補完
+
+Commit: `M5: tests for file-serving routes + pdf_local; README updates`
+
+## 結論
+
+- **Part 1（每日排程）**：cron 已實際安裝 @6:30，每天 crawl→fetch-pdfs→gen→
+  validate；dashboard 即時反映最新 DB。可 `--uninstall` 或從備份還原。
+- **Part 2（超連結）**：dashboard 論文列連 PDF（本地優先 / 遠端 fallback），
+  策略列連 spec markdown + manifest，全部經安全的 `/files/*` 路由 serve。
+
+## 後續方向
+
+1. PDF 下載目前抓「所有有 pdf_url 但無本地檔」的論文；量大時可在 daily 用
+   `fetch-pdfs -n N` 限流，避免單日對 arxiv 過量請求。
+2. spec markdown 目前 serve 原始 .md（瀏覽器顯示純文字）；若要 render 成 HTML
+   可在前端引一個輕量 markdown renderer 或 server 端轉換。
+3. 可在 summary 卡片加「本地 PDF 數 / 有 pdf_url 數」一欄，讓下載覆蓋率一目了然。

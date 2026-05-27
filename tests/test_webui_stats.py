@@ -166,6 +166,37 @@ def test_summary_counts(db: Path, strat_root: Path, export_dir: Path) -> None:
     assert s["runs_today"] == stats.summary(db, strat_root, export_dir)["runs_today"]
 
 
+def test_paper_row_attaches_pdf_local(db: Path, monkeypatch) -> None:
+    """new_papers_on marks pdf_local when the downloaded file exists.
+
+    Patch stats.has_local_pdf (the dependency stats uses) so the test doesn't
+    touch the real data/pdfs dir.
+    """
+    monkeypatch.setattr(
+        stats, "has_local_pdf",
+        lambda source, sid: source == "arxiv" and sid == "1",
+    )
+    rows = stats.new_papers_on("2026-05-27", db_path=db)
+    by = {r["source_id"]: r for r in rows}
+    assert by["1"]["pdf_local"] == "arxiv_1.pdf"
+    assert by["2"]["pdf_local"] is None
+
+
+def test_bundle_dir_for(strat_root: Path) -> None:
+    assert stats.bundle_dir_for("vgrsi_tx", strat_root) == strat_root / "vgrsi_tx"
+    assert stats.bundle_dir_for("arxiv_2605_01300", strat_root) == \
+        strat_root / "_generated" / "arxiv_2605_01300"
+    assert stats.bundle_dir_for("nope", strat_root) is None
+
+
+def test_inventory_reports_spec_files(strat_root: Path, export_dir: Path) -> None:
+    inv = stats.strategy_inventory(strat_root, export_dir)
+    rec = next(s for s in inv if s["id"] == "vgrsi_tx")
+    # fixture bundles only write manifest.yaml (no README), so has_spec_md False
+    assert rec["has_spec_md"] is False
+    assert "manifest.yaml" in rec["spec_files"]
+
+
 def test_missing_db_is_graceful(tmp_path: Path) -> None:
     missing = tmp_path / "nope.db"
     assert stats.papers_summary(missing) == {"total": 0, "by_source": []}

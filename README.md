@@ -77,9 +77,30 @@ PORT=6060 ./scripts/run_webui.sh
   id / 來源 / 模板 / 標籤 / 待審
 - **匯出狀態**：每支策略是否已匯出到 `~/gs-zipline-tej/strategies/<id>/`
   （可用 `ZIPLINE_TEJ_STRATEGIES_DIR` 覆寫目標路徑）
+- **檔案超連結**：論文列連到 PDF（優先本地 `data/pdfs/<slug>.pdf`，否則遠端
+  `pdf_url`）；策略列連到 spec markdown（`README.md`）與 `manifest.yaml`，
+  皆由 webui 經 `/files/*` 路由 serve（path-traversal + 副檔名白名單防護）。
 
 JSON API（同一 server）：`/api/summary`、`/api/runs?date=`、`/api/papers?date=`、
-`/api/strategies`、`/api/dates`。設計記錄見 `docs/progress-webui.md`。
+`/api/strategies`、`/api/dates`；檔案：`/files/pdf/<name>`、
+`/files/strategy/<id>/<file>`。設計記錄見 `docs/progress-webui.md`、
+`docs/progress-pdf-and-schedule.md`。
+
+### 每日排程 + PDF 下載
+
+```bash
+# 手動下載尚未抓的 PDF 到 data/pdfs/
+.venv/bin/quant-crawl fetch-pdfs            # 全部；或 -s arxiv -n 5 限量
+
+# 安裝每日排程（crawl → fetch-pdfs → strategy_gen → validate）
+./scripts/install_daily_refresh.sh                       # 預覽 cron 行
+./scripts/install_daily_refresh.sh --apply --schedule "30 6 * * *"
+./scripts/install_daily_refresh.sh --uninstall           # 移除
+```
+
+`daily_refresh.sh` 四階段：(1) `quant-crawl run` 更新 papers.db →
+(2) `fetch-pdfs` 下載新 PDF → (3) `strategy_gen` 產生 skeleton bundle →
+(4) validator。log 在 `data/logs/daily_refresh_<date>.log`。
 
 ## 架構
 
