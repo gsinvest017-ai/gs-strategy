@@ -27,7 +27,8 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from .classify import classify_paper
+from .classify import ClassificationResult, classify_paper
+from .taxonomy import TAG_VOCABULARY, flat_tags
 
 PKG_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = PKG_DIR / "templates"
@@ -43,6 +44,35 @@ DEFAULT_END = "2026-04-30"
 DEFAULT_CAPITAL = 5_000_000
 
 _SLUG_SANITISE_RE = re.compile(r"[^a-z0-9]+")
+
+# Roots that are stock-index futures; everything else is a single-stock future.
+_INDEX_FUTURE_ROOTS = frozenset({"TX", "MTX", "TXF", "MXF", "TE", "TF", "GTF", "XIF"})
+
+# Fixed execution-context tags every generated bundle carries.
+_FIXED_BUNDLE_TAGS = ("paper", "auto-generated", "needs-review", "taiwan", "futures")
+
+
+def _instrument_tag(root: str) -> str:
+    return "index-future" if root.upper() in _INDEX_FUTURE_ROOTS else "stock-future"
+
+
+def assemble_tags(
+    paper: Mapping[str, Any], classification: "ClassificationResult"
+) -> List[str]:
+    """Build the searchable manifest.tags list for a generated bundle.
+
+    Order: fixed execution tags -> instrument -> taxonomy (family/signal/
+    direction) -> the template's own tags. De-duped, order-preserving.
+    """
+    root = str(classification.default_params.get("root_symbol", "TX"))
+    ordered = (
+        list(_FIXED_BUNDLE_TAGS)
+        + [_instrument_tag(root)]
+        + flat_tags(paper)
+        + list(classification.tags)
+    )
+    seen: Dict[str, None] = {}
+    return [t for t in ordered if not (t in seen or seen.update({t: None}))]
 
 
 def paper_slug(source: str, source_id: str) -> str:
@@ -151,10 +181,7 @@ def generate_bundle(
         "end": end,
         "capital_base": capital_base,
         "params_yaml": params_yaml,
-        "tags": (
-            ["paper", "auto-generated", "needs-review", "taiwan", "futures"]
-            + list(classification.tags)
-        ),
+        "tags": assemble_tags(paper, classification),
         "symbols": [classification.default_params.get("root_symbol", "TX")],
         "template": classification.template,
         "matched_keywords": list(classification.matched_keywords),
@@ -273,7 +300,14 @@ def main(argv: List[str]) -> int:
     )
     p.add_argument("--dry-run", action="store_true",
                    help="print what would be generated without writing files")
+    p.add_argument("--list-tags", action="store_true",
+                   help="print the full strategy-tag vocabulary and exit")
     args = p.parse_args(argv)
+
+    if args.list_tags:
+        for tag in sorted(TAG_VOCABULARY):
+            print(tag)
+        return 0
 
     papers = select_recent_papers(args.db, since=args.since, limit=args.limit)
     if not papers:

@@ -239,6 +239,46 @@ def test_generate_bundle_idempotent_preserves_edits(tmp_path: Path) -> None:
     assert "updated_at" in redo["source"]
 
 
+def test_generated_tags_include_taxonomy(tmp_path: Path) -> None:
+    """Generated manifest.tags must carry rich taxonomy tags, not just the
+    template's two-tag stub."""
+    paper = dict(
+        _DUMMY_PAPER,
+        title="Long-short cross-sectional momentum with a regime filter",
+        abstract="A market-neutral momentum book gated by a regime-switching model.",
+        keywords_hit=["momentum", "regime"],
+    )
+    path = generate_bundle(paper, out_root=tmp_path / "g")
+    tags = yaml.safe_load((path / "manifest.yaml").read_text(encoding="utf-8"))["tags"]
+    # fixed execution tags
+    for t in ("paper", "auto-generated", "needs-review", "taiwan", "futures"):
+        assert t in tags
+    # instrument inferred from TX root
+    assert "index-future" in tags
+    # taxonomy-derived strategy tags
+    for t in ("momentum", "cross-sectional", "regime-aware",
+              "long-short", "market-neutral"):
+        assert t in tags
+    # no duplicates
+    assert len(tags) == len(set(tags))
+
+
+def test_generated_tags_stock_future_instrument(tmp_path: Path) -> None:
+    """A non-index root symbol yields the stock-future instrument tag."""
+    paper = dict(_DUMMY_PAPER, source_id="2604.00001",
+                 title="Momentum on single-stock futures")
+    # Force a stock-future root via classifier default override isn't exposed;
+    # instead use a paper whose template defaults to TX, then assert TX→index.
+    # For stock-future we rely on assemble_tags directly.
+    from quant_crawler.strategy_gen.classify import classify_paper
+    from quant_crawler.strategy_gen.generate import assemble_tags
+    cls = classify_paper(paper)
+    object.__setattr__(cls, "default_params", dict(cls.default_params, root_symbol="QFF"))
+    tags = assemble_tags(paper, cls)
+    assert "stock-future" in tags
+    assert "index-future" not in tags
+
+
 def test_dry_run_writes_nothing(tmp_path: Path) -> None:
     out_root = tmp_path / "gen"
     path = generate_bundle(_DUMMY_PAPER, out_root=out_root, dry_run=True)
