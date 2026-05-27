@@ -39,6 +39,39 @@
 | M2 | 版本戳記 + restart-safe + 重啟 | summary `server_started`/`code_rev`、footer 顯示、run_webui.sh 換舊 server、重啟並驗證 34/本地 + tests |
 | M3 | docs + 報告 | README 註記「改碼後需重啟」、進度檔總結 |
 
+## 進度日誌
+
+### M1 — root cause ✅
+
+以 commit 時間 (15:44) vs server 啟動時間 (13:34) + 舊 server 回應缺 `filter`
+key 證實：執行中的是舊 process，非程式 bug。Commit `<M1>`。
+
+### M2 — 版本戳記 + restart-safe + 重啟 ✅
+
+- `server.py`：模組載入時擷取 `SERVER_STARTED`（process 啟動 UTC 時間）與
+  `CODE_REV`（`git rev-parse --short HEAD`），`/api/summary` 回傳這兩欄
+- 前端 footer 顯示「server 啟動於 … · code … （改碼後需重啟）」
+- `run_webui.sh`：啟動前 `pgrep` 同 port 的舊 webui 並 kill（restart-safe）
+- **重啟使用者的 5057 server**：kill PID 529955 (13:34) → detached 重啟
+  PID 579425 (16:35)；驗證 `?pdf=local` 回 34、`filter:local`、戳記齊全
+- **瀏覽器截圖**：5057 選「只看本地 PDF」後正確顯示 arxiv 論文的「本地」連結
+- webui 測試 34 綠
+
+Commit: `M2: server version stamp + restart-safe run_webui.sh (detect stale process)`
+
+### M3 — docs ✅
+
+README webui 段落加「改碼後需重啟 server」提醒 + footer 戳記說明；本檔總結。
+
+Commit: `M3: docs — note server restart requirement`
+
+## 結論
+
+PDF 連結顯示「—」的真因是**執行中的 server 是舊 process**（13:34 啟動，早於
+15:44 的 pdf-filter 程式碼）。已重啟你的 5057 server，現在「只看本地 PDF」
+正確顯示 34 個本地連結。並加了 (a) footer 版本戳記讓 server 過期一眼可見、
+(b) `run_webui.sh` 自動替換同 port 舊 server，避免再犯。
+
 ## Fallback 指引
 
 - 立即手動修：`pkill -f 'quant_crawler.webui'` 後 `./scripts/run_webui.sh`。

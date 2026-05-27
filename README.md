@@ -68,6 +68,11 @@ python3 -m venv .venv
 PORT=6060 ./scripts/run_webui.sh
 ```
 
+> **改碼後要重啟**：`http.server` 不會 hot-reload Python，改了 `server.py`/
+> `stats.py` 後必須重啟 server 才生效（靜態檔 index.html/app.js 則即時讀）。
+> `run_webui.sh` 啟動前會自動停掉同 port 的舊 server；footer 也會顯示
+> 「server 啟動於 … · code <git hash>」讓你一眼看出跑的是不是最新版。
+
 面板顯示：
 
 - **論文/報告總量** + 各來源分布（arxiv / wiley / aqr / repec / nber / fed_feds）
