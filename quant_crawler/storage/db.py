@@ -195,6 +195,23 @@ class Storage:
             )
             return [_deserialize(r) for r in cur.fetchall()]
 
+    def papers_with_pdf(
+        self, limit: Optional[int] = None, source: Optional[str] = None
+    ) -> list[tuple[str, str, str]]:
+        """Return (source, source_id, pdf_url) for papers that have a pdf_url."""
+        sql = "SELECT source, source_id, pdf_url FROM papers WHERE pdf_url != ''"
+        params: list = []
+        if source:
+            sql += " AND source = ?"
+            params.append(source)
+        sql += " ORDER BY fetched_at DESC"
+        if limit:
+            sql += " LIMIT ?"
+            params.append(limit)
+        with self._conn() as c:
+            cur = c.execute(sql, params)
+            return [(r[0], r[1], r[2]) for r in cur.fetchall()]
+
     def stats_by_source(self) -> list[tuple[str, int]]:
         with self._conn() as c:
             cur = c.execute(

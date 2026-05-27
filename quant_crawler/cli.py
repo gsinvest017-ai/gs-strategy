@@ -74,6 +74,15 @@ def cmd_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fetch_pdfs(args: argparse.Namespace) -> int:
+    from quant_crawler.pdf_fetch import fetch_pending
+
+    storage = Storage()
+    summary = fetch_pending(storage, limit=args.limit, source=args.source)
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
+
+
 def cmd_sources(args: argparse.Namespace) -> int:
     for name in REGISTRY:
         cfg = SOURCES.get(name)
@@ -120,6 +129,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     pso = sub.add_parser("sources", help="List configured sources")
     pso.set_defaults(func=cmd_sources)
+
+    pf = sub.add_parser("fetch-pdfs", help="Download papers' PDFs to data/pdfs/")
+    pf.add_argument("--source", "-s", help="limit to one source")
+    pf.add_argument("--limit", "-n", type=int, default=None,
+                    help="max PDFs to download this run")
+    pf.set_defaults(func=cmd_fetch_pdfs)
 
     return p
 
