@@ -105,3 +105,30 @@ CI 用：失敗 bundle 數為 exit code。
 provenance。
 
 設計細節與決策記錄在 [`docs/progress-strategy-import-spec.md`](../docs/progress-strategy-import-spec.md)。
+
+### 策略分類標籤 (taxonomy)
+
+每個 bundle 的 `manifest.tags` 採用統一的多維度詞彙，dashboard import 後
+直接進 `StrategyMeta.tags`，search panel（`main.js` 的 fuzzy haystack）即可
+模糊搜尋。維度：
+
+| 維度 | 範例 tag |
+|---|---|
+| `family` | momentum / trend-following / mean-reversion / pairs-trading / carry / value / factor / volatility / event-driven / arbitrage |
+| `signal` | technical / fundamental / cross-sectional / time-series / regime-aware / machine-learning / sentiment / microstructure / graph-based |
+| `direction` | long-only / long-short / market-neutral |
+| `instrument` | index-future / stock-future / single-stock |
+
+固定執行情境 tag：`taiwan`、`futures`、（自動產生的再加）`paper`、
+`auto-generated`、`needs-review`。
+
+自動產生的 bundle 由 `quant_crawler/strategy_gen/taxonomy.py` 從論文標題/摘要
+多標籤抽取；手寫 4 支 bundle 用同一詞彙手填。完整詞彙表：
+
+```bash
+.venv/bin/python -m quant_crawler.strategy_gen --list-tags
+```
+
+搜尋範例（dashboard search panel 輸入）：`market-neutral`、`regime`、
+`cross-sectional momentum`（多 token AND）。設計記錄見
+[`docs/progress-strategy-taxonomy.md`](../docs/progress-strategy-taxonomy.md)。
