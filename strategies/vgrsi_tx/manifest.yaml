@@ -24,10 +24,15 @@ params:
     MTX: 100
   spread_points: 6.0
 tags:
+- paper
 - taiwan
 - futures
+- index-future
+- mean-reversion
 - technical
-- paper
+- graph-based
+- time-series
+- long-only
 requires_tej_key: true
 extra_deps: []
 symbols:

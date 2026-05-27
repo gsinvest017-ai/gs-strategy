@@ -24,11 +24,16 @@ params:
     TX: 200
   spread_points: 6.0
 tags:
+- paper
 - taiwan
 - futures
+- index-future
 - momentum
+- trend-following
+- volatility
+- regime-aware
+- long-short
 - nonlinear
-- paper
 requires_tej_key: true
 extra_deps: []
 symbols:

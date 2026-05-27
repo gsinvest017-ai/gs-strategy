@@ -155,11 +155,15 @@ params:
     FKF: 120
   spread_points: 6.0
 tags:
+- paper
 - taiwan
 - futures
+- stock-future
 - momentum
-- regime
-- paper
+- cross-sectional
+- regime-aware
+- market-neutral
+- long-short
 requires_tej_key: true
 extra_deps: []
 symbols:

@@ -27,10 +27,15 @@ params:
     MTX: 100
   spread_points: 6.0
 tags:
+- paper
 - taiwan
 - futures
+- index-future
 - momentum
-- paper
+- trend-following
+- time-series
+- volatility
+- long-short
 requires_tej_key: true
 extra_deps: []
 symbols:
