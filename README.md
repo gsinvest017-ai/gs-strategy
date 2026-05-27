@@ -85,8 +85,14 @@ PORT=6060 ./scripts/run_webui.sh
 - **檔案超連結**：論文列連到 PDF（優先本地 `data/pdfs/<slug>.pdf`，否則遠端
   `pdf_url`）；策略列連到 spec markdown（`README.md`）與 `manifest.yaml`，
   皆由 webui 經 `/files/*` 路由 serve（path-traversal + 副檔名白名單防護）。
-  本地 PDF 連結即時反映 `data/pdfs/`（無需重建）；papers 面板的「PDF」篩選器
-  預設「有 PDF」，載入即顯示有 PDF 的論文，另有「只看本地 PDF」「全部（依日期）」。
+  本地 PDF 連結即時反映 `data/pdfs/`（無需重建）。
+- **Strategy / Factor 雙 panel**：論文區分「策略」「因子」兩個 tab 切換查詢
+  （依 `quant_crawler/paper_class.py` 自動分類 strategy vs factor）。每個 tab
+  可依**子類別**篩選（factor: value/size/momentum/quality/… ；strategy:
+  trend-following/mean-reversion/pairs-trading/…），子類別自動偵測。
+- **手動標籤**：每篇論文可在 dashboard 手動新增/移除子類別標籤、或覆寫 kind
+  （修正誤判）。手動標註存 `paper_labels` 表，**re-crawl 不會被洗掉**。
+  寫入走 `POST /api/labels`（dashboard 因此具備有限寫入能力）。
 
 JSON API（同一 server）：`/api/summary`、`/api/runs?date=`、`/api/papers?date=`、
 `/api/strategies`、`/api/dates`；檔案：`/files/pdf/<name>`、

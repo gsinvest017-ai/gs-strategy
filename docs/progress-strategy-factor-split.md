@@ -96,4 +96,51 @@ CREATE TABLE paper_labels (
 
 ## 進度日誌
 
-（每完成一個 milestone 在下方追加 `## M<n> — <title>` 段落。）
+### M1 — 設計 ✅
+資料模型（auto 即時推導 + `paper_labels` 存手動）、binary kind 分類、雙子類別
+taxonomy、API、UI 規劃。Commit `<M1>`。
+
+### M2 — 分類器 ✅
+`quant_crawler/paper_class.py`：`classify_kind`（factor vs strategy 關鍵字計分，
+平手→strategy）、`subcategories`（per-kind 多標籤，保守 pattern 防誤判）、
+`classify`、`subcat_vocabulary`。16 測試。真實 87 篇 → 69 strategy / 18 factor。
+Commit: `M2: strategy/factor classifier + per-kind subcategory taxonomy`
+
+### M3 — 手動標籤儲存 + stats 整合 ✅
+- `quant_crawler/storage/labels.py`：`paper_labels` 表 + `LabelStore`
+  (get/all_labels/add_subcat/remove_subcat/set_kind)，與 papers upsert 解耦
+- `stats._paper_row` 改成附 kind/kind_auto/kind_overridden/subcats_auto/
+  subcats_manual/subcats；`list_papers` 加 kind+subcat 篩選（任一 filter 跨全部
+  論文）；`kind_counts`；summary 加 `papers_by_kind`；labels 批次載入避免 N+1
+- 7 labels 測試 + 6 stats 整合測試
+Commit: `M3: paper_labels store + stats kind/subcat integration & filters`
+
+### M4 — server + 前端雙 panel ✅
+- server：`/api/papers` 加 kind/subcat 參數、新增 `/api/taxonomy`、新增
+  `do_POST /api/labels`（add_subcat/remove_subcat/set_kind）
+- 前端：策略/因子 tab 切換、子類別篩選下拉（依 kind 動態）、每列子類別 chips
+  （自動灰 / 手動紫 + ×移除）+「+標籤」輸入（datalist 自動補全）+ kind 覆寫
+  下拉；summary 加「策略/因子」卡
+- 重啟 5057 server；瀏覽器驗證：strategy tab 69 筆 / factor tab 18 筆、
+  UI 加標籤端到端寫入成功（POST→reload→chip 出現），測後清除
+Commit: `M4: dual strategy/factor panels + subcat filter + manual tag/kind UI + /api/labels POST`
+
+### M5 — POST 測試 + docs ✅
+- `test_webui_server.py` +6（taxonomy / kind filter / POST roundtrip+cleanup /
+  bad op / missing fields / POST 404）
+- 全 webui+分類+labels 測試 78 綠、確認無 DB 標籤污染
+- README 加 strategy/factor 雙 panel + 手動標籤段落；本檔總結
+Commit: `M5: server POST/taxonomy tests + README strategy/factor section`
+
+## 結論
+
+依 architecture.drawio 落實 strategy/factor 分流：scraper 端有自動分類器，
+dashboard 分雙 panel 切換，各支援自動 + 手動子類別標籤（手動標註持久化、
+re-crawl 不洗）。dashboard 從唯讀加上有限寫入（僅 paper_labels）。
+
+## 後續方向
+- kind 分類目前 binary（無 unknown）；若要更精準可加信心門檻 + 「未分類」桶。
+- 子類別 taxonomy 可持續擴充（在 paper_class 加一列 + 補測試 sample）。
+- 手動標籤可加「常用標籤」快捷鍵；目前靠 datalist 自動補全。
+- factor pool 可進一步接 architecture.drawio 的 "Factor for selector" 流向
+  target selector（目前 drawio 標 TODO）。

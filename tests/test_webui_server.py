@@ -105,6 +105,83 @@ def test_api_papers_fallback_latest(server: str) -> None:
     assert len(data["papers"]) <= 5
 
 
+def _post(base: str, path: str, payload: dict):
+    import urllib.request
+
+    def _parse(raw: bytes):
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            return raw.decode(errors="replace")
+
+    req = urllib.request.Request(
+        base + path, data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"}, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.status, _parse(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, _parse(e.read())
+
+
+def test_api_taxonomy(server: str) -> None:
+    status, body, _ = _get(server, "/api/taxonomy")
+    assert status == 200
+    d = json.loads(body)
+    assert "value" in d["factor"]
+    assert "trend-following" in d["strategy"]
+
+
+def test_api_papers_kind_filter(server: str) -> None:
+    status, body, _ = _get(server, "/api/papers?kind=factor&limit=500")
+    assert status == 200
+    d = json.loads(body)
+    assert d["kind"] == "factor"
+    assert all(p["kind"] == "factor" for p in d["papers"])
+
+
+def test_post_labels_roundtrip(server: str) -> None:
+    """add_subcat -> appears; set_kind -> overridden; cleanup."""
+    src, sid = "arxiv", "2604.19107"   # real paper in repo DB
+    try:
+        st, rec = _post(server, "/api/labels",
+                        {"source": src, "source_id": sid,
+                         "op": "add_subcat", "value": "srvtest"})
+        assert st == 200
+        assert "srvtest" in rec["label"]["manual_subcats"]
+        st, rec = _post(server, "/api/labels",
+                        {"source": src, "source_id": sid,
+                         "op": "set_kind", "value": "factor"})
+        assert st == 200
+        assert rec["label"]["kind_override"] == "factor"
+        # verify via GET
+        _, body, _ = _get(server, "/api/papers?kind=factor&subcat=srvtest&limit=500")
+        ids = {(p["source"], p["source_id"]) for p in json.loads(body)["papers"]}
+        assert (src, sid) in ids
+    finally:
+        _post(server, "/api/labels", {"source": src, "source_id": sid,
+                                      "op": "remove_subcat", "value": "srvtest"})
+        _post(server, "/api/labels", {"source": src, "source_id": sid,
+                                      "op": "set_kind", "value": None})
+
+
+def test_post_labels_bad_op(server: str) -> None:
+    st, rec = _post(server, "/api/labels",
+                    {"source": "a", "source_id": "b", "op": "bogus"})
+    assert st == 400
+
+
+def test_post_labels_missing_fields(server: str) -> None:
+    st, _ = _post(server, "/api/labels", {"op": "add_subcat", "value": "x"})
+    assert st == 400
+
+
+def test_post_unknown_path_404(server: str) -> None:
+    st, _ = _post(server, "/api/nope", {})
+    assert st == 404
+
+
 def test_api_papers_local_filter(server: str) -> None:
     """pdf=local must only return papers that have a downloaded local file.
     The repo has 2 real downloaded arxiv PDFs (from the fetch-pdfs smoke)."""
