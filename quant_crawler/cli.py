@@ -83,6 +83,14 @@ def cmd_fetch_pdfs(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rag_ingest(args: argparse.Namespace) -> int:
+    from quant_crawler.rag.ingest import ingest_all
+
+    summary = ingest_all(limit=args.limit, source=args.source, reindex=args.reindex)
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
+
+
 def cmd_sources(args: argparse.Namespace) -> int:
     for name in REGISTRY:
         cfg = SOURCES.get(name)
@@ -135,6 +143,15 @@ def build_parser() -> argparse.ArgumentParser:
     pf.add_argument("--limit", "-n", type=int, default=None,
                     help="max PDFs to download this run")
     pf.set_defaults(func=cmd_fetch_pdfs)
+
+    pri = sub.add_parser("rag-ingest",
+                         help="Extract downloaded PDFs into the RAG full-text store")
+    pri.add_argument("--source", "-s", help="limit to one source")
+    pri.add_argument("--limit", "-n", type=int, default=None,
+                     help="max papers to ingest this run")
+    pri.add_argument("--reindex", action="store_true",
+                     help="re-extract even if already indexed")
+    pri.set_defaults(func=cmd_rag_ingest)
 
     return p
 
