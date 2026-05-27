@@ -91,6 +91,37 @@ def cmd_rag_ingest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rag_search(args: argparse.Namespace) -> int:
+    from quant_crawler.rag.retrieve import search_chunks
+
+    hits = search_chunks(args.query, limit=args.limit, kind=args.kind,
+                         source=args.source, source_id=args.source_id)
+    if args.json:
+        print(json.dumps(hits, ensure_ascii=False, indent=2))
+        return 0
+    if not hits:
+        print("(no matches)")
+        return 0
+    for h in hits:
+        loc = f"{h['source']}:{h['source_id']} p{h['page']} [{h['kind']}]"
+        print(f"\n### {loc}  score={h['score']}")
+        print(f"    {h.get('title') or ''}")
+        print("    " + h["text"][:400].replace("\n", " "))
+    return 0
+
+
+def cmd_rag_stats(args: argparse.Namespace) -> int:
+    from quant_crawler.rag.store import RagStore
+    from quant_crawler.rag.retrieve import list_indexed
+
+    print(json.dumps(RagStore().stats(), ensure_ascii=False, indent=2))
+    if args.list:
+        for p in list_indexed(kind=args.kind):
+            print(f"  {p['source']}:{p['source_id']:24s} [{p['kind']}] "
+                  f"{p['n_chunks']} chunks  {p.get('title') or ''}")
+    return 0
+
+
 def cmd_sources(args: argparse.Namespace) -> int:
     for name in REGISTRY:
         cfg = SOURCES.get(name)
@@ -152,6 +183,21 @@ def build_parser() -> argparse.ArgumentParser:
     pri.add_argument("--reindex", action="store_true",
                      help="re-extract even if already indexed")
     pri.set_defaults(func=cmd_rag_ingest)
+
+    prs = sub.add_parser("rag-search", help="BM25 search over indexed paper text")
+    prs.add_argument("query")
+    prs.add_argument("--limit", "-n", type=int, default=8)
+    prs.add_argument("--kind", choices=["strategy", "factor"],
+                     help="only chunks from strategy/factor papers")
+    prs.add_argument("--source", "-s")
+    prs.add_argument("--source-id")
+    prs.add_argument("--json", action="store_true")
+    prs.set_defaults(func=cmd_rag_search)
+
+    prst = sub.add_parser("rag-stats", help="RAG index stats")
+    prst.add_argument("--list", action="store_true", help="list indexed papers")
+    prst.add_argument("--kind", choices=["strategy", "factor"])
+    prst.set_defaults(func=cmd_rag_stats)
 
     return p
 
