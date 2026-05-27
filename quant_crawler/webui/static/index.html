@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>gs-strategy 管理面板</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>gs-strategy 管理面板</h1>
+      <p class="sub">論文爬蟲 × 策略產生 pipeline 狀態總覽</p>
+    </div>
+    <div class="meta">
+      <span id="generated-at">載入中…</span>
+      <button id="refresh-btn" title="重新整理">↻ 重新整理</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Summary cards -->
+    <section class="cards" id="cards"></section>
+
+    <!-- Source breakdown -->
+    <section class="panel">
+      <h2>論文/報告來源分布</h2>
+      <div id="source-bars" class="bars"></div>
+    </section>
+
+    <!-- Crawl runs -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>爬蟲 routine 執行紀錄</h2>
+        <label>日期
+          <select id="runs-date"></select>
+        </label>
+      </div>
+      <table class="grid" id="runs-table">
+        <thead>
+          <tr><th>來源</th><th>開始</th><th>結束</th><th>抓取</th><th>保留</th><th>狀態</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" id="runs-empty" hidden>此日期無 routine 紀錄。</p>
+    </section>
+
+    <!-- New papers -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>新增資料</h2>
+        <span class="hint" id="papers-hint"></span>
+      </div>
+      <table class="grid" id="papers-table">
+        <thead>
+          <tr><th>來源</th><th>標題</th><th>發表</th><th>連結</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" id="papers-empty" hidden>無資料。</p>
+    </section>
+
+    <!-- Strategy inventory -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>策略清單與匯出狀態</h2>
+        <input id="strat-filter" type="search" placeholder="🔍 篩選 id / tag / template…" />
+      </div>
+      <p class="hint" id="export-dir-hint"></p>
+      <table class="grid" id="strat-table">
+        <thead>
+          <tr><th>策略 id</th><th>來源</th><th>模板</th><th>標籤</th><th>待審</th><th>匯出 gs-zipline-tej</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" id="strat-empty" hidden>尚無策略。</p>
+    </section>
+  </main>
+
+  <footer><span id="err-banner"></span></footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
