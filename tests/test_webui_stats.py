@@ -241,6 +241,58 @@ def test_inventory_reports_spec_files(strat_root: Path, export_dir: Path) -> Non
     assert "manifest.yaml" in rec["spec_files"]
 
 
+def test_paper_row_has_kind_and_subcats(db: Path) -> None:
+    rows = stats.new_papers_on("2026-05-27", db_path=db)
+    p = rows[0]
+    for key in ("kind", "kind_auto", "subcats", "subcats_auto",
+                "subcats_manual", "kind_overridden"):
+        assert key in p
+    assert p["kind"] in ("strategy", "factor")
+
+
+def test_list_papers_kind_filter_with_override(db: Path) -> None:
+    from quant_crawler.storage.labels import LabelStore
+    ls = LabelStore(db)
+    ls.set_kind("wiley", "3", "factor")          # force one paper to factor
+    factor = stats.list_papers(kind="factor", db_path=db)
+    assert ("wiley", "3") in {(p["source"], p["source_id"]) for p in factor}
+    assert all(p["kind"] == "factor" for p in factor)
+    strat = stats.list_papers(kind="strategy", db_path=db)
+    assert ("wiley", "3") not in {(p["source"], p["source_id"]) for p in strat}
+
+
+def test_list_papers_subcat_filter_manual(db: Path) -> None:
+    from quant_crawler.storage.labels import LabelStore
+    ls = LabelStore(db)
+    ls.add_subcat("arxiv", "1", "carry")
+    rows = stats.list_papers(subcat="carry", db_path=db)
+    ids = {(p["source"], p["source_id"]) for p in rows}
+    assert ("arxiv", "1") in ids
+    hit = next(p for p in rows if p["source_id"] == "1")
+    assert "carry" in hit["subcats"]
+    assert "carry" in hit["subcats_manual"]
+
+
+def test_manual_subcat_appears_in_paper_row(db: Path) -> None:
+    from quant_crawler.storage.labels import LabelStore
+    LabelStore(db).add_subcat("arxiv", "2", "esg")
+    rows = stats.new_papers_on("2026-05-27", db_path=db)
+    p = next(r for r in rows if r["source_id"] == "2")
+    assert "esg" in p["subcats_manual"]
+    assert "esg" in p["subcats"]
+
+
+def test_kind_counts_sum_to_total(db: Path) -> None:
+    counts = stats.kind_counts(db)
+    assert counts["strategy"] + counts["factor"] == 3
+
+
+def test_summary_includes_papers_by_kind(db: Path, strat_root: Path, export_dir: Path) -> None:
+    s = stats.summary(db, strat_root, export_dir)
+    assert "papers_by_kind" in s
+    assert set(s["papers_by_kind"]) == {"strategy", "factor"}
+
+
 def test_missing_db_is_graceful(tmp_path: Path) -> None:
     missing = tmp_path / "nope.db"
     assert stats.papers_summary(missing) == {"total": 0, "by_source": []}
