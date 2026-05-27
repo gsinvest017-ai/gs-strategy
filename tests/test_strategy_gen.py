@@ -285,6 +285,54 @@ def test_dry_run_writes_nothing(tmp_path: Path) -> None:
     assert not path.exists()  # no files written
 
 
+def _seed_papers_table(db: Path, source: str, source_id: str, title: str) -> None:
+    """Minimal papers table so retrieve._paper_meta can enrich chunks."""
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS papers (source TEXT, source_id TEXT, "
+        "title TEXT, url TEXT, abstract TEXT, keywords_hit TEXT, categories TEXT, "
+        "PRIMARY KEY (source, source_id))"
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO papers (source, source_id, title) VALUES (?,?,?)",
+        (source, source_id, title),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_generate_bundle_embeds_rag_passages(tmp_path: Path) -> None:
+    """When the paper is RAG-indexed, the README embeds the auto-retrieved
+    passages inline (not just a hint to call the MCP server)."""
+    from quant_crawler.rag.store import RagStore
+
+    db = tmp_path / "papers.db"
+    src, sid = _DUMMY_PAPER["source"], _DUMMY_PAPER["source_id"]
+    _seed_papers_table(db, src, sid, _DUMMY_PAPER["title"])
+    formula = ("The momentum signal formula is s_t = (P_t - P_{t-L}) / P_{t-L} "
+               "with lookback L and a skip period.")
+    RagStore(db).replace_paper(src, sid, [(0, 7, formula)])
+
+    path = generate_bundle(_DUMMY_PAPER, out_root=tmp_path / "gen", rag_db_path=db)
+    readme = (path / "README.md").read_text(encoding="utf-8")
+    assert "### Auto-retrieved passages" in readme
+    assert "s_t = (P_t - P_{t-L}) / P_{t-L}" in readme
+    assert "p.7" in readme                     # page label rendered
+    assert "get_paper_context(" in readme       # MCP hint still present
+
+
+def test_generate_bundle_rag_not_indexed_fallback(tmp_path: Path) -> None:
+    """An indexed papers table but no chunks for this paper -> ingest hint."""
+    db = tmp_path / "papers.db"
+    src, sid = _DUMMY_PAPER["source"], _DUMMY_PAPER["source_id"]
+    _seed_papers_table(db, src, sid, _DUMMY_PAPER["title"])
+    # papers table exists but no rag_chunks seeded -> not indexed
+    path = generate_bundle(_DUMMY_PAPER, out_root=tmp_path / "gen", rag_db_path=db)
+    readme = (path / "README.md").read_text(encoding="utf-8")
+    assert "Paper text NOT yet indexed" in readme
+    assert "### Auto-retrieved passages" not in readme
+
+
 def test_select_recent_papers_filters_by_fetched_at(tmp_path: Path) -> None:
     """select_recent_papers uses the schema we expect on data/papers.db."""
     db = tmp_path / "papers.db"

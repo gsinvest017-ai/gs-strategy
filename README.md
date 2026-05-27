@@ -144,11 +144,14 @@ MCP server（Claude Code 透過根目錄 `.mcp.json` 自動掛載 `gs-strategy-r
 | `get_paper_fulltext(source, source_id)` | 取某論文全文 |
 | `list_indexed_papers(kind?)` / `rag_stats()` | 列出已索引 / 索引統計 |
 
-自動產生的 bundle README 會附上對應的 `get_paper_context(...)` 呼叫提示；
+自動產生的 bundle README 會**直接內嵌**從 RAG store 取回的 top 段落（依
+strategy/factor 模板下 targeted query），讓 reviewer/Claude 不必再多跑一次
+MCP 就能對照原文公式；同時保留 `get_paper_context(...)` 提示供進一步查詢。
+未索引的論文則 fallback 顯示 `rag-ingest` 指引。
 `daily_refresh.sh` 在 fetch-pdfs 後自動 `rag-ingest`，閉環：
 crawl → fetch-pdfs → rag-ingest → strategy_gen。
 
-設計記錄見 `docs/progress-rag-mcp.md`。
+設計記錄見 `docs/progress-rag-mcp.md`、`docs/progress-generator-rag-context.md`。
 
 ### Dashboard 內瀏覽 RAG / MCP
 

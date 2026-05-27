@@ -43,6 +43,16 @@ DEFAULT_START = "2020-01-01"
 DEFAULT_END = "2026-04-30"
 DEFAULT_CAPITAL = 5_000_000
 
+# Template -> targeted RAG query used to auto-retrieve the paper's signal
+# definition into the generated README. Augmented with the matched keywords.
+_RAG_QUERY_BY_TEMPLATE = {
+    "momentum": "momentum signal formula lookback skip ranking",
+    "mean_reversion": "mean reversion oscillator threshold signal formula",
+    "buy_and_hold": "strategy definition parameters position sizing",
+}
+_RAG_CONTEXT_CHUNKS = 3
+_RAG_CHUNK_PREVIEW_CHARS = 700
+
 _SLUG_SANITISE_RE = re.compile(r"[^a-z0-9]+")
 
 # Roots that are stock-index futures; everything else is a single-stock future.
@@ -134,6 +144,71 @@ def _description(paper: Mapping[str, Any], result_template: str,
     )
 
 
+def _rag_context_section(
+    paper: Mapping[str, Any],
+    classification: "ClassificationResult",
+    rag_db_path: Optional[Path] = None,
+) -> str:
+    """Build the README's "RAG source context" section.
+
+    When the paper is indexed, auto-retrieves the top passages for the
+    template's signal and embeds them inline so a reviewer (or Claude) sees the
+    original formula text without an extra MCP round-trip. Always falls back to
+    the ingest hint when retrieval is unavailable — generation never fails on a
+    RAG problem.
+    """
+    source = str(paper["source"])
+    source_id = str(paper["source_id"])
+    query = " ".join(
+        [_RAG_QUERY_BY_TEMPLATE.get(classification.template, "signal formula definition")]
+        + list(classification.matched_keywords)[:5]
+    )
+    try:
+        from quant_crawler.config import DB_PATH
+        from quant_crawler.rag.retrieve import paper_context
+
+        ctx = paper_context(
+            source, source_id, query=query,
+            max_chunks=_RAG_CONTEXT_CHUNKS, db_path=rag_db_path or DB_PATH,
+        )
+    except Exception:
+        ctx = {"indexed": False, "chunks": []}
+
+    if not ctx.get("indexed"):
+        return (
+            "## RAG source context\n\n"
+            "Paper text NOT yet indexed. Run `quant-crawl fetch-pdfs` then\n"
+            "`quant-crawl rag-ingest` to enable formula retrieval via MCP.\n\n"
+        )
+
+    lines = [
+        "## RAG source context (use to extract the correct formula)\n",
+        f"This paper's full text is indexed. Below are the top passages "
+        f"auto-retrieved\nfor the **{classification.template}** signal — verify "
+        f"the formula against them.\nFor a targeted lookup, query the "
+        f"`gs-strategy-rag` MCP server:\n",
+        "```",
+        f'get_paper_context(source="{source}", source_id="{source_id}",',
+        '                  query="<the signal/factor formula you need>")',
+        "```",
+        f'or `get_paper_fulltext("{source}", "{source_id}")`.\n',
+    ]
+    chunks = ctx.get("chunks") or []
+    if chunks:
+        lines.append("### Auto-retrieved passages\n")
+        for ch in chunks:
+            text = " ".join((ch.get("text") or "").split())
+            if len(text) > _RAG_CHUNK_PREVIEW_CHARS:
+                text = text[:_RAG_CHUNK_PREVIEW_CHARS] + " …"
+            page = ch.get("page")
+            loc = f"p.{page}" if page is not None else f"chunk {ch.get('chunk_idx')}"
+            score = ch.get("score")
+            head = f"- **{loc}**" + (f" (BM25 {score})" if score is not None else "") + ":"
+            lines.append(head)
+            lines.append(f"  > {text}\n")
+    return "\n".join(lines) + "\n"
+
+
 def generate_bundle(
     paper: Mapping[str, Any],
     out_root: Path = DEFAULT_OUT_ROOT,
@@ -141,6 +216,7 @@ def generate_bundle(
     end: str = DEFAULT_END,
     capital_base: int = DEFAULT_CAPITAL,
     dry_run: bool = False,
+    rag_db_path: Optional[Path] = None,
 ) -> Path:
     """Render a skeleton bundle for one paper.
 
@@ -243,33 +319,10 @@ def generate_bundle(
             CANONICAL_FUTURES_SETUP, bundle_dir / "futures_setup.py"
         )
 
-    # Is the source paper's full text available in the RAG store? If so, the
-    # reviewer (or Claude) can pull the exact formula via the MCP server.
-    try:
-        from quant_crawler.rag.store import RagStore
-        rag_indexed = RagStore().is_indexed(paper["source"], str(paper["source_id"]))
-    except Exception:
-        rag_indexed = False
-
-    if rag_indexed:
-        rag_section = (
-            "## RAG source context (use to extract the correct formula)\n\n"
-            "This paper's full text is indexed. Before filling in the signal,\n"
-            "pull the original passages via the `gs-strategy-rag` MCP server so\n"
-            "the formula/params match the paper exactly:\n\n"
-            "```\n"
-            f"get_paper_context(source=\"{paper['source']}\", "
-            f"source_id=\"{paper['source_id']}\",\n"
-            "                  query=\"<the signal/factor formula you need>\")\n"
-            "```\n"
-            f"or `get_paper_fulltext(\"{paper['source']}\", \"{paper['source_id']}\")`.\n\n"
-        )
-    else:
-        rag_section = (
-            "## RAG source context\n\n"
-            "Paper text NOT yet indexed. Run `quant-crawl fetch-pdfs` then\n"
-            "`quant-crawl rag-ingest` to enable formula retrieval via MCP.\n\n"
-        )
+    # Auto-retrieve the paper's signal passages from the RAG store (when
+    # indexed) and embed them inline, so the reviewer/Claude sees the original
+    # formula text without a separate MCP round-trip.
+    rag_section = _rag_context_section(paper, classification, rag_db_path)
 
     (bundle_dir / "README.md").write_text(
         f"# {manifest_ctx['name']}\n\n"
