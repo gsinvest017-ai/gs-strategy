@@ -45,16 +45,22 @@
       <p class="empty" id="runs-empty" hidden>此日期無 routine 紀錄。</p>
     </section>
 
-    <!-- New papers -->
+    <!-- Papers: strategy vs factor panels -->
     <section class="panel">
       <div class="panel-head">
-        <h2>新增資料</h2>
+        <div class="tabs" id="kind-tabs">
+          <button class="tab active" data-kind="strategy">策略 Strategy</button>
+          <button class="tab" data-kind="factor">因子 Factor</button>
+        </div>
         <div class="panel-controls">
+          <label>子類別
+            <select id="subcat-filter"><option value="">全部子類別</option></select>
+          </label>
           <label>PDF
             <select id="papers-filter">
-              <option value="any" selected>有 PDF（本地或遠端）</option>
-              <option value="local">只看本地 PDF</option>
-              <option value="">全部（依日期）</option>
+              <option value="">不限</option>
+              <option value="any">有 PDF</option>
+              <option value="local">只本地 PDF</option>
             </select>
           </label>
           <span class="hint" id="papers-hint"></span>
@@ -62,11 +68,11 @@
       </div>
       <table class="grid" id="papers-table">
         <thead>
-          <tr><th>來源</th><th>標題</th><th>發表</th><th>頁面</th><th>PDF</th></tr>
+          <tr><th>來源</th><th>標題</th><th>子類別（可手動加標籤）</th><th>連結</th><th>kind</th></tr>
         </thead>
         <tbody></tbody>
       </table>
-      <p class="empty" id="papers-empty" hidden>無資料。</p>
+      <p class="empty" id="papers-empty" hidden>此分類目前無資料。</p>
     </section>
 
     <!-- Strategy inventory -->

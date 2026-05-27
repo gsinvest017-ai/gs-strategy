@@ -37,8 +37,10 @@ async function loadSummary() {
       `server 啟動於 ${s.server_started} · code ${s.code_rev || "?"}（改碼後需重啟 server 才生效）`;
   }
 
+  const kindc = s.papers_by_kind || { strategy: 0, factor: 0 };
   const cards = [
     { label: "論文/報告總量", value: s.papers_total, cls: "accent" },
+    { label: "策略 / 因子", value: `${kindc.strategy}/${kindc.factor}`, cls: "" },
     { label: "已下載 PDF", value: s.pdfs_downloaded ?? 0, cls: "" },
     { label: "今日 routine", value: s.runs_today, cls: "" },
     { label: "策略總數", value: s.strategies_total,
@@ -107,54 +109,111 @@ async function loadRuns() {
 }
 
 // ---------- new papers ----------
-async function loadPapers() {
-  const filter = $("#papers-filter").value;   // "" | "any" | "local"
-  let rows, hint;
-  if (filter) {
-    // PDF filter spans ALL papers regardless of fetch date, so downloaded
-    // PDFs surface even when nothing was crawled today.
-    const data = await getJSON(`/api/papers?pdf=${filter}&limit=300`);
-    rows = data.papers;
-    const label = filter === "local" ? "有本地 PDF" : "有 PDF";
-    hint = `跨全部論文 · ${label} ${rows.length} 筆`;
-  } else {
-    const date = $("#runs-date").value;
-    const data = await getJSON(`/api/papers?date=${encodeURIComponent(date)}&limit=100`);
-    rows = data.papers;
-    hint = `${date} 新增 ${rows.length} 筆`;
-    if (rows.length === 0) {
-      const latest = await getJSON(`/api/papers?limit=15`);
-      rows = latest.papers;
-      hint = latest.fallback_latest
-        ? `（${date} 無新增；顯示最近 ${rows.length} 筆。有本地 PDF 的論文請用上方 PDF 篩選器）`
-        : hint;
-    }
+let CURRENT_KIND = "strategy";
+let TAXONOMY = { strategy: [], factor: [] };
+
+async function loadTaxonomy() {
+  try { TAXONOMY = await getJSON("/api/taxonomy"); } catch { /* keep empty */ }
+}
+
+function populateSubcatFilter() {
+  const sel = $("#subcat-filter");
+  const cur = sel.value;
+  sel.replaceChildren(el("option", { value: "" }, "全部子類別"));
+  for (const s of (TAXONOMY[CURRENT_KIND] || [])) {
+    sel.append(el("option", { value: s }, s));
   }
-  $("#papers-hint").textContent = hint;
+  // keep selection if still valid
+  if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
+}
+
+async function postLabel(source, source_id, op, value) {
+  const r = await fetch("/api/labels", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source, source_id, op, value }),
+  });
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({}));
+    throw new Error(e.error || `HTTP ${r.status}`);
+  }
+  return r.json();
+}
+
+function subcatChip(p, tag, manual) {
+  const chip = el("span", { class: `tag ${manual ? "tag-manual" : ""}`, title: manual ? "手動標籤" : "自動分類" }, tag);
+  if (manual) {
+    const x = el("span", { class: "chip-x", title: "移除" }, " ×");
+    x.addEventListener("click", async () => {
+      try { await postLabel(p.source, p.source_id, "remove_subcat", tag); await loadPapers(); }
+      catch (e) { showError(e.message); }
+    });
+    chip.append(x);
+  }
+  return chip;
+}
+
+function renderPaperRow(p) {
+  // subcats cell: auto chips + manual chips + add control
+  const subWrap = el("div", { class: "tags" });
+  for (const t of p.subcats_auto || []) subWrap.append(subcatChip(p, t, false));
+  for (const t of p.subcats_manual || []) subWrap.append(subcatChip(p, t, true));
+  const addInput = el("input", { type: "text", class: "subcat-add", placeholder: "+標籤", list: "subcat-options" });
+  addInput.addEventListener("keydown", async (ev) => {
+    if (ev.key === "Enter" && addInput.value.trim()) {
+      try { await postLabel(p.source, p.source_id, "add_subcat", addInput.value.trim()); await loadPapers(); }
+      catch (e) { showError(e.message); }
+    }
+  });
+  subWrap.append(addInput);
+
+  // PDF / page links
+  let pdfCell;
+  if (p.pdf_local) {
+    pdfCell = el("a", { href: `/files/pdf/${encodeURIComponent(p.pdf_local)}`, target: "_blank", rel: "noopener", title: p.pdf_local }, "📄本地");
+  } else if (p.pdf_url) {
+    pdfCell = el("a", { href: p.pdf_url, target: "_blank", rel: "noopener" }, "⬇遠端");
+  } else { pdfCell = document.createTextNode("—"); }
+  const links = el("span", {}, p.url ? el("a", { href: p.url, target: "_blank", rel: "noopener" }, "open") : "—", document.createTextNode(" · "), pdfCell);
+
+  // kind override select
+  const kindSel = el("select", { class: "kind-select", title: p.kind_overridden ? "已手動覆寫" : "自動分類" });
+  for (const [v, label] of [["", "自動"], ["strategy", "strategy"], ["factor", "factor"]]) {
+    const o = el("option", { value: v }, label);
+    if ((v === "" && !p.kind_overridden) || (p.kind_overridden && v === p.kind)) o.selected = true;
+    kindSel.append(o);
+  }
+  if (p.kind_overridden) kindSel.classList.add("overridden");
+  kindSel.addEventListener("change", async () => {
+    try { await postLabel(p.source, p.source_id, "set_kind", kindSel.value || null); await loadPapers(); }
+    catch (e) { showError(e.message); }
+  });
+
+  return el("tr", {},
+    el("td", { class: "mono" }, p.source),
+    el("td", {}, p.title || "(無標題)"),
+    el("td", {}, subWrap),
+    el("td", {}, links),
+    el("td", {}, kindSel),
+  );
+}
+
+async function loadPapers() {
+  const pdf = $("#papers-filter").value;       // "" | "any" | "local"
+  const subcat = $("#subcat-filter").value;    // "" | <tag>
+  const params = new URLSearchParams({ kind: CURRENT_KIND, limit: "500" });
+  if (pdf) params.set("pdf", pdf);
+  if (subcat) params.set("subcat", subcat);
+  const data = await getJSON(`/api/papers?${params.toString()}`);
+  const rows = data.papers;
+  const kindLabel = CURRENT_KIND === "factor" ? "因子" : "策略";
+  $("#papers-hint").textContent =
+    `${kindLabel} ${rows.length} 筆` + (subcat ? ` · 子類別=${subcat}` : "") + (pdf ? ` · ${pdf === "local" ? "本地PDF" : "有PDF"}` : "");
   const tbody = $("#papers-table tbody");
   tbody.replaceChildren();
   $("#papers-empty").hidden = rows.length > 0;
   $("#papers-table").hidden = rows.length === 0;
-  for (const p of rows) {
-    // PDF link: prefer the locally-downloaded file, else the remote pdf_url.
-    let pdfCell;
-    if (p.pdf_local) {
-      pdfCell = el("a", { href: `/files/pdf/${encodeURIComponent(p.pdf_local)}`,
-                          target: "_blank", rel: "noopener", title: p.pdf_local },
-                   "📄 本地");
-    } else if (p.pdf_url) {
-      pdfCell = el("a", { href: p.pdf_url, target: "_blank", rel: "noopener" }, "⬇ 遠端");
-    } else {
-      pdfCell = document.createTextNode("—");
-    }
-    tbody.append(el("tr", {},
-      el("td", { class: "mono" }, p.source),
-      el("td", {}, p.title || "(無標題)"),
-      el("td", { class: "mono" }, p.published || "—"),
-      el("td", {}, p.url ? el("a", { href: p.url, target: "_blank", rel: "noopener" }, "open") : "—"),
-      el("td", {}, pdfCell),
-    ));
-  }
+  for (const p of rows) tbody.append(renderPaperRow(p));
 }
 
 // ---------- strategies ----------
@@ -214,11 +273,24 @@ async function loadStrategies() {
   renderStrategies($("#strat-filter").value);
 }
 
+function syncDatalist() {
+  // autocomplete options for the manual-tag input = current kind's vocabulary
+  let dl = $("#subcat-options");
+  if (!dl) {
+    dl = el("datalist", { id: "subcat-options" });
+    document.body.append(dl);
+  }
+  dl.replaceChildren(...(TAXONOMY[CURRENT_KIND] || []).map((s) => el("option", { value: s })));
+}
+
 // ---------- orchestration ----------
 async function refreshAll() {
   showError("");
   try {
     await loadSummary();
+    await loadTaxonomy();
+    populateSubcatFilter();
+    syncDatalist();
     await loadDates();
     await loadRuns();
     await loadPapers();
@@ -228,18 +300,30 @@ async function refreshAll() {
   }
 }
 
+async function reloadPapersSafe() {
+  showError("");
+  try { await loadPapers(); } catch (e) { showError(e.message || String(e)); }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   $("#refresh-btn").addEventListener("click", refreshAll);
   $("#runs-date").addEventListener("change", async () => {
     showError("");
-    try { await loadRuns(); await loadPapers(); }
-    catch (e) { showError(e.message || String(e)); }
+    try { await loadRuns(); } catch (e) { showError(e.message || String(e)); }
   });
   $("#strat-filter").addEventListener("input", (e) => renderStrategies(e.target.value));
-  $("#papers-filter").addEventListener("change", async () => {
-    showError("");
-    try { await loadPapers(); }
-    catch (e) { showError(e.message || String(e)); }
-  });
+  $("#papers-filter").addEventListener("change", reloadPapersSafe);
+  $("#subcat-filter").addEventListener("change", reloadPapersSafe);
+  // kind tabs
+  for (const btn of $$("#kind-tabs .tab")) {
+    btn.addEventListener("click", async () => {
+      $$("#kind-tabs .tab").forEach((b) => b.classList.toggle("active", b === btn));
+      CURRENT_KIND = btn.dataset.kind;
+      $("#subcat-filter").value = "";
+      populateSubcatFilter();
+      syncDatalist();
+      await reloadPapersSafe();
+    });
+  }
   refreshAll();
 });

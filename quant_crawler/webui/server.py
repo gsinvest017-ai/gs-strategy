@@ -26,7 +26,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from quant_crawler import paper_class
 from quant_crawler.config import PDF_DIR, PROJECT_ROOT
+from quant_crawler.storage.labels import LabelStore
 
 from . import stats
 
@@ -165,14 +167,17 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/papers":
                 date = qs.get("date", [None])[0]
                 limit = int(qs.get("limit", ["100"])[0])
-                pdf = qs.get("pdf", [None])[0]   # None | "any" | "local"
-                if pdf in ("any", "local"):
-                    # PDF filter spans all papers (date ignored) so downloaded
-                    # PDFs surface regardless of fetch date.
-                    rows = stats.list_papers(date=None, limit=limit, pdf=pdf)
+                pdf = qs.get("pdf", [None])[0]      # None | "any" | "local"
+                kind = qs.get("kind", [None])[0]    # None | "strategy" | "factor"
+                subcat = qs.get("subcat", [None])[0]
+                if pdf in ("any", "local") or kind or subcat:
+                    # Any active filter spans all papers (date ignored).
+                    rows = stats.list_papers(
+                        date=None, limit=limit, pdf=pdf, kind=kind, subcat=subcat
+                    )
                     self._send_json({
-                        "date": None, "filter": pdf,
-                        "fallback_latest": False, "papers": rows,
+                        "date": None, "filter": pdf, "kind": kind,
+                        "subcat": subcat, "fallback_latest": False, "papers": rows,
                     })
                 else:
                     rows = stats.new_papers_on(date, limit=limit)
@@ -182,10 +187,15 @@ class Handler(BaseHTTPRequestHandler):
                         fallback = True
                     self._send_json({
                         "date": date or stats._today_iso(),
-                        "filter": None,
+                        "filter": None, "kind": None, "subcat": None,
                         "fallback_latest": fallback,
                         "papers": rows,
                     })
+            elif path == "/api/taxonomy":
+                self._send_json({
+                    "factor": list(paper_class.FACTOR_SUBCAT_NAMES),
+                    "strategy": list(paper_class.STRATEGY_SUBCAT_NAMES),
+                })
             elif path == "/api/strategies":
                 self._send_json({"strategies": stats.strategy_inventory()})
             elif path == "/api/dates":
@@ -210,6 +220,42 @@ class Handler(BaseHTTPRequestHandler):
         except BrokenPipeError:
             pass
         except Exception as exc:  # surface errors as JSON for the UI
+            self._send_json({"error": repr(exc)}, status=500)
+
+    def do_POST(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        if parsed.path != "/api/labels":
+            self._send_text("not found", 404)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            body = self.rfile.read(length) if length else b"{}"
+            data = json.loads(body or b"{}")
+            source = data.get("source")
+            source_id = data.get("source_id")
+            op = data.get("op")
+            value = data.get("value")
+            if not source or not source_id:
+                self._send_json({"error": "source + source_id required"}, 400)
+                return
+            store = LabelStore()
+            if op == "add_subcat":
+                rec = store.add_subcat(source, str(source_id), str(value or ""))
+            elif op == "remove_subcat":
+                rec = store.remove_subcat(source, str(source_id), str(value or ""))
+            elif op == "set_kind":
+                rec = store.set_kind(source, str(source_id),
+                                     value if value else None)
+            else:
+                self._send_json({"error": f"unknown op: {op!r}"}, 400)
+                return
+            self._send_json({"source": source, "source_id": source_id,
+                             "label": rec})
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, status=400)
+        except BrokenPipeError:
+            pass
+        except Exception as exc:
             self._send_json({"error": repr(exc)}, status=500)
 
 
