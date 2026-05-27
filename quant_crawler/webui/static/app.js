@@ -35,6 +35,7 @@ async function loadSummary() {
 
   const cards = [
     { label: "論文/報告總量", value: s.papers_total, cls: "accent" },
+    { label: "已下載 PDF", value: s.pdfs_downloaded ?? 0, cls: "" },
     { label: "今日 routine", value: s.runs_today, cls: "" },
     { label: "策略總數", value: s.strategies_total,
       sub: `${s.strategies_manual} 手寫 / ${s.strategies_generated} 自動`, cls: "" },
@@ -103,17 +104,27 @@ async function loadRuns() {
 
 // ---------- new papers ----------
 async function loadPapers() {
-  const date = $("#runs-date").value;
-  const data = await getJSON(`/api/papers?date=${encodeURIComponent(date)}&limit=100`);
-  let rows = data.papers;
-  let hint = `${date} 新增 ${rows.length} 筆`;
-  // If the picked date has no fetched papers, show latest as a fallback view.
-  if (rows.length === 0) {
-    const latest = await getJSON(`/api/papers?limit=15`);
-    rows = latest.papers;
-    hint = latest.fallback_latest
-      ? `（${date} 無新增；顯示最近 ${rows.length} 筆）`
-      : hint;
+  const filter = $("#papers-filter").value;   // "" | "any" | "local"
+  let rows, hint;
+  if (filter) {
+    // PDF filter spans ALL papers regardless of fetch date, so downloaded
+    // PDFs surface even when nothing was crawled today.
+    const data = await getJSON(`/api/papers?pdf=${filter}&limit=300`);
+    rows = data.papers;
+    const label = filter === "local" ? "有本地 PDF" : "有 PDF";
+    hint = `跨全部論文 · ${label} ${rows.length} 筆`;
+  } else {
+    const date = $("#runs-date").value;
+    const data = await getJSON(`/api/papers?date=${encodeURIComponent(date)}&limit=100`);
+    rows = data.papers;
+    hint = `${date} 新增 ${rows.length} 筆`;
+    if (rows.length === 0) {
+      const latest = await getJSON(`/api/papers?limit=15`);
+      rows = latest.papers;
+      hint = latest.fallback_latest
+        ? `（${date} 無新增；顯示最近 ${rows.length} 筆。有本地 PDF 的論文請用上方 PDF 篩選器）`
+        : hint;
+    }
   }
   $("#papers-hint").textContent = hint;
   const tbody = $("#papers-table tbody");
@@ -221,5 +232,10 @@ document.addEventListener("DOMContentLoaded", () => {
     catch (e) { showError(e.message || String(e)); }
   });
   $("#strat-filter").addEventListener("input", (e) => renderStrategies(e.target.value));
+  $("#papers-filter").addEventListener("change", async () => {
+    showError("");
+    try { await loadPapers(); }
+    catch (e) { showError(e.message || String(e)); }
+  });
   refreshAll();
 });
