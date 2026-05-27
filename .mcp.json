@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "gs-strategy-rag": {
+      "command": "/home/kevin/gs-strategy/.venv/bin/python",
+      "args": ["-m", "quant_crawler.rag.mcp_server"]
+    }
+  }
+}
