@@ -74,6 +74,12 @@ if ! "${VENV_CRAWL}" -m quant_crawler.cli fetch-pdfs >> "${RUN_LOG}" 2>&1; then
     log "WARN: fetch-pdfs exited non-zero (continuing)"
 fi
 
+# --- Step 2b: index new PDFs into the RAG store (best-effort) --------------
+log "[step 2b] quant-crawl rag-ingest"
+if ! "${VENV_CRAWL}" -m quant_crawler.cli rag-ingest >> "${RUN_LOG}" 2>&1; then
+    log "WARN: rag-ingest exited non-zero (continuing)"
+fi
+
 # --- Step 3: emit skeleton bundles -----------------------------------------
 log "[step 3/4] strategy_gen.generate --since ${SINCE_DATE}"
 GEN_OUT="${LOG_DIR}/daily_refresh_gen_${TODAY}.out"

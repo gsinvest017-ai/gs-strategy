@@ -73,4 +73,56 @@ kind / 子類別。
 
 ## 進度日誌
 
-（每完成一個 milestone 在下方追加 `## M<n> — <title>` 段落。）
+### M1 — 設計 + deps ✅
+裝 pypdf + mcp（FastMCP），確認 FTS5 可用、34 PDF 已下載。技術棧定案
+（pypdf + SQLite FTS5 + FastMCP，向量層列後續）。Commit `<M1>`。
+
+### M2 — RAG store + ingest ✅
+- `quant_crawler/rag/store.py`：`RagStore`（FTS5 `rag_chunks`+`rag_fts`，
+  replace_paper/search(BM25)/get_chunks/fulltext/indexed_papers/stats，
+  FTS query sanitise 防 operator 炸）
+- `rag/ingest.py`：pypdf 抽文字 + page-aware 重疊 chunk（~1000字/150 overlap）
+- `quant-crawl rag-ingest`
+- **實跑 34 PDF → 3432 chunks**；檢索驗證精準命中 cubic-momentum 公式段落
+- 9 store/chunk 測試
+Commit: `M2: RAG FTS5 store + pypdf ingest + quant-crawl rag-ingest`
+
+### M3 — 檢索 API + CLI ✅
+- `rag/retrieve.py`：`search_chunks`（join title+kind，kind 過濾）、
+  `paper_context`（已知論文內 targeted query 或全文）、`list_indexed`
+- `quant-crawl rag-search`（含 --kind/--source-id/--json）、`rag-stats --list`
+- 6 retrieve 測試（enrich/kind filter/targeted/fulltext/not-indexed）；
+  live 驗證 RMT 論文檢索（正確歸 factor kind）
+Commit: `M3: enriched RAG retrieval API (kind-aware) + rag-search/rag-stats CLI`
+
+### M4 — MCP server ✅
+- `rag/mcp_server.py`（FastMCP）5 tools：search_paper_chunks /
+  get_paper_context / get_paper_fulltext / list_indexed_papers / rag_stats
+- 根目錄 `.mcp.json` 讓 Claude Code 自動掛 `gs-strategy-rag`
+- **完整 stdio client handshake smoke**：initialize→list_tools(5)→call_tool；
+  get_paper_context 取回 cubic-momentum 公式段落成功
+- 4 MCP 測試（tool 註冊/schema/dispatch）
+Commit: `M4: FastMCP server (search/context/fulltext tools) + .mcp.json + tests`
+
+### M5 — strategy_gen 整合 + docs ✅
+- `daily_refresh.sh` 加 step 2b `rag-ingest`（閉環 crawl→fetch-pdfs→rag-ingest→gen）
+- `generate.py`：bundle README 依 RAG 索引狀態附 `get_paper_context(...)` 提示
+  （已索引）或 ingest 指引（未索引）；review checklist 改成「先從 RAG 取公式」
+- README 加 RAG+MCP 段落、新增 `requirements-rag.txt`、本檔總結
+- 全 RAG/MCP/strategy_gen 測試綠
+Commit: `M5: wire RAG into pipeline + generated README hint + docs`
+
+## 結論
+
+閉環達成：爬 → 下載 PDF → **抽全文索引進 FTS5** → MCP server 暴露檢索 →
+Claude 生成 spec 時可呼叫 `get_paper_context(source, source_id, query)` 取回
+原文公式段落，忠實還原論文。34 篇 / 3432 chunks 已索引可用。
+
+## 後續方向
+- **語意向量層**：若要 fuzzy semantic（非關鍵字）檢索，可加本地 embedding
+  （sentence-transformers）或外部 embedding，建第二張向量表與 FTS 並用 hybrid。
+- **公式專用抽取**：pypdf 對含 LaTeX/數學式 PDF 抽出的是純文字，公式符號可能
+  失真；可考慮 `pymupdf` 或 GROBID/nougat 做數式還原。
+- **dashboard 整合**：webui 可加一個「RAG 檢索」面板直接查 chunk。
+- **generator 自動帶 context**：未來可讓 generate.py 直接呼叫 retrieve 把 top
+  公式段落寫進 bundle（目前是給提示，由 Claude/人工拉取）。

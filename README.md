@@ -115,6 +115,41 @@ JSON API（同一 server）：`/api/summary`、`/api/runs?date=`、`/api/papers?
 (2) `fetch-pdfs` 下載新 PDF → (3) `strategy_gen` 產生 skeleton bundle →
 (4) validator。log 在 `data/logs/daily_refresh_<date>.log`。
 
+## RAG + MCP（讓 Claude 取原文公式生成忠實 spec）
+
+把下載的 PDF 全文索引進可檢索 store，透過 MCP 讓 Claude 在生成 strategy/factor
+spec 時取回**原始論文 context**（正確數學公式、參數定義），避免憑記憶杜撰。
+
+技術棧（純 Python、不靠 SaaS）：`pypdf` 抽文字 + **SQLite FTS5**（BM25 檢索，
+與 `papers.db` 同庫）+ **FastMCP** server。需額外安裝：
+
+```bash
+.venv/bin/pip install pypdf mcp        # 或見 requirements-rag.txt
+```
+
+用法：
+
+```bash
+.venv/bin/quant-crawl rag-ingest               # 抽 data/pdfs/*.pdf → chunk → FTS5
+.venv/bin/quant-crawl rag-stats --list          # 索引統計 / 列出已索引論文
+.venv/bin/quant-crawl rag-search "cubic momentum critical threshold" --kind strategy
+```
+
+MCP server（Claude Code 透過根目錄 `.mcp.json` 自動掛載 `gs-strategy-rag`）暴露：
+
+| MCP tool | 用途 |
+|---|---|
+| `search_paper_chunks(query, kind?, limit?)` | 跨全 corpus BM25 搜段落 |
+| `get_paper_context(source, source_id, query)` | 在**已知論文**內取最相關段落（公式 lookup） |
+| `get_paper_fulltext(source, source_id)` | 取某論文全文 |
+| `list_indexed_papers(kind?)` / `rag_stats()` | 列出已索引 / 索引統計 |
+
+自動產生的 bundle README 會附上對應的 `get_paper_context(...)` 呼叫提示；
+`daily_refresh.sh` 在 fetch-pdfs 後自動 `rag-ingest`，閉環：
+crawl → fetch-pdfs → rag-ingest → strategy_gen。
+
+設計記錄見 `docs/progress-rag-mcp.md`。
+
 ## 架構
 
 ```

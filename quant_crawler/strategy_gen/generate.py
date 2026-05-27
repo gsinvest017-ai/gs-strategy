@@ -243,20 +243,48 @@ def generate_bundle(
             CANONICAL_FUTURES_SETUP, bundle_dir / "futures_setup.py"
         )
 
-    # README sidecar pointing the human at the review checklist
+    # Is the source paper's full text available in the RAG store? If so, the
+    # reviewer (or Claude) can pull the exact formula via the MCP server.
+    try:
+        from quant_crawler.rag.store import RagStore
+        rag_indexed = RagStore().is_indexed(paper["source"], str(paper["source_id"]))
+    except Exception:
+        rag_indexed = False
+
+    if rag_indexed:
+        rag_section = (
+            "## RAG source context (use to extract the correct formula)\n\n"
+            "This paper's full text is indexed. Before filling in the signal,\n"
+            "pull the original passages via the `gs-strategy-rag` MCP server so\n"
+            "the formula/params match the paper exactly:\n\n"
+            "```\n"
+            f"get_paper_context(source=\"{paper['source']}\", "
+            f"source_id=\"{paper['source_id']}\",\n"
+            "                  query=\"<the signal/factor formula you need>\")\n"
+            "```\n"
+            f"or `get_paper_fulltext(\"{paper['source']}\", \"{paper['source_id']}\")`.\n\n"
+        )
+    else:
+        rag_section = (
+            "## RAG source context\n\n"
+            "Paper text NOT yet indexed. Run `quant-crawl fetch-pdfs` then\n"
+            "`quant-crawl rag-ingest` to enable formula retrieval via MCP.\n\n"
+        )
+
     (bundle_dir / "README.md").write_text(
         f"# {manifest_ctx['name']}\n\n"
         f"Auto-generated bundle from `{paper['source']}:{paper['source_id']}`.\n\n"
         f"Template: **{classification.template}**\n\n"
         f"Matched keywords: `{', '.join(classification.matched_keywords) or '(none)'}`\n\n"
         f"Paper URL: {manifest_ctx['paper_url']}\n\n"
+        + rag_section +
         "## Review checklist\n\n"
-        "1. Replace `_generate_signal()` / `_compute_oscillator()` body with\n"
-        "   the paper's actual logic.\n"
-        "2. Verify default params match the paper (lookback, thresholds,\n"
+        "1. Pull the paper's real formula from the RAG MCP server (above).\n"
+        "2. Replace `_generate_signal()` / `_compute_oscillator()` body with it.\n"
+        "3. Verify default params match the paper (lookback, thresholds,\n"
         "   instruments, etc.).\n"
-        "3. Confirm cost / slippage / position-sizing assumptions.\n"
-        "4. Set `manifest.requires_review: false` only after sign-off.\n",
+        "4. Confirm cost / slippage / position-sizing assumptions.\n"
+        "5. Set `manifest.requires_review: false` only after sign-off.\n",
         encoding="utf-8",
     )
 
