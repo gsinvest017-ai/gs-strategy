@@ -207,6 +207,44 @@ def test_api_dates(server: str) -> None:
     assert isinstance(json.loads(body)["dates"], list)
 
 
+def test_api_rag_stats(server: str) -> None:
+    status, body, _ = _get(server, "/api/rag/stats")
+    assert status == 200
+    d = json.loads(body)
+    assert "papers_indexed" in d and "chunks" in d and "papers" in d
+    assert isinstance(d["papers"], list)
+
+
+def test_api_rag_search(server: str) -> None:
+    status, body, _ = _get(server, "/api/rag/search?q=momentum&limit=5")
+    assert status == 200
+    d = json.loads(body)
+    assert d["query"] == "momentum"
+    assert isinstance(d["chunks"], list)
+    for c in d["chunks"]:
+        assert {"source", "source_id", "page", "text", "score"} <= set(c)
+
+
+def test_api_rag_search_empty_query(server: str) -> None:
+    status, body, _ = _get(server, "/api/rag/search?q=")
+    assert status == 200
+    assert json.loads(body)["chunks"] == []
+
+
+def test_api_rag_paper_requires_ids(server: str) -> None:
+    assert _get_status(server, "/api/rag/paper") == 400
+
+
+def test_api_mcp_info(server: str) -> None:
+    status, body, _ = _get(server, "/api/mcp/info")
+    assert status == 200
+    d = json.loads(body)
+    assert d["config"]["found"] is True
+    assert any(t["name"] == "rag_stats" for t in d["tools"])
+    assert "papers_indexed" in d["rag"]
+    assert isinstance(d["running"], list)
+
+
 def test_unknown_route_404(server: str) -> None:
     assert _get_status(server, "/api/nope") == 404
 

@@ -200,6 +200,33 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"strategies": stats.strategy_inventory()})
             elif path == "/api/dates":
                 self._send_json({"dates": stats.crawl_dates()})
+            elif path == "/api/rag/stats":
+                from quant_crawler.rag.store import RagStore
+                from quant_crawler.rag.retrieve import list_indexed
+                kind = qs.get("kind", [None])[0]
+                self._send_json({
+                    **RagStore().stats(),
+                    "papers": list_indexed(kind=kind),
+                })
+            elif path == "/api/rag/search":
+                from quant_crawler.rag.retrieve import search_chunks
+                q = qs.get("q", [""])[0]
+                kind = qs.get("kind", [None])[0]
+                limit = int(qs.get("limit", ["20"])[0])
+                hits = search_chunks(q, limit=limit, kind=kind) if q.strip() else []
+                self._send_json({"query": q, "kind": kind, "chunks": hits})
+            elif path == "/api/rag/paper":
+                from quant_crawler.rag.retrieve import paper_context
+                source = qs.get("source", [None])[0]
+                source_id = qs.get("source_id", [None])[0]
+                q = qs.get("q", [None])[0]
+                if not source or not source_id:
+                    self._send_json({"error": "source + source_id required"}, 400)
+                else:
+                    self._send_json(paper_context(source, source_id, query=q))
+            elif path == "/api/mcp/info":
+                from .mcp_info import mcp_info
+                self._send_json(mcp_info())
             elif path.startswith("/files/pdf/"):
                 name = path[len("/files/pdf/"):]
                 self._send_file(PDF_DIR / name, PDF_DIR, {".pdf"})
