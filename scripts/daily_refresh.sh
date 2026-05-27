@@ -60,15 +60,22 @@ SINCE_DATE="$(date -u -d 'yesterday' +%Y-%m-%d 2>/dev/null \
 log "selecting papers fetched_at >= ${SINCE_DATE}"
 
 # --- Step 1: refresh papers.db ---------------------------------------------
-log "[step 1/3] quant-crawl run"
+log "[step 1/4] quant-crawl run"
 if ! "${VENV_CRAWL}" -m quant_crawler.cli run --log-run >> "${RUN_LOG}" 2>&1; then
     log "ERROR: quant-crawl exited non-zero"
     echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) FAIL crawl" >> "${SUMMARY_LOG}"
     exit 1
 fi
 
-# --- Step 2: emit skeleton bundles -----------------------------------------
-log "[step 2/3] strategy_gen.generate --since ${SINCE_DATE}"
+# --- Step 2: download new PDFs to data/pdfs/ (best-effort) -----------------
+# Non-fatal: a PDF host being down must not fail the whole refresh.
+log "[step 2/4] quant-crawl fetch-pdfs"
+if ! "${VENV_CRAWL}" -m quant_crawler.cli fetch-pdfs >> "${RUN_LOG}" 2>&1; then
+    log "WARN: fetch-pdfs exited non-zero (continuing)"
+fi
+
+# --- Step 3: emit skeleton bundles -----------------------------------------
+log "[step 3/4] strategy_gen.generate --since ${SINCE_DATE}"
 GEN_OUT="${LOG_DIR}/daily_refresh_gen_${TODAY}.out"
 if ! "${VENV_CRAWL}" -m quant_crawler.strategy_gen \
         --since "${SINCE_DATE}" \
@@ -81,8 +88,8 @@ cat "${GEN_OUT}" >> "${RUN_LOG}"
 BUNDLES_EMITTED=$(grep -c '\[OUT\]' "${GEN_OUT}" || true)
 log "emitted ${BUNDLES_EMITTED} bundle(s)"
 
-# --- Step 3: validate every generated bundle -------------------------------
-log "[step 3/3] validate strategies/_generated/*"
+# --- Step 4: validate every generated bundle -------------------------------
+log "[step 4/4] validate strategies/_generated/*"
 shopt -s nullglob
 GEN_DIRS=("${ROOT_DIR}"/strategies/_generated/*/)
 shopt -u nullglob
