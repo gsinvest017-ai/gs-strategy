@@ -80,6 +80,8 @@ PORT=6060 ./scripts/run_webui.sh
 - **檔案超連結**：論文列連到 PDF（優先本地 `data/pdfs/<slug>.pdf`，否則遠端
   `pdf_url`）；策略列連到 spec markdown（`README.md`）與 `manifest.yaml`，
   皆由 webui 經 `/files/*` 路由 serve（path-traversal + 副檔名白名單防護）。
+  本地 PDF 連結即時反映 `data/pdfs/`（無需重建）；papers 面板的「PDF」篩選器
+  預設「有 PDF」，載入即顯示有 PDF 的論文，另有「只看本地 PDF」「全部（依日期）」。
 
 JSON API（同一 server）：`/api/summary`、`/api/runs?date=`、`/api/papers?date=`、
 `/api/strategies`、`/api/dates`；檔案：`/files/pdf/<name>`、
