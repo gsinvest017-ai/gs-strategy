@@ -32,6 +32,10 @@ async function loadSummary() {
   const s = await getJSON("/api/summary");
   $("#generated-at").textContent = `更新於 ${s.generated_at} · 今日 ${s.today}`;
   $("#export-dir-hint").textContent = `匯出目標：${s.export_dir}`;
+  if (s.server_started) {
+    $("#server-stamp").textContent =
+      `server 啟動於 ${s.server_started} · code ${s.code_rev || "?"}（改碼後需重啟 server 才生效）`;
+  }
 
   const cards = [
     { label: "論文/報告總量", value: s.papers_total, cls: "accent" },

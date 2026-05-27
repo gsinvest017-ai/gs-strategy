@@ -19,16 +19,37 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from quant_crawler.config import PDF_DIR
+from quant_crawler.config import PDF_DIR, PROJECT_ROOT
 
 from . import stats
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+def _git_rev() -> str:
+    """Short git hash of the code this process is running (best-effort)."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=5,
+        )
+        return out.stdout.strip() or "unknown"
+    except Exception:
+        return "unknown"
+
+
+# Captured ONCE when this process starts. If the on-disk code is newer than
+# these, the running server is stale and must be restarted (http.server does
+# not hot-reload Python). The UI footer surfaces these so staleness is visible.
+SERVER_STARTED = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+CODE_REV = _git_rev()
 
 _CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -133,7 +154,10 @@ class Handler(BaseHTTPRequestHandler):
             elif path.startswith("/static/"):
                 self._send_static(path[len("/static/"):])
             elif path == "/api/summary":
-                self._send_json(stats.summary())
+                payload = stats.summary()
+                payload["server_started"] = SERVER_STARTED
+                payload["code_rev"] = CODE_REV
+                self._send_json(payload)
             elif path == "/api/runs":
                 date = qs.get("date", [None])[0]
                 self._send_json({"date": date or stats._today_iso(),
