@@ -283,6 +283,112 @@ function syncDatalist() {
   dl.replaceChildren(...(TAXONOMY[CURRENT_KIND] || []).map((s) => el("option", { value: s })));
 }
 
+// ---------- RAG browser ----------
+async function loadRagStats() {
+  const d = await getJSON("/api/rag/stats");
+  $("#rag-stat-hint").textContent = `已索引 ${d.papers_indexed} 篇 · ${d.chunks} chunks`;
+  const ul = $("#rag-paper-list");
+  ul.replaceChildren();
+  for (const p of d.papers || []) {
+    const li = el("li", { class: "rag-paper", title: `${p.source}:${p.source_id}` },
+      el("span", { class: `badge ${p.kind}` }, p.kind || "?"),
+      document.createTextNode(" "),
+      el("span", {}, `${p.title || p.source_id}`),
+      el("span", { class: "hint" }, ` (${p.n_chunks})`),
+    );
+    li.addEventListener("click", () => showRagPaper(p.source, p.source_id));
+    ul.append(li);
+  }
+}
+
+async function ragSearch() {
+  const q = $("#rag-q").value.trim();
+  const kind = $("#rag-kind").value;
+  const tbody = $("#rag-table tbody");
+  if (!q) { tbody.replaceChildren(); $("#rag-empty").hidden = false; $("#rag-table").hidden = true; return; }
+  const params = new URLSearchParams({ q, limit: "25" });
+  if (kind) params.set("kind", kind);
+  const d = await getJSON(`/api/rag/search?${params}`);
+  tbody.replaceChildren();
+  $("#rag-empty").hidden = d.chunks.length > 0;
+  $("#rag-table").hidden = d.chunks.length === 0;
+  if (!d.chunks.length) { $("#rag-empty").textContent = `「${q}」無命中。`; }
+  for (const h of d.chunks) {
+    const titleCell = el("span", { class: "rag-link", title: `${h.source}:${h.source_id}` }, h.title || h.source_id);
+    titleCell.addEventListener("click", () => showRagPaper(h.source, h.source_id, q));
+    tbody.append(el("tr", {},
+      el("td", {}, titleCell),
+      el("td", {}, el("span", { class: `badge ${h.kind}` }, h.kind || "?")),
+      el("td", { class: "mono" }, String(h.page ?? "—")),
+      el("td", { class: "mono" }, String(h.score)),
+      el("td", { class: "rag-snippet" }, h.text),
+    ));
+  }
+}
+
+async function showRagPaper(source, source_id, q) {
+  const box = $("#rag-detail");
+  box.hidden = false;
+  box.textContent = "載入中…";
+  const params = new URLSearchParams({ source, source_id });
+  if (q) params.set("q", q);
+  const d = await getJSON(`/api/rag/paper?${params}`);
+  box.replaceChildren();
+  box.append(el("div", { class: "rag-detail-head" },
+    el("strong", {}, d.title || `${source}:${source_id}`),
+    el("span", { class: "hint" }, ` ${source}:${source_id} · ${d.kind || "?"}`),
+    d.url ? el("a", { href: d.url, target: "_blank", rel: "noopener" }, " · 原文連結") : null,
+    el("button", { class: "rag-close" }, " 收起"),
+  ));
+  box.querySelector(".rag-close").addEventListener("click", () => { box.hidden = true; });
+  if (d.chunks) {
+    for (const c of d.chunks) {
+      box.append(el("div", { class: "rag-chunk" },
+        el("span", { class: "hint" }, `p${c.page} · score ${c.score}`),
+        el("p", {}, c.text)));
+    }
+  } else if (d.fulltext) {
+    box.append(el("pre", { class: "rag-fulltext" }, d.fulltext));
+  } else {
+    box.append(el("p", { class: "empty" }, "此論文尚未索引全文。"));
+  }
+}
+
+// ---------- MCP server info ----------
+async function loadMcpInfo() {
+  const d = await getJSON("/api/mcp/info");
+  const running = (d.running || []).length;
+  $("#mcp-running-hint").textContent = running
+    ? `🟢 偵測到 ${running} 個運行中 process`
+    : "⚪ stdio：由 Claude Code 按需啟動（目前無常駐 process）";
+  const box = $("#mcp-info");
+  box.replaceChildren();
+  for (const s of d.config.servers || []) {
+    box.append(el("div", { class: "mcp-server" },
+      el("div", {}, el("strong", {}, s.name),
+        el("span", { class: "badge manual" }, ` ${s.transport}`)),
+      el("div", { class: "mono hint" }, `${s.command || ""} ${(s.args || []).join(" ")}`),
+    ));
+  }
+  // index health
+  box.append(el("div", { class: "hint", style: "margin:8px 0" },
+    `索引：${d.rag.papers_indexed} 篇 / ${d.rag.chunks} chunks`));
+  // running pids
+  if (running) {
+    box.append(el("div", { class: "hint" },
+      "運行中: " + d.running.map((p) => `pid ${p.pid} (${p.started})`).join("; ")));
+  }
+  // tools
+  const tbl = el("table", { class: "grid" });
+  tbl.append(el("thead", {}, el("tr", {}, el("th", {}, "MCP tool"), el("th", {}, "說明"))));
+  const tb = el("tbody", {});
+  for (const t of d.tools || []) {
+    tb.append(el("tr", {}, el("td", { class: "mono" }, t.name), el("td", {}, t.description)));
+  }
+  tbl.append(tb);
+  box.append(tbl);
+}
+
 // ---------- orchestration ----------
 async function refreshAll() {
   showError("");
@@ -295,6 +401,8 @@ async function refreshAll() {
     await loadRuns();
     await loadPapers();
     await loadStrategies();
+    await loadRagStats();
+    await loadMcpInfo();
   } catch (e) {
     showError(e.message || String(e));
   }
@@ -314,6 +422,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#strat-filter").addEventListener("input", (e) => renderStrategies(e.target.value));
   $("#papers-filter").addEventListener("change", reloadPapersSafe);
   $("#subcat-filter").addEventListener("change", reloadPapersSafe);
+  const ragGo = async () => { showError(""); try { await ragSearch(); } catch (e) { showError(e.message); } };
+  $("#rag-search-btn").addEventListener("click", ragGo);
+  $("#rag-q").addEventListener("keydown", (e) => { if (e.key === "Enter") ragGo(); });
+  $("#rag-kind").addEventListener("change", ragGo);
   // kind tabs
   for (const btn of $$("#kind-tabs .tab")) {
     btn.addEventListener("click", async () => {

@@ -90,6 +90,48 @@
       </table>
       <p class="empty" id="strat-empty" hidden>尚無策略。</p>
     </section>
+
+    <!-- RAG full-text browser -->
+    <section class="panel" id="rag-panel">
+      <div class="panel-head">
+        <h2>RAG 全文檢索（論文/報告原文）</h2>
+        <span class="hint" id="rag-stat-hint"></span>
+      </div>
+      <div class="panel-controls">
+        <input id="rag-q" type="search" placeholder="🔍 用關鍵字搜原文（例：cubic momentum threshold）— 不用寫 SQL" />
+        <label>分類
+          <select id="rag-kind">
+            <option value="">全部</option>
+            <option value="strategy">策略</option>
+            <option value="factor">因子</option>
+          </select>
+        </label>
+        <button id="rag-search-btn">搜尋</button>
+      </div>
+      <div class="rag-layout">
+        <div class="rag-results">
+          <table class="grid" id="rag-table">
+            <thead><tr><th>論文</th><th>分類</th><th>頁</th><th>分數</th><th>命中段落</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p class="empty" id="rag-empty" hidden>輸入關鍵字後按搜尋。</p>
+        </div>
+        <aside class="rag-papers">
+          <div class="hint">已索引論文（點擊看全文 chunks）</div>
+          <ul id="rag-paper-list"></ul>
+        </aside>
+      </div>
+      <div id="rag-detail" class="rag-detail" hidden></div>
+    </section>
+
+    <!-- MCP server info -->
+    <section class="panel" id="mcp-panel">
+      <div class="panel-head">
+        <h2>MCP server</h2>
+        <span class="hint" id="mcp-running-hint"></span>
+      </div>
+      <div id="mcp-info"></div>
+    </section>
   </main>
 
   <footer>

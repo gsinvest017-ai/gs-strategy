@@ -60,4 +60,35 @@ Code 在每個 session **按需 spawn**。因此面板顯示：
 
 ## 進度日誌
 
-（每完成一個 milestone 在下方追加 `## M<n> — <title>` 段落。）
+### M1 — 設計 ✅
+釐清 stdio MCP server「運行」語義（無常駐 daemon，按需 spawn）；面板顯示
+config + tools + 索引健康 + best-effort process 偵測。Commit `<M1>`。
+
+### M2 — webui RAG/MCP 後端 ✅
+- `quant_crawler/webui/mcp_info.py`：`mcp_config`（讀 .mcp.json）、`mcp_tools`
+  （introspect FastMCP `list_tools`）、`running_servers`（pgrep）、`mcp_info`
+- server GET：`/api/rag/stats`、`/api/rag/search`、`/api/rag/paper`、`/api/mcp/info`
+  （全部唯讀，包既有 `rag.retrieve` + `RagStore`）
+- 4 mcp_info 測試 + 5 server endpoint 測試；live 驗證 search/mcp-info
+Commit: `M2: webui RAG endpoints (stats/search/paper) + /api/mcp/info`
+
+### M3 — 前端面板 + 驗證 ✅
+- **RAG 全文檢索面板**：關鍵字搜尋框（不用 SQL）+ 分類篩選 → 結果表
+  （論文/分類/頁/分數/命中段落），右側「已索引論文」清單，點擊看 chunks/全文
+- **MCP server 面板**：server 名稱 + stdio badge + 啟動命令、索引健康、
+  運行狀態 hint、5 個 tool 清單含說明
+- 瀏覽器驗證：搜「cubic momentum threshold」回 25 筆、34 篇索引、MCP 5 tools；
+  截圖確認兩面板渲染
+- webui+rag 測試 70 綠
+Commit: `M3: RAG browse panel + MCP server info panel (frontend)`
+
+## 結論
+
+不會 SQL 的使用者開 dashboard 即可：關鍵字搜 RAG 原文（BM25）、點論文看
+chunks/全文、看 MCP server 設定 / tools / 索引狀態 / 運行偵測。全唯讀、複用
+既有 `rag.retrieve`。
+
+## 後續方向
+- RAG 結果可加「複製 get_paper_context(...) 呼叫」按鈕，方便貼給 Claude。
+- MCP 面板可加「測試 ping」按鈕實際 spawn server 跑一次 list_tools 驗證健康。
+- 大論文全文目前一次塞進 <pre>；可加分頁/lazy load。

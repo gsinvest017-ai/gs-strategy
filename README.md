@@ -150,6 +150,15 @@ crawl → fetch-pdfs → rag-ingest → strategy_gen。
 
 設計記錄見 `docs/progress-rag-mcp.md`。
 
+### Dashboard 內瀏覽 RAG / MCP
+
+webui（`./scripts/run_webui.sh`）多了兩個面板，不會 SQL 也能用：
+- **RAG 全文檢索**：關鍵字搜原文（BM25）、依 strategy/factor 篩選、點論文看
+  chunks/全文。對應 `/api/rag/{stats,search,paper}`。
+- **MCP server**：顯示 `gs-strategy-rag` 設定、transport、暴露的 tool 清單、
+  索引健康、運行偵測（stdio 無常駐 process 時標示由 client 按需啟動）。
+  對應 `/api/mcp/info`。
+
 ## 架構
 
 ```
