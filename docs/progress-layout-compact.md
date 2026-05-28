@@ -46,4 +46,38 @@ RAG 結果），整頁高 **25,434px @1280×720**（≈35× viewport，要狂捲
 
 ## 進度日誌
 
-（每完成一個 milestone 在下方追加 `## M<n> — <title>` 段落。）
+### M1 — 計畫 + 基準量測 ✅
+量到目前整頁高 **25,434px @1280×720**（≈35× viewport）。Commit `<M1>`。
+
+### M2 — grid 佈局 + 表格內部捲動 ✅
+- `index.html`：papers + MCP section 加 `wide` class（全寬）；3 個長表
+  （papers / strat / rag-table）包進 `<div class="table-scroll">`
+- `style.css`：
+  - `main` 改 `display: grid; grid-template-columns: 1fr 1fr; gap: 14px`；
+    全寬列用 `.cards, .wide { grid-column: 1 / -1 }`
+  - `@media (max-width: 1180px)` → 單欄 fallback
+  - `.table-scroll { max-height: 320px; overflow-y: auto }`，
+    `thead th` 黏頂（sticky）讓表頭隨內部捲動保持可見
+  - summary cards 壓緊：value 30→24, padding 16→10/14
+  - `.rag-layout` 在 ≤1400px 時 sidebar 落到下方避免擠壓
+- **量測結果**：整頁高 **25,434 → 1,792px**（**14× 縮減**，2.49× viewport @1280×720）
+- 截圖確認：寬螢幕（1500×900）首螢一眼看到 summary+bars+runs+papers 頂部；
+  捲到底見 strategies+RAG 並排 + MCP 全寬；窄螢幕（1000px）自動單欄堆疊
+- panels 數量、JS、API 完全不變
+Commit: `M2: compact grid layout + sticky-header table-scroll (25434px → 1792px)`
+
+### M3 — docs ✅
+README webui 段補一行新版面說明；本檔結論。
+
+Commit: `M3: docs — note compact dashboard layout`
+
+## 結論
+
+純前端 CSS/HTML 重排（main → grid + 表格 wrapper），不動 API/資料/JS。
+整頁高度從 35× viewport 壓到 ~2.5× viewport，寬螢幕首螢可見約 4-5 個 panel
+標題，長表格不再撐爆頁面。窄螢幕自動 fallback 單欄。
+
+## 後續方向
+- 進一步：把 `main` 改 CSS Grid named areas 可細調 row 高度（例如 papers 設
+  固定 row-height），達成首螢看到所有 panel 標題。
+- 可加 `position: sticky` 在 topbar 與 summary cards，捲動時保持可見。

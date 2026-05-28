@@ -73,6 +73,10 @@ PORT=6060 ./scripts/run_webui.sh
 > `run_webui.sh` 啟動前會自動停掉同 port 的舊 server；footer 也會顯示
 > 「server 啟動於 … · code <git hash>」讓你一眼看出跑的是不是最新版。
 
+> **緊湊版面**：寬螢幕（≥1180px）採 2 欄 grid，全部 panel 約 2.5× viewport
+> 即可看完；長表格（papers / strategies / RAG）內部捲動 + 黏頂表頭。窄螢幕
+> 自動 fallback 單欄。設計記錄見 `docs/progress-layout-compact.md`。
+
 面板顯示：
 
 - **論文/報告總量** + 各來源分布（arxiv / wiley / aqr / repec / nber / fed_feds）
