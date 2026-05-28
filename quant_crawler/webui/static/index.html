@@ -46,7 +46,7 @@
     </section>
 
     <!-- Papers: strategy vs factor panels -->
-    <section class="panel">
+    <section class="panel wide">
       <div class="panel-head">
         <div class="tabs" id="kind-tabs">
           <button class="tab active" data-kind="strategy">策略 Strategy</button>
@@ -66,12 +66,14 @@
           <span class="hint" id="papers-hint"></span>
         </div>
       </div>
-      <table class="grid" id="papers-table">
-        <thead>
-          <tr><th>來源</th><th>標題</th><th>子類別（可手動加標籤）</th><th>連結</th><th>kind</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="grid" id="papers-table">
+          <thead>
+            <tr><th>來源</th><th>標題</th><th>子類別（可手動加標籤）</th><th>連結</th><th>kind</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
       <p class="empty" id="papers-empty" hidden>此分類目前無資料。</p>
     </section>
 
@@ -82,12 +84,14 @@
         <input id="strat-filter" type="search" placeholder="🔍 篩選 id / tag / template…" />
       </div>
       <p class="hint" id="export-dir-hint"></p>
-      <table class="grid" id="strat-table">
-        <thead>
-          <tr><th>策略 id</th><th>來源</th><th>模板</th><th>標籤</th><th>spec</th><th>待審</th><th>匯出 gs-zipline-tej</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="grid" id="strat-table">
+          <thead>
+            <tr><th>策略 id</th><th>來源</th><th>模板</th><th>標籤</th><th>spec</th><th>待審</th><th>匯出 gs-zipline-tej</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
       <p class="empty" id="strat-empty" hidden>尚無策略。</p>
     </section>
 
@@ -110,10 +114,12 @@
       </div>
       <div class="rag-layout">
         <div class="rag-results">
-          <table class="grid" id="rag-table">
-            <thead><tr><th>論文</th><th>分類</th><th>頁</th><th>分數</th><th>命中段落</th></tr></thead>
-            <tbody></tbody>
-          </table>
+          <div class="table-scroll">
+            <table class="grid" id="rag-table">
+              <thead><tr><th>論文</th><th>分類</th><th>頁</th><th>分數</th><th>命中段落</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
           <p class="empty" id="rag-empty" hidden>輸入關鍵字後按搜尋。</p>
         </div>
         <aside class="rag-papers">
@@ -125,7 +131,7 @@
     </section>
 
     <!-- MCP server info -->
-    <section class="panel" id="mcp-panel">
+    <section class="panel wide" id="mcp-panel">
       <div class="panel-head">
         <h2>MCP server</h2>
         <span class="hint" id="mcp-running-hint"></span>
