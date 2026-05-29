@@ -1,0 +1,40 @@
+# Normalise line endings so Windows / WSL / Linux contributors can all commit
+# cleanly without CRLF↔LF noise. (added by /platform-compatible)
+
+# Default: detect-text, store with LF in repo.
+* text=auto eol=lf
+
+# Shell scripts MUST be LF (CRLF breaks shebang + bash heredocs).
+*.sh    text eol=lf
+*.bash  text eol=lf
+
+# PowerShell stays CRLF (Windows-native).
+*.ps1   text eol=crlf
+
+# Source / config files: LF.
+*.py    text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.cfg   text eol=lf
+*.ini   text eol=lf
+*.json  text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.js    text eol=lf
+.gitignore           text eol=lf
+.gitattributes       text eol=lf
+.env.example         text eol=lf
+
+# Binary blobs / generated artefacts: never normalise.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.pdf   binary
+*.pickle binary
+*.pkl   binary
+*.db    binary
+*.parquet binary
+*.zip   binary
+*.tar.gz binary
