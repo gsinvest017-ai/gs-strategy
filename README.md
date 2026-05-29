@@ -208,6 +208,26 @@ quant_crawler/
 - **publisher-curated 旁路**：AQR 的研究本來就是篩過的，`bypass_relevance=True` 不再過濾
 - **失敗隔離**：`BaseCrawler.run` 整個 wrap 在 try/except，單一 source 出錯不會中斷其他
 
+## autogo dashboard test-plans
+
+本 repo 提供符合 autogo `Source repo test plans` import contract 的測試計畫，
+讓 autogo dashboard `/plans` 一鍵跑（spawn Claude / Playwright，自動收 video /
+trace / step screenshots / summary）。詳見 [`test-plans/README.md`](test-plans/README.md)。
+
+```bash
+# 列出本 repo 所有 plans + 狀態
+.venv/bin/python scripts/test_plan_format.py list
+
+# 新增一支 fuzzy plan stub
+.venv/bin/python scripts/test_plan_format.py new 003-my-plan \
+    --title "我的 plan" --runner playwright-mcp
+
+# 驗證所有 plans 是否符合 autogo schema（autogo refresh 之前的 self-check）
+.venv/bin/python scripts/test_plan_format.py validate --all
+```
+
+設計記錄見 `docs/progress-test-plans.md`。
+
 ## 開發
 
 ```bash
