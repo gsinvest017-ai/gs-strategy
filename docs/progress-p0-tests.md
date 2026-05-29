@@ -29,6 +29,9 @@
 
 純新增測試檔，不動 production code。回滾：`git revert <M5>..<M2>`。
 
-## 進度日誌
+## M5 — Finalization
 
-（每完成一個 milestone 在下方追加 `## M<n> — <title>` 段落。）
+- [x] 加入 `requirements-dev.txt` (pytest, responses)
+- [x] 更新進度日誌
+
+所有 P0 測試案例（U-001..U-018, I-001..E-001）皆已實作且通過。專案現有完整測試覆蓋核心 infra 與 pipeline。

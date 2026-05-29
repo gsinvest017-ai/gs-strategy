@@ -24,13 +24,9 @@
 跨平台一鍵啟動（Linux / macOS / WSL 用 `run.sh`，Windows 用 `run.ps1`）：
 
 ```bash
-./run.sh                  # 建 .venv + 裝 deps + 起 webui
-./run.sh setup            # 只裝
-./run.sh webui            # 只起 webui (http://127.0.0.1:5057)
-./run.sh crawl            # 一條龍：crawl + fetch-pdfs + rag-ingest
-./run.sh test             # pytest
-./run.sh help
+./run.sh test             # pytest (執行所有測試，包含 P0 案例)
 ```
+
 
 ```powershell
 # Windows
