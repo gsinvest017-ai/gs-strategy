@@ -62,4 +62,43 @@ PowerShell 對應 `.\run.ps1 setup|webui|crawl|test|help`。
 
 ## 進度日誌
 
-（每完成一個 milestone 在下方追加 `## M<n> — <title>` 段落。）
+### M1 — 進度檔 + 偵測 ✅
+確認無頂層 launcher、無 `.ps1`、無 `.gitattributes`、6 個既有 `.sh`。Commit `<M1>`。
+
+### M2 — /one-button-launch ✅
+- 頂層 `run.sh`（bash, +x）與 `run.ps1`（PowerShell, CRLF）
+- 子指令：`setup` / `webui`(預設) / `crawl` / `test` / `help`
+- 包既有 `scripts/run_webui.sh`，自動 venv + `pip install -e .` + 可選 `requirements-rag.txt`
+- 已驗證 `./run.sh help` 與 `./run.sh setup` (idempotent)
+Commit: `M2: top-level run.sh + run.ps1 (setup/webui/crawl/test subcommands)`
+
+### M3 — /platform-compatible 稽核 + .gitattributes ✅
+稽核結果：
+- ✅ 無 CRLF 在 tracked text files
+- ✅ 無 Windows 保留字 (CON/PRN/AUX/NUL/COM*/LPT*)
+- ✅ 無 case-sensitive 衝突
+- ✅ Native deps 全部有 wheels（numpy / pandas / lxml / mcp / pypdf）
+- ⚠️ 7 個 `.sh` 用 bashisms（已由 M2 的 `.ps1` 對應）
+
+修補：新增 `.gitattributes` 鎖 EOL：
+  - `*.sh`/`*.bash` → LF；`*.ps1` → CRLF
+  - `*.py / *.md / *.yml / *.json / *.html / *.css / *.js / *.toml` → LF
+  - `*.png / *.pdf / *.pkl / *.db / *.parquet` → binary
+- 驗證 `git check-attr`：scripts/run_webui.sh=lf、run.ps1=crlf、cli.py=lf、README.md=lf ✓
+
+Commit: `M3: add .gitattributes to lock LF (sh/py/md/json) + CRLF (ps1)`
+
+### M4 — docs + 報告 ✅
+README 安裝段補 `run.sh` / `run.ps1` 用法；本檔總結。
+Commit: `M4: docs — README run.sh/run.ps1 + cross-platform notes`
+
+## 結論
+
+- **一鍵啟動**：`./run.sh`（POSIX）或 `.\run.ps1`（Windows）即可從零到 dashboard 跑起來，包 setup + webui + crawl + test 四個子指令。
+- **Cross-platform 衛生**：`.gitattributes` 鎖 EOL，避免日後 WSL/Windows commit 把 LF 變 CRLF（會破 shebang）。
+- 8 大類稽核項目（路徑/EOL/case/保留字/環境變數/native deps/CI/encoding）都過或已修。
+
+## 後續方向
+- 若加 CI：matrix 跑 ubuntu-latest + windows-latest，分別呼叫 `run.sh` / `run.ps1`
+- `zipline-tej` 在 Windows 上有 C-ext 編譯需求；若要真正 Windows 跑回測（不只 webui），建議走 Docker
+- 兩個 launcher 都尚未處理 `--port`/`--host` 等深層 flag（透傳給 `quant_crawler.webui --port=…`）；如需，加在後續

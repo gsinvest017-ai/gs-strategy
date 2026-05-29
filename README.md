@@ -21,9 +21,28 @@
 
 ## 安裝
 
+跨平台一鍵啟動（Linux / macOS / WSL 用 `run.sh`，Windows 用 `run.ps1`）：
+
+```bash
+./run.sh                  # 建 .venv + 裝 deps + 起 webui
+./run.sh setup            # 只裝
+./run.sh webui            # 只起 webui (http://127.0.0.1:5057)
+./run.sh crawl            # 一條龍：crawl + fetch-pdfs + rag-ingest
+./run.sh test             # pytest
+./run.sh help
+```
+
+```powershell
+# Windows
+.\run.ps1                 # 同上（子指令一致）
+```
+
+或手動：
+
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e .
+.venv/bin/pip install -r requirements-rag.txt   # 可選：啟用 RAG/MCP
 ```
 
 ## 用法
