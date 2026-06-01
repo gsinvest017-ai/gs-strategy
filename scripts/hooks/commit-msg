@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Git commit-msg hook：檢查 commit message 是否符合本 repo 的中文規範。
+# 由 scripts/install_hooks.sh 安裝（symlink 到 .git/hooks/commit-msg）。
+#
+# 預設 STRICT=0：lint 模式（印 warning 但不擋 commit），避免機械訊息 / 在中
+# 文 prefix 設定下臨時打英文 commit 被擋住。要強制阻擋改 STRICT=1。
+STRICT=0
+
+ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null)"
+[[ -z "${ROOT_DIR}" ]] && exit 0
+VENV_PY="${ROOT_DIR}/.venv/bin/python"
+[[ ! -x "${VENV_PY}" ]] && VENV_PY="$(command -v python3 || true)"
+[[ -z "${VENV_PY}" ]] && exit 0     # 沒 Python：不擋
+
+ARGS=(--file "$1")
+if [[ "${STRICT}" == "1" ]]; then
+    ARGS+=(--strict)
+fi
+
+"${VENV_PY}" "${ROOT_DIR}/scripts/check_commit_msg.py" "${ARGS[@]}"
+EXIT=$?
+if [[ ${EXIT} -ne 0 ]]; then
+    echo "" >&2
+    echo "[commit-msg] 違反 docs/spec/git-commit-style.md（STRICT=1 阻擋）" >&2
+    echo "[commit-msg] 用 \`git commit --no-verify\` 可繞過" >&2
+fi
+exit ${EXIT}
