@@ -33,3 +33,13 @@ claude -p "幫我寫個 fizzbuzz.py"
 - 視此目錄為可拋棄的 sandbox：可大膽嘗試危險操作的測試。
 - 除非觸碰 `permissions.deny` 範圍，不需中途確認。
 - 仍須避免影響此目錄以外的檔案系統。
+
+## Git commit message
+
+**主體用繁體中文**，保留 prefix（`Mn:` / `feat:` / `fix:` 等）、git trailer、
+檔名/函式/CLI flag/專案名等技術識別符原文。Subject ≤ 72 字，不寫小說。
+完整 spec 見 [`docs/spec/git-commit-style.md`](docs/spec/git-commit-style.md)；
+全域對應規則在 `~/.claude/CLAUDE.md` Behavior rule #3。
+
+機械檢查：`scripts/check_commit_msg.py HEAD`
+（自動掛 hook：`./scripts/install_hooks.sh`）
