@@ -413,6 +413,53 @@ async function reloadPapersSafe() {
   try { await loadPapers(); } catch (e) { showError(e.message || String(e)); }
 }
 
+// ---------- 手動批次上傳 PDF ----------
+async function uploadPdfs() {
+  const input = $("#upload-input");
+  const files = input.files;
+  const status = $("#upload-status");
+  const resultBox = $("#upload-result");
+  if (!files || files.length === 0) {
+    status.textContent = "請先選 PDF 檔";
+    return;
+  }
+  const form = new FormData();
+  for (const f of files) form.append("files", f, f.name);
+  status.textContent = `上傳中… (${files.length} 檔)`;
+  $("#upload-btn").disabled = true;
+  try {
+    const r = await fetch("/api/upload", { method: "POST", body: form });
+    const data = await r.json();
+    if (data.error && !(data.uploaded || []).length) {
+      status.textContent = `✗ ${data.error}`;
+    } else {
+      status.textContent = `✓ ${data.summary || ""}`;
+    }
+    // 結果明細
+    resultBox.hidden = false;
+    resultBox.replaceChildren();
+    for (const u of data.uploaded || []) {
+      resultBox.append(el("div", { class: "upload-ok" },
+        `✓ ${u.filename} → manual:${u.source_id} (${(u.bytes / 1024).toFixed(0)} KB)`));
+    }
+    for (const s of data.skipped || []) {
+      resultBox.append(el("div", { class: "upload-skip" },
+        `✗ ${s.filename} — ${s.reason}`));
+    }
+    input.value = "";   // 清空選取
+    // 上傳成功 → 刷新 summary + papers（切到「有 PDF」看得到）
+    if ((data.uploaded || []).length) {
+      await loadSummary();
+      await loadRagStats().catch(() => {});
+      await reloadPapersSafe();
+    }
+  } catch (e) {
+    status.textContent = `✗ ${e.message || e}`;
+  } finally {
+    $("#upload-btn").disabled = false;
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   $("#refresh-btn").addEventListener("click", refreshAll);
   $("#runs-date").addEventListener("change", async () => {
@@ -426,6 +473,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#rag-search-btn").addEventListener("click", ragGo);
   $("#rag-q").addEventListener("keydown", (e) => { if (e.key === "Enter") ragGo(); });
   $("#rag-kind").addEventListener("change", ragGo);
+  $("#upload-btn").addEventListener("click", uploadPdfs);
   // kind tabs
   for (const btn of $$("#kind-tabs .tab")) {
     btn.addEventListener("click", async () => {

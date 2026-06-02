@@ -249,8 +249,33 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:  # surface errors as JSON for the UI
             self._send_json({"error": repr(exc)}, status=500)
 
+    def _handle_upload(self) -> None:
+        """POST /api/upload — multipart 批次 PDF 上傳。"""
+        try:
+            from .upload import handle_upload
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0:
+                self._send_json({"error": "empty upload"}, 400)
+                return
+            # 上限保護：500 MB 總量（單檔上限在 upload module 內）
+            if length > 500 * 1024 * 1024:
+                self._send_json({"error": "upload too large (>500MB total)"}, 413)
+                return
+            ctype = self.headers.get("Content-Type", "")
+            body = self.rfile.read(length)
+            result = handle_upload(ctype, body)
+            status = 200 if not result.get("error") else 400
+            self._send_json(result, status=status)
+        except BrokenPipeError:
+            pass
+        except Exception as exc:
+            self._send_json({"error": repr(exc)}, status=500)
+
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path == "/api/upload":
+            self._handle_upload()
+            return
         if parsed.path != "/api/labels":
             self._send_text("not found", 404)
             return

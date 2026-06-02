@@ -200,3 +200,10 @@ a:hover { text-decoration: underline; }
 
 footer { padding: 0 28px 30px; }
 #err-banner { color: var(--red); font-family: var(--mono); font-size: 12px; }
+
+/* 手動上傳 PDF panel */
+.upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.upload-row input[type="file"] { color: var(--muted); font-size: 13px; }
+.upload-result { margin-top: 10px; max-height: 180px; overflow-y: auto; font-size: 12px; font-family: var(--mono); }
+.upload-ok { color: var(--green); padding: 1px 0; }
+.upload-skip { color: var(--amber); padding: 1px 0; }

@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>gs-strategy 管理面板</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <!-- BEGIN apply-gs-templete -->
+  <link rel="stylesheet" href="/static/gs-theme.css" />
+  <!-- END apply-gs-templete -->
 </head>
 <body>
   <header class="topbar">
@@ -43,6 +46,20 @@
         <tbody></tbody>
       </table>
       <p class="empty" id="runs-empty" hidden>此日期無 routine 紀錄。</p>
+    </section>
+
+    <!-- Manual PDF upload -->
+    <section class="panel wide">
+      <div class="panel-head">
+        <h2>上傳 PDF（手動批次）</h2>
+        <span class="hint" id="upload-hint">選一或多個 PDF → 建立 manual 來源論文、可被 RAG 索引</span>
+      </div>
+      <div class="upload-row">
+        <input id="upload-input" type="file" accept="application/pdf,.pdf" multiple />
+        <button id="upload-btn">上傳</button>
+        <span id="upload-status" class="hint"></span>
+      </div>
+      <div id="upload-result" class="upload-result" hidden></div>
     </section>
 
     <!-- Papers: strategy vs factor panels -->
