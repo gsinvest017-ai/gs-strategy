@@ -115,7 +115,11 @@ PORT=6060 ./scripts/run_webui.sh
 - **手動批次上傳 PDF**：透過瀏覽器 file selector 一次選多個 PDF 上傳，存進
   `data/pdfs/` 並在 `papers.db` 建 `source='manual'` 的論文 row，立即出現在
   論文清單、可被 `rag-ingest` 索引。走 `POST /api/upload`（multipart）；
-  單檔上限 50 MB、驗 `.pdf` 副檔名 + `%PDF` magic bytes。
+  單檔上限 50 MB、驗 `.pdf` 副檔名 + `%PDF` magic bytes。中文檔名正確處理
+  （UTF-8 還原，不亂碼）。上傳時「歸類到」可選**策略 / 因子 / 自動分類**，
+  非自動時寫 `paper_labels` kind override，論文直接進對應 tab。
+  > 既有亂碼標題（舊版上傳留下的）一次性修復：
+  > `.venv/bin/python scripts/fix_manual_titles.py --apply`（預設 dry-run）。
 
 JSON API（同一 server）：`/api/summary`、`/api/runs?date=`、`/api/papers?date=`、
 `/api/strategies`、`/api/dates`；寫入：`POST /api/labels`、`POST /api/upload`
