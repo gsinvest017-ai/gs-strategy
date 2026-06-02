@@ -30,6 +30,19 @@ class UploadPart:
     content: bytes
 
 
+def _fix_utf8(s: str) -> str:
+    """還原被 latin-1 解碼過的 UTF-8 字串（修中文檔名 mojibake）。
+
+    header 整段用 latin-1 解碼，但瀏覽器的 filename="中文.pdf" 其實是 UTF-8
+    bytes。把字串重新 encode 回 latin-1 bytes 再以 UTF-8 解碼即可還原；
+    純 ASCII 或非 UTF-8 序列則保留原值。
+    """
+    try:
+        return s.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return s
+
+
 def parse_boundary(content_type: str) -> Optional[bytes]:
     """從 Content-Type 取 multipart boundary。"""
     if not content_type or "multipart/form-data" not in content_type:
@@ -69,7 +82,7 @@ def parse_multipart(body: bytes, boundary: bytes) -> List[UploadPart]:
         name_m = re.search(r'name="([^"]*)"', cd)
         parts.append(UploadPart(
             field_name=name_m.group(1) if name_m else "",
-            filename=fn_m.group(1) if fn_m else None,
+            filename=_fix_utf8(fn_m.group(1)) if fn_m else None,
             content=content,
         ))
     return parts

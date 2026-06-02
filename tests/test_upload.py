@@ -51,6 +51,37 @@ def test_parse_boundary():
     assert upload.parse_boundary("application/json") is None
 
 
+def test_parse_multipart_utf8_chinese_filename():
+    """瀏覽器送 UTF-8 中文檔名不該變 mojibake。"""
+    fn = "中文動量策略.pdf"
+    boundary = "----b"
+    body = (
+        f'--{boundary}\r\nContent-Disposition: form-data; name="files"; '
+        f'filename="{fn}"\r\nContent-Type: application/pdf\r\n\r\n'
+    ).encode("utf-8") + _PDF + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    parts = upload.parse_multipart(body, boundary.encode())
+    files = [p for p in parts if p.filename]
+    assert len(files) == 1
+    assert files[0].filename == fn       # 還原成正確中文
+    assert files[0].content == _PDF
+
+
+def test_chinese_title_preserved_in_paper_row(store, pdf_dir):
+    fn = "中文動量策略.pdf"
+    boundary = "----b"
+    body = (
+        f'--{boundary}\r\nContent-Disposition: form-data; name="files"; '
+        f'filename="{fn}"\r\nContent-Type: application/pdf\r\n\r\n'
+    ).encode("utf-8") + _PDF + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    res = upload.handle_upload(
+        f"multipart/form-data; boundary={boundary}", body,
+        storage=store, pdf_dir=pdf_dir,
+    )
+    assert len(res["uploaded"]) == 1
+    rows = store.latest(limit=5, source="manual")
+    assert rows[0].title == "中文動量策略"   # 非 mojibake
+
+
 def test_parse_multipart_extracts_files():
     ct, body = _multipart([
         ("files", "a.pdf", _PDF),
