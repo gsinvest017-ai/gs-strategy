@@ -130,11 +130,16 @@ def _looks_like_pdf(filename: Optional[str], content: bytes) -> bool:
     return content[:5].startswith(b"%PDF")
 
 
+_VALID_KINDS = {"strategy", "factor"}
+
+
 def save_upload(
     filename: str, content: bytes,
     storage: Optional[Storage] = None, pdf_dir: Path = PDF_DIR,
+    kind: Optional[str] = None,
 ) -> Dict[str, object]:
-    """存一個上傳檔 + 建 manual paper row。回傳 result dict。"""
+    """存一個上傳檔 + 建 manual paper row。`kind` 非空時寫 kind_override
+    （strategy / factor），讓論文直接歸到指定區；空則沿用自動分類。"""
     storage = storage or Storage()
     pdf_dir = Path(pdf_dir)
     pdf_dir.mkdir(parents=True, exist_ok=True)
@@ -165,15 +170,27 @@ def save_upload(
         fetched_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
     storage.upsert(rec)
+
+    applied_kind = None
+    if kind in _VALID_KINDS:
+        # 與「手動覆寫 kind」共用 paper_labels；論文立即出現在指定 tab
+        from quant_crawler.storage.labels import LabelStore
+        LabelStore(storage.path).set_kind("manual", source_id, kind)
+        applied_kind = kind
+
     return {"filename": filename, "ok": True, "source_id": source_id,
-            "pdf": pdf_filename("manual", source_id), "bytes": len(content)}
+            "pdf": pdf_filename("manual", source_id), "bytes": len(content),
+            "kind": applied_kind}
 
 
 def handle_upload(
     content_type: str, body: bytes,
     storage: Optional[Storage] = None, pdf_dir: Path = PDF_DIR,
 ) -> Dict[str, object]:
-    """parse multipart + 逐檔 save。回傳 {uploaded, skipped, summary}。"""
+    """parse multipart + 逐檔 save。回傳 {uploaded, skipped, summary}。
+
+    `kind` 表單欄位（strategy / factor / 空）套用到本批所有檔。
+    """
     boundary = parse_boundary(content_type)
     if boundary is None:
         return {"error": "expected multipart/form-data", "uploaded": [],
@@ -183,15 +200,25 @@ def handle_upload(
     if not files:
         return {"error": "no files in upload", "uploaded": [], "skipped": []}
 
+    # 純欄位 part：取 kind
+    kind = None
+    for p in parts:
+        if p.filename is None and p.field_name == "kind":
+            kind = p.content.decode("utf-8", errors="replace").strip() or None
+    if kind not in _VALID_KINDS:
+        kind = None
+
     storage = storage or Storage()
     uploaded: List[dict] = []
     skipped: List[dict] = []
     for part in files:
         res = save_upload(part.filename, part.content,
-                          storage=storage, pdf_dir=pdf_dir)
+                          storage=storage, pdf_dir=pdf_dir, kind=kind)
         (uploaded if res["ok"] else skipped).append(res)
+    kind_note = f"（→ {kind} 區）" if kind else ""
     return {
         "uploaded": uploaded,
         "skipped": skipped,
-        "summary": f"{len(uploaded)} 成功 / {len(skipped)} 略過",
+        "kind": kind,
+        "summary": f"{len(uploaded)} 成功 / {len(skipped)} 略過{kind_note}",
     }

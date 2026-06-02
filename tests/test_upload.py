@@ -167,6 +167,44 @@ def test_handle_upload_batch(store, pdf_dir):
     assert store.count(source="manual") == 2
 
 
+def test_save_upload_with_kind_sets_override(store, pdf_dir):
+    from quant_crawler.storage.labels import LabelStore
+    res = upload.save_upload("p.pdf", _PDF, storage=store, pdf_dir=pdf_dir,
+                             kind="factor")
+    assert res["ok"] is True and res["kind"] == "factor"
+    lbl = LabelStore(store.path).get("manual", res["source_id"])
+    assert lbl["kind_override"] == "factor"
+
+
+def test_save_upload_invalid_kind_ignored(store, pdf_dir):
+    res = upload.save_upload("p.pdf", _PDF, storage=store, pdf_dir=pdf_dir,
+                             kind="bogus")
+    assert res["kind"] is None     # 非法 kind 不套用
+
+
+def test_handle_upload_kind_field_applies_to_all(store, pdf_dir):
+    boundary = "----b"
+    def part(field, filename, content, ctype="application/pdf"):
+        head = (f"--{boundary}\r\nContent-Disposition: form-data; "
+                f'name="{field}"' + (f'; filename="{filename}"' if filename else "")
+                + f"\r\nContent-Type: {ctype}\r\n\r\n").encode("utf-8")
+        return head + content + b"\r\n"
+    body = (
+        part("kind", None, b"strategy", "text/plain")
+        + part("files", "a.pdf", _PDF)
+        + part("files", "b.pdf", _PDF)
+        + f"--{boundary}--\r\n".encode("utf-8")
+    )
+    res = upload.handle_upload(f"multipart/form-data; boundary={boundary}",
+                               body, storage=store, pdf_dir=pdf_dir)
+    assert res["kind"] == "strategy"
+    assert len(res["uploaded"]) == 2
+    from quant_crawler.storage.labels import LabelStore
+    ls = LabelStore(store.path)
+    for u in res["uploaded"]:
+        assert ls.get("manual", u["source_id"])["kind_override"] == "strategy"
+
+
 def test_handle_upload_non_multipart(store, pdf_dir):
     res = upload.handle_upload("application/json", b"{}",
                                storage=store, pdf_dir=pdf_dir)

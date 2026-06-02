@@ -56,6 +56,13 @@
       </div>
       <div class="upload-row">
         <input id="upload-input" type="file" accept="application/pdf,.pdf" multiple />
+        <label>歸類到
+          <select id="upload-kind">
+            <option value="">自動分類</option>
+            <option value="strategy">策略 Strategy</option>
+            <option value="factor">因子 Factor</option>
+          </select>
+        </label>
         <button id="upload-btn">上傳</button>
         <span id="upload-status" class="hint"></span>
       </div>

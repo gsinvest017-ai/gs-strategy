@@ -425,7 +425,9 @@ async function uploadPdfs() {
   }
   const form = new FormData();
   for (const f of files) form.append("files", f, f.name);
-  status.textContent = `上傳中… (${files.length} 檔)`;
+  const kind = $("#upload-kind").value;       // "" | "strategy" | "factor"
+  if (kind) form.append("kind", kind);
+  status.textContent = `上傳中… (${files.length} 檔${kind ? " → " + kind : ""})`;
   $("#upload-btn").disabled = true;
   try {
     const r = await fetch("/api/upload", { method: "POST", body: form });
