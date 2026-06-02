@@ -112,11 +112,16 @@ PORT=6060 ./scripts/run_webui.sh
 - **手動標籤**：每篇論文可在 dashboard 手動新增/移除子類別標籤、或覆寫 kind
   （修正誤判）。手動標註存 `paper_labels` 表，**re-crawl 不會被洗掉**。
   寫入走 `POST /api/labels`（dashboard 因此具備有限寫入能力）。
+- **手動批次上傳 PDF**：透過瀏覽器 file selector 一次選多個 PDF 上傳，存進
+  `data/pdfs/` 並在 `papers.db` 建 `source='manual'` 的論文 row，立即出現在
+  論文清單、可被 `rag-ingest` 索引。走 `POST /api/upload`（multipart）；
+  單檔上限 50 MB、驗 `.pdf` 副檔名 + `%PDF` magic bytes。
 
 JSON API（同一 server）：`/api/summary`、`/api/runs?date=`、`/api/papers?date=`、
-`/api/strategies`、`/api/dates`；檔案：`/files/pdf/<name>`、
-`/files/strategy/<id>/<file>`。設計記錄見 `docs/progress-webui.md`、
-`docs/progress-pdf-and-schedule.md`。
+`/api/strategies`、`/api/dates`；寫入：`POST /api/labels`、`POST /api/upload`
+（multipart 批次 PDF）；檔案：`/files/pdf/<name>`、`/files/strategy/<id>/<file>`。
+設計記錄見 `docs/progress-webui.md`、`docs/progress-pdf-and-schedule.md`、
+`docs/progress-pdf-upload.md`。
 
 ### 每日排程 + PDF 下載
 
