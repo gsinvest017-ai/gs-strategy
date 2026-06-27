@@ -10,6 +10,6 @@
 # numpy must be >= 2.0 (required by zipline-tej and tej-exchange-calendars).
 
 zipline-tej
-pandas>=2.2,<3.0
+pandas>=2.3.3,<3.0
 numpy>=2.0,<3.0
 pyyaml
