@@ -122,6 +122,37 @@ def cmd_rag_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rag_gs_index(args: argparse.Namespace) -> int:
+    from quant_crawler.gsrag_adapter import build_index
+
+    n, fallback = build_index(backend=args.backend)
+    if fallback:
+        print(f"  WARN: {fallback}")
+    print(f"gs-rag index built (backend={args.backend}): {n} chunks.")
+    return 0
+
+
+def cmd_rag_gs_ask(args: argparse.Namespace) -> int:
+    from quant_crawler.gsrag_adapter import GSRAG_DB, ask_papers, build_index
+
+    if not GSRAG_DB.exists():
+        print("(index missing, building first...)")
+        build_index(backend=args.backend)
+    ans = ask_papers(args.query, backend=args.backend, top_k=args.top_k,
+                     source=args.source)
+    if ans.grounded:
+        badge = "OK extractive (sourced)" if ans.mode == "extractive" else "OK grounded"
+    else:
+        badge = "REFUSED (insufficient evidence)"
+    print(f"[{badge}]\n")
+    print(ans.text)
+    if ans.grounded and ans.citations:
+        print("\n-- sources --")
+        for c in ans.citations:
+            print(f"  [{c.n}] {c.title}  ({c.doc_id})")
+    return 0 if (ans.grounded or ans.refused) else 1
+
+
 def cmd_sources(args: argparse.Namespace) -> int:
     for name in REGISTRY:
         cfg = SOURCES.get(name)
@@ -198,6 +229,19 @@ def build_parser() -> argparse.ArgumentParser:
     prst.add_argument("--list", action="store_true", help="list indexed papers")
     prst.add_argument("--kind", choices=["strategy", "factor"])
     prst.set_defaults(func=cmd_rag_stats)
+
+    pgi = sub.add_parser("rag-gs-index",
+                         help="(re)build the shared gs-rag index over paper abstracts")
+    pgi.add_argument("--backend", default="bm25", choices=["bm25", "semantic"])
+    pgi.set_defaults(func=cmd_rag_gs_index)
+
+    pga = sub.add_parser("rag-gs-ask",
+                         help="ask the paper corpus for a cited, trustable answer (gs-rag)")
+    pga.add_argument("query")
+    pga.add_argument("--top-k", "-k", type=int, default=5, dest="top_k")
+    pga.add_argument("--source", "-s", help="limit to one source, e.g. arxiv")
+    pga.add_argument("--backend", default="bm25", choices=["bm25", "semantic"])
+    pga.set_defaults(func=cmd_rag_gs_ask)
 
     return p
 
