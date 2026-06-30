@@ -63,9 +63,9 @@ def _dowhy_refute(panel, treatment, outcome, confounders, observed_effect):
         new = float(res.new_effect)
         detail[name] = new
         if name == "placebo":
-            checks[name] = abs(new) < abs(estimate.value) * 0.5
+            checks[name] = bool(abs(new) < abs(estimate.value) * 0.5)
         else:
-            checks[name] = abs(new - estimate.value) < abs(estimate.value) * 0.5
+            checks[name] = bool(abs(new - estimate.value) < abs(estimate.value) * 0.5)
     return RefutationReport(
         passed=all(checks.values()), checks=checks, detail=detail, method="dowhy"
     )
