@@ -2,4 +2,4 @@
 #   .venv/bin/pip install -r requirements-rag.txt
 # SQLite FTS5 (the vector/full-text store) is built into Python's stdlib sqlite3.
 pypdf>=6.0      # PDF text extraction for rag-ingest
-mcp>=1.0        # FastMCP server (quant_crawler.rag.mcp_server)
+mcp>=2.0.0        # FastMCP server (quant_crawler.rag.mcp_server)
