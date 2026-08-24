@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-27
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # gs-strategy 管理介面 (web UI)
 
 > 給 gs-strategy 加一個本地網頁管理介面，彙整爬蟲與策略產生 pipeline 的狀態。

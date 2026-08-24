@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-27
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # Fix: dashboard PDF links still "-" — stale server process
 
 ## 症狀

@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-27
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # Strategy Category Taxonomy + Tag Enrichment
 
 > 接續 `progress-strategy-import-spec.md`（4 支 bundle 改 spec v1）與

@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-06-02
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # 手動批次上傳 paper/report PDF
 
 ## 目標

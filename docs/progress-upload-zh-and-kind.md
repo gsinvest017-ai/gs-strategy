@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-06-02
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # 上傳功能：修中文檔名亂碼 + 可選 strategy/factor 區
 
 ## 目標

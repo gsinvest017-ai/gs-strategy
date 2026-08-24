@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-29
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # One-button launch + platform compatibility
 
 ## 目標

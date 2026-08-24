@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-10
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # 從 87 篇 paper 篩出可在台灣期貨市場執行的策略 — 進度紀錄
 
 **Session**: `f3349183-1543-4def-9ec5-6b3782f8b1d2`

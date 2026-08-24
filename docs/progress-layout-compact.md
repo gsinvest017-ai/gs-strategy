@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-28
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # Compact dashboard layout (minimize vertical scroll)
 
 ## 目標

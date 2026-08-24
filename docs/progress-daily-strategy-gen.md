@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-26
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # Daily Paper → Strategy Bundle Auto-Gen Pipeline
 
 > 接上 `progress-strategy-import-spec.md` (M1-M6) 的後續工作。前者把 4 支

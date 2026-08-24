@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-29
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # Test-plans for autogo dashboard import
 
 ## 目標
