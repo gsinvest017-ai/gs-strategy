@@ -101,6 +101,20 @@ def run_strategy_from_config(
         out = Path(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         results.to_pickle(out)
+        # Best-effort verification sidecar (validation-report-v1) so every
+        # backtest artifact carries its PSR/DSR alongside raw Sharpe.
+        # Disable with STRATEGY_VALIDATION=0; trials via GS_VALIDATION_N_TRIALS.
+        if os.environ.get("STRATEGY_VALIDATION", "1") != "0":
+            try:
+                sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+                from strategies._common.validation.report import write_sidecar_for
+                sidecar = write_sidecar_for(
+                    out,
+                    n_trials=int(os.environ.get("GS_VALIDATION_N_TRIALS", "1")))
+                if sidecar:
+                    print(f"[runner] validation sidecar: {sidecar}")
+            except Exception as exc:  # never fatal
+                print(f"[runner] validation sidecar skipped: {exc}")
     return results
 
 

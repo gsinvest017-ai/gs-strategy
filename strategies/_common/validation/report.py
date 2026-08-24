@@ -80,6 +80,26 @@ def build_report(perf: pd.DataFrame, *, n_trials: int = 1,
     }
 
 
+def write_sidecar_for(perf_path: Path, *, n_trials: int | None = None,
+                      periods_per_year: int = 252) -> Path | None:
+    """Best-effort: write ``<perf>.validation.json`` next to a perf file.
+
+    Validation must never break a completed backtest, so this swallows all
+    errors and returns the sidecar path on success / None on failure.
+    """
+    try:
+        report = build_report(load_perf(Path(perf_path)),
+                              n_trials=int(n_trials or 1),
+                              periods_per_year=periods_per_year)
+        sidecar = Path(perf_path).with_name(
+            Path(perf_path).name + ".validation.json")
+        sidecar.write_text(json.dumps(report, ensure_ascii=False, indent=2),
+                           encoding="utf-8")
+        return sidecar
+    except Exception:
+        return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="validation.report")
     parser.add_argument("perf", type=Path)
