@@ -12,11 +12,15 @@ calendar: TEJ_XTAI           # explicit for equity
 params:
   strategy_form: xs_multifactor
   rebalance: monthly         # daily | weekly | monthly (spec v1.2)
-  symbols: []                # TODO Phase 1: universe from quantdata gold/universe
+  universe_source: quantdata # '' (關閉) | 'quantdata' → gold/features price canonical
+  universe_as_of: null       # 建議設在 backtest start 之前（PIT 安全）；null → 今天
+  universe_top_n: 200
+  symbols: []                # 覆寫用：非空則忽略 universe_source
   n_long: 10                 # long bucket size (top-N by composite score)
   n_short: 0                 # 0 -> long-only; >0 -> short leg
   weighting: equal           # equal | factor_proportional (TODO)
   signals: []                # factor pool ids consumed (spec v1.2 signals:)
   price_floor: 10.0          # 排除低價股
-  liquidity_floor_ntd: 20_000_000   # 20 日均成交額下限（TODO 接 volume）
+  liquidity_floor_ntd: 20_000_000   # 流動性下限：trailing 均值成交額（NT$）
+  liquidity_window: 20       # 流動性回看交易日數
   benchmark: IR0001          # 需同時 ingest tquant bundle
