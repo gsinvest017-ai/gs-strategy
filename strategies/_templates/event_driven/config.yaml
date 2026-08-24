@@ -1,0 +1,18 @@
+# Event-window template (strategy_form: event_driven)
+# Upstream: GS-insider-ownership（MOPS 內部人申報事件，signal A-D）
+# Spec: ~/gs-zipline-tej/docs/strategy-import-spec.md v1.2
+
+start: '2019-01-01'
+end:   '2026-04-30'
+capital_base: 10_000_000
+bundle: tquant
+calendar: TEJ_XTAI
+
+params:
+  strategy_form: event_driven
+  events_csv: assets/events.csv   # bundle-local sidecar（spec §3.3）
+  pre_days: 2                     # 事件日前 N 日建倉
+  post_days: 10                   # 持有至事件後 N 日平倉
+  position_pct: 0.05              # 每事件投入資金比例
+  max_concurrent_events: 5
+  min_signal_strength: 0.0        # CSV strength 欄位門檻

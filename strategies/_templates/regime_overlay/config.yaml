@@ -1,0 +1,18 @@
+# Regime-overlay template (strategy_form: regime_overlay)
+# Upstream: gs-E-risk（risk_ew 狀態機 -> leverage_dial / trend overlay 權重）
+# Spec: ~/gs-zipline-tej/docs/strategy-import-spec.md v1.2
+
+start: '2019-01-01'
+end:   '2026-04-30'
+capital_base: 5_000_000
+bundle: tquant_future
+calendar: TEJ_morning_future
+
+params:
+  strategy_form: regime_overlay
+  base_symbol: TX
+  base_lookback: 20          # 基礎趨勢訊號（可替換成任意 base strategy）
+  overlay_csv: assets/regime_weights.csv   # E-risk 匯出的日頻權重 (date,weight)
+  overlay_default_weight: 0.5   # CSV 缺漏日的保守預設
+  max_contracts: 2
+  allow_short: true

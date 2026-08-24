@@ -1,0 +1,18 @@
+# Breakdown-short tail hedge template (strategy_form: tail_hedge_short)
+# Upstream: gs-bulltrap-short（妖股假突破放空：前高停損 / 分批移動停利 /
+#           Monte Carlo 3 檔資金控管）
+# Spec: ~/gs-zipline-tej/docs/strategy-import-spec.md v1.2
+
+start: '2019-01-01'
+end:   '2026-04-30'
+capital_base: 5_000_000
+bundle: tquant_future
+calendar: TEJ_morning_future
+
+params:
+  strategy_form: tail_hedge_short
+  symbols: []                # 放空標的清單（個股期）；空 -> 模板不進場
+  breakout_lookback: 60      # 「前高」回看窗
+  fake_break_margin: 0.02    # 收盤跌回前高下方此幅度視為假突破
+  trail_steps_pct: [0.05, 0.10]   # 分批移動停利：獲利達門檻各減碼
+  risk_fraction_per_trade: 0.08
