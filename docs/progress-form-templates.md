@@ -18,8 +18,10 @@ Market-Timing / Insider-ownership / bulltrap-short / E-risk）的策略
   骨架 + assets 範例 CSV；全數 strategy.py 通過 `py_compile`、
   config.yaml 通過 yaml.safe_load。對應 spec v1.2 由
   gs-zipline-tej `dev/spec-v12-strategy-forms` 分支承載（M1）。
-- [ ] **M3** — 交叉驗證：§13 表格路徑 ↔ 實際目錄一致、模板引用的
-  spec 欄位名稱一致（兩 repo 各自收尾）。
+- [x] **M3** — 交叉驗證通過（2026-08-24）：spec §13 表格路徑 ↔
+  `_templates/` 實際目錄 5/5 對應；config `strategy_form` 值域 5/5 合規；
+  py_compile 與 yaml parse 全綠。spec 端 commit：
+  gs-zipline-tej `0748d9b`（dev/spec-v12-strategy-forms）。
 
 ## 進度日誌
 
