@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-27
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # RAG store + MCP server for faithful strategy/factor spec generation
 
 > 把爬下來的 paper/report 全文存進可檢索的 store，透過 MCP 讓 Claude 取回

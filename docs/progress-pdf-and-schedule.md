@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-27
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # 每日排程 + Dashboard PDF/Spec 超連結
 
 > 兩件事：(1) 替爬蟲建每日系統排程，定期更新 papers.db / dashboard；

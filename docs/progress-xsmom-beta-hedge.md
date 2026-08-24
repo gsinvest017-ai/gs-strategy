@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-27
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # xsmom_stkfut_rmt — Beta-neutral TX hedge (M13)
 
 > 夜間無人值守任務 (claude/nightly-2026-05-19)。從

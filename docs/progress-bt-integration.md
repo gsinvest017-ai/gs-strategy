@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-14
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # Backtest Integration Progress
 
 > 把 `strategies/` 接到 `gs-zipline-tej` 期貨回測框架，最小改動把 4 支策略跑起來。

@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-28
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # Generator auto-embeds RAG paper context into generated bundles
 
 > 接 `progress-rag-mcp.md` 的最後一條「後續方向」：

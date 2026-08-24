@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-27
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # Fix: Dashboard PDF hyperlinks all show "-"
 
 ## 症狀

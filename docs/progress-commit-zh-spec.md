@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-06-01
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # 規範 git commit message 用繁體中文寫（本 repo 落地）
 
 ## 目標

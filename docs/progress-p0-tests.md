@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-29
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # Implement P0 test cases (from docs/test-plan.md)
 
 ## 目標

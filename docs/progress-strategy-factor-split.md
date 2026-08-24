@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-27
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # Strategy vs Factor 分類 + 雙 panel dashboard
 
 > 依 `architecture.drawio` 設計（"Strategy/Factor scraper, factor class" +

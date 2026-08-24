@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-26
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # Strategy Import Spec Compliance — gs-strategy → gs-zipline-tej dashboard
 
 > 把本 repo 的 4 支既有策略（`strategies/{vgrsi_tx, cubic_momentum_tx,

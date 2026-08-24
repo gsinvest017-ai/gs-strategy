@@ -1,3 +1,10 @@
+---
+type: progress
+updated: 2026-05-27
+repos: [gs-strategy]
+owner: gsinvest017-kevin
+---
+
 # RAG dashboard panel + MCP server info
 
 > 在既有 webui 加上：(1) 給不會 SQL 的人瀏覽/檢索 RAG 全文 store 的面板；
