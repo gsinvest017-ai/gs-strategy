@@ -1,0 +1,22 @@
+# Staged-entry market timing template (strategy_form: timing_legs)
+# Upstream: gs--Market-Timing（合成擇時分數 -> 准入 legs，分批進場）
+# Spec: ~/gs-zipline-tej/docs/strategy-import-spec.md v1.2
+
+start: '2019-01-01'
+end:   '2026-04-30'
+capital_base: 5_000_000
+bundle: tquant_future
+calendar: TEJ_morning_future
+
+params:
+  strategy_form: timing_legs
+  root_symbol: TX
+  n_legs: 3                  # 分幾批進滿
+  gate_threshold: 0.6        # 合成分數 >= threshold 才准進下一批
+  gate_cooldown_days: 5      # 兩批之間最少間隔
+  exit_score: 0.35           # 分數跌破 -> 全數退場
+  allow_short: false
+  max_contracts: 3
+  per_contract_cost:
+    TX: 200
+  spread_points: 6.0

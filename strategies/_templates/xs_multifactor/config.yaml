@@ -1,0 +1,22 @@
+# Cross-sectional multi-factor equity long-short (topN) template
+# Upstream: Factor--FORGE factors + gs-MINT tournament survivors
+# Spec: ~/gs-zipline-tej/docs/strategy-import-spec.md v1.2
+#       strategy_form: xs_multifactor
+
+start: '2019-01-01'
+end:   '2026-04-30'
+capital_base: 10_000_000
+bundle: tquant               # equity bundle
+calendar: TEJ_XTAI           # explicit for equity
+
+params:
+  strategy_form: xs_multifactor
+  rebalance: monthly         # daily | weekly | monthly (spec v1.2)
+  symbols: []                # TODO Phase 1: universe from quantdata gold/universe
+  n_long: 10                 # long bucket size (top-N by composite score)
+  n_short: 0                 # 0 -> long-only; >0 -> short leg
+  weighting: equal           # equal | factor_proportional (TODO)
+  signals: []                # factor pool ids consumed (spec v1.2 signals:)
+  price_floor: 10.0          # 排除低價股
+  liquidity_floor_ntd: 20_000_000   # 20 日均成交額下限（TODO 接 volume）
+  benchmark: IR0001          # 需同時 ingest tquant bundle
