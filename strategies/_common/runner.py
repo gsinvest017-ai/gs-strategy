@@ -103,16 +103,34 @@ def run_strategy_from_config(
         results.to_pickle(out)
         # Best-effort verification sidecar (validation-report-v1) so every
         # backtest artifact carries its PSR/DSR alongside raw Sharpe.
-        # Disable with STRATEGY_VALIDATION=0; trials via GS_VALIDATION_N_TRIALS.
+        #
+        # Both the annualisation factor and the trial count are *derived from
+        # the config* rather than hard-coded here: 252 on a monthly strategy
+        # inflates the annualised Sharpe by ~4.6x, and an assumed n_trials=1
+        # makes the DSR silently equal the PSR while still being labelled a
+        # deflated ratio.  The derivation and its provenance both live in
+        # validation.report, and both provenances end up in the sidecar.
+        #
+        # Disable with STRATEGY_VALIDATION=0; trials via config
+        # ``validation.n_trials`` or GS_VALIDATION_N_TRIALS.
         if os.environ.get("STRATEGY_VALIDATION", "1") != "0":
             try:
                 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-                from strategies._common.validation.report import write_sidecar_for
-                sidecar = write_sidecar_for(
+                from strategies._common.validation import report as _validation
+
+                ppy, ppy_source = _validation.resolve_periods_per_year(cfg)
+                n_trials, n_trials_source = _validation.resolve_n_trials(cfg)
+                sidecar = _validation.write_sidecar_for(
                     out,
-                    n_trials=int(os.environ.get("GS_VALIDATION_N_TRIALS", "1")))
+                    n_trials=n_trials,
+                    n_trials_source=n_trials_source,
+                    periods_per_year=ppy,
+                    periods_per_year_source=ppy_source,
+                )
                 if sidecar:
-                    print(f"[runner] validation sidecar: {sidecar}")
+                    print(f"[runner] validation sidecar: {sidecar} "
+                          f"(periods_per_year={ppy} from {ppy_source}, "
+                          f"n_trials={n_trials} from {n_trials_source})")
             except Exception as exc:  # never fatal
                 print(f"[runner] validation sidecar skipped: {exc}")
     return results
