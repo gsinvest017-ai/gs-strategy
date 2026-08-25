@@ -98,22 +98,52 @@ def test_periods_per_year_for_unknown_returns_none(freq):
     assert report.periods_per_year_for(freq) is None
 
 
-def test_resolve_periods_per_year_from_rebalance_and_data_frequency():
+def _stamped(freq, periods):
+    """A perf frame whose rows really are spaced at *freq*."""
+    idx = pd.date_range("2020-01-06", periods=periods, freq=freq)
+    rng = np.random.default_rng(11)
+    return pd.DataFrame({"dt": idx,
+                         "returns": rng.normal(0.001, 0.02, periods)})
+
+
+@pytest.mark.parametrize("freq,periods,expected", [
+    ("B", 260, 252),      # business-daily rows
+    ("W-FRI", 120, 52),   # weekly rows
+    ("ME", 60, 12),       # month-end rows
+])
+def test_periods_per_year_measured_from_timestamps(freq, periods, expected):
+    ppy, source = report.infer_periods_per_year(_stamped(freq, periods))
+    assert ppy == expected
+    assert source.startswith("inferred:")
+
+
+def test_inference_beats_a_misleading_rebalance_declaration():
+    """A monthly-rebalanced strategy still emits daily perf rows.
+
+    Regression guard: deriving periods_per_year from the manifest's
+    ``rebalance`` key annualised 252 daily rows as if they were 21 years,
+    turning a 17.66% one-year CAGR into 0.78%.
+    """
+    perf = _stamped("B", 252)
+    ppy, source = report.resolve_periods_per_year({"rebalance": "monthly"}, perf)
+    assert ppy == 252
+    assert source == "inferred:daily"
+
+
+def test_explicit_periods_per_year_overrides_inference():
+    perf = _stamped("B", 252)
     assert report.resolve_periods_per_year(
-        {"rebalance": "monthly"}) == (12, "rebalance")
-    assert report.resolve_periods_per_year(
-        {"data_frequency": "daily"}) == (252, "data_frequency")
-    # rebalance is the more expressive declaration, so it wins
-    assert report.resolve_periods_per_year(
-        {"rebalance": "weekly", "data_frequency": "daily"}) == (52, "rebalance")
-    # an outright number beats both
-    assert report.resolve_periods_per_year(
-        {"rebalance": "daily", "validation": {"periods_per_year": 26}}
+        {"validation": {"periods_per_year": 26}}, perf
     ) == (26, "validation.periods_per_year")
 
 
+def test_inference_declines_without_timestamps():
+    bare = pd.DataFrame({"returns": [0.01] * 40})
+    assert report.infer_periods_per_year(bare) == (None, None)
+
+
 @pytest.mark.parametrize("cfg", [
-    None, {}, {"rebalance": "yearly"}, {"data_frequency": None},
+    None, {}, {"rebalance": "monthly"}, {"validation": {}},
     {"validation": {"periods_per_year": "abc"}},
 ])
 def test_resolve_periods_per_year_falls_back_to_252_but_says_so(cfg):
@@ -125,9 +155,9 @@ def test_resolve_periods_per_year_falls_back_to_252_but_says_so(cfg):
 def test_monthly_annualisation_differs_from_daily():
     perf = _perf_frame()
     daily = report.build_report(perf, periods_per_year=252,
-                                periods_per_year_source="rebalance")
+                                periods_per_year_source="inferred:monthly")
     monthly = report.build_report(perf, periods_per_year=12,
-                                  periods_per_year_source="rebalance")
+                                  periods_per_year_source="inferred:monthly")
     assert monthly["periods_per_year"] == 12
     # SR scales with sqrt(periods_per_year): annualising a monthly strategy
     # with 252 would overstate it by sqrt(252/12) ~= 4.58x
@@ -135,7 +165,7 @@ def test_monthly_annualisation_differs_from_daily():
         daily["annualized_sharpe"] * (12 / 252) ** 0.5, rel=1e-9)
     assert abs(monthly["annualized_sharpe"]) < abs(
         daily["annualized_sharpe"])
-    assert monthly["periods_per_year_source"] == "rebalance"
+    assert monthly["periods_per_year_source"] == "inferred:monthly"
     # a derived frequency leaves no "assumed 252" warning behind
     assert not any("252" in w for w in monthly["warnings"])
 
@@ -183,13 +213,13 @@ def test_dsr_not_deflated_when_n_trials_is_an_assumption():
     assert rep["warnings"], "an undeflated DSR must carry a warning"
     joined = " ".join(rep["warnings"])
     assert "DSR" in joined and "deflate" in joined
-    # the "DSR" here is not a statistic at all: at n_trials=1 the
-    # expected-max-SR benchmark is -inf, so the value is a constant 1.0
-    # regardless of the returns, while the honest PSR is far below it
-    assert rep["dsr"] == 1.0
-    assert rep["psr"] < 1.0
+    # At n_trials=1 the deflation benchmark is 0, so DSR is just PSR: a real
+    # statistic that still tracks the return series, but carrying no
+    # multiple-testing correction — hence dsr_deflated=False above.
+    assert rep["dsr"] == pytest.approx(rep["psr"])
     other = report.build_report(_perf_frame(seed=99, drift=-0.001))
-    assert other["dsr"] == 1.0            # same constant, different series
+    assert other["dsr"] == pytest.approx(other["psr"])
+    assert other["dsr"] != pytest.approx(rep["dsr"])   # not a constant
 
 
 def test_dsr_deflated_true_when_n_trials_declared():
@@ -201,12 +231,50 @@ def test_dsr_deflated_true_when_n_trials_declared():
         assert not any("DSR" in w for w in rep["warnings"])
 
 
-def test_declared_single_trial_is_honest_not_deflated_looking():
-    """N=1 *declared* means one trial really was run — no deflation needed."""
+def test_declared_single_trial_is_still_not_deflated():
+    """Declaring N=1 must not buy a "deflated" label for an undeflated number.
+
+    Regression guard: dsr_deflated used to be derived from n_trials_source, so
+    validation: {n_trials: 1} in config.yaml earned dsr_deflated=True on a
+    Sharpe that had no multiple-testing correction applied at all.
+    """
     rep = report.build_report(_perf_frame(), n_trials=1,
                               n_trials_source="config")
-    assert rep["dsr_deflated"] is True
-    assert not any("DSR" in w for w in rep["warnings"])
+    assert rep["dsr_deflated"] is False
+    assert any("DSR" in w for w in rep["warnings"])
+
+
+def test_dsr_at_one_trial_equals_psr_not_one():
+    """N=1 must collapse DSR onto PSR, not onto the constant 1.0.
+
+    Regression guard for the sharpe.py extreme-value formula degenerating at
+    n_trials == 1 (e=1 -> norm.ppf(0) = -inf -> PSR(-inf) = 1.0 for every
+    series), which handed any backtest a perfect DSR.
+    """
+    rep = report.build_report(_perf_frame(), n_trials=1)
+    assert rep["dsr"] == pytest.approx(rep["psr"])
+    assert rep["dsr"] != pytest.approx(1.0)
+
+
+def test_dsr_strictly_decreases_as_trials_grow():
+    """More trials tried -> harder to believe the Sharpe."""
+    perf = _perf_frame()
+    vals = [report.build_report(perf, n_trials=n)["dsr"]
+            for n in (1, 2, 10, 100)]
+    assert vals == sorted(vals, reverse=True)
+    assert vals[0] > vals[-1]
+
+
+def test_write_sidecar_measures_factor_from_a_stamped_perf(tmp_path):
+    """The runner writes perf frames that carry timestamps; use them."""
+    p = tmp_path / "perf.parquet"
+    _stamped("ME", 60).to_parquet(p, index=False)
+
+    sidecar = report.write_sidecar_for(p, cfg={"validation": {"n_trials": 8}})
+    doc = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert doc["periods_per_year"] == 12
+    assert doc["periods_per_year_source"] == "inferred:monthly"
+    assert not any("年化係數退回預設" in w for w in doc["warnings"])
 
 
 def test_write_sidecar_records_sources(tmp_path, monkeypatch):
@@ -215,10 +283,12 @@ def test_write_sidecar_records_sources(tmp_path, monkeypatch):
     _perf_frame().to_parquet(p, index=False)
 
     sidecar = report.write_sidecar_for(
-        p, cfg={"rebalance": "monthly", "validation": {"n_trials": 12}})
+        p, cfg={"validation": {"n_trials": 12}})
     doc = json.loads(sidecar.read_text(encoding="utf-8"))
-    assert doc["periods_per_year"] == 12
-    assert doc["periods_per_year_source"] == "rebalance"
+    # _perf_frame() carries no timestamps, so the factor cannot be measured
+    # and the report says so instead of pretending it derived one.
+    assert doc["periods_per_year"] == 252
+    assert doc["periods_per_year_source"] == "default"
     assert doc["n_trials"] == 12
     assert doc["n_trials_source"] == "config"
     assert doc["dsr_deflated"] is True
@@ -256,7 +326,7 @@ def _sample_report():
     return report.build_report(_perf_frame(), n_trials=48,
                                n_trials_source="config",
                                periods_per_year=12,
-                               periods_per_year_source="rebalance")
+                               periods_per_year_source="inferred:monthly")
 
 
 def test_apply_to_manifest_roundtrip_is_all_strings(tmp_path):

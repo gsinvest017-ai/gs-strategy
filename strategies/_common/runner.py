@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import json
 import os
 import sys
 from pathlib import Path
@@ -118,19 +119,27 @@ def run_strategy_from_config(
                 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
                 from strategies._common.validation import report as _validation
 
-                ppy, ppy_source = _validation.resolve_periods_per_year(cfg)
+                # Do not pre-resolve periods_per_year here: the annualisation
+                # factor is measured from the perf frame's own timestamps, and
+                # only write_sidecar_for has the frame loaded.
                 n_trials, n_trials_source = _validation.resolve_n_trials(cfg)
+                manifest = Path(strategy_path).resolve().parent / "manifest.yaml"
                 sidecar = _validation.write_sidecar_for(
                     out,
+                    cfg=cfg,
                     n_trials=n_trials,
                     n_trials_source=n_trials_source,
-                    periods_per_year=ppy,
-                    periods_per_year_source=ppy_source,
+                    manifest_path=manifest if manifest.exists() else None,
                 )
                 if sidecar:
+                    doc = json.loads(sidecar.read_text(encoding="utf-8"))
                     print(f"[runner] validation sidecar: {sidecar} "
-                          f"(periods_per_year={ppy} from {ppy_source}, "
-                          f"n_trials={n_trials} from {n_trials_source})")
+                          f"(periods_per_year={doc['periods_per_year']} from "
+                          f"{doc['periods_per_year_source']}, "
+                          f"n_trials={n_trials} from {n_trials_source}, "
+                          f"dsr_deflated={doc['dsr_deflated']})")
+                    for warn in doc.get("warnings", []):
+                        print(f"[runner] ⚠ {warn}")
             except Exception as exc:  # never fatal
                 print(f"[runner] validation sidecar skipped: {exc}")
     return results

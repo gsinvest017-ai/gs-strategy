@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -83,20 +84,58 @@ def periods_per_year_for(freq: str | None) -> int | None:
     return FREQUENCY_PERIODS_PER_YEAR.get(freq.strip().lower())
 
 
-def resolve_periods_per_year(cfg: Mapping[str, Any] | None) -> tuple[int, str]:
-    """Derive periods-per-year from a strategy config / manifest mapping.
+def infer_periods_per_year(perf: "pd.DataFrame") -> tuple[int, str] | tuple[None, None]:
+    """Measure the observation frequency of *perf* from its own timestamps.
 
-    Priority: ``rebalance`` (v1.2 manifest semantics: daily/weekly/monthly)
-    beats ``data_frequency`` (zipline semantics: daily/minute), because
-    ``rebalance`` is the only one of the two that can express a weekly or
-    monthly strategy — ``data_frequency`` describes the *bar* size, not the
-    strategy's decision frequency.  ``validation.periods_per_year`` overrides
-    both, for the rare strategy that must state the number outright.
+    This is the only source that cannot be wrong by construction: annualising
+    a return series depends on how often it is *observed*, not on how often
+    the strategy rebalances. A monthly-rebalanced zipline algo still emits one
+    perf row per trading day, and annualising those daily rows at 12/year
+    understates CAGR by more than an order of magnitude.
 
-    Returns ``(periods_per_year, source)`` where *source* is one of
-    ``"validation.periods_per_year"`` / ``"rebalance"`` / ``"data_frequency"``
-    / ``"default"``.  A ``"default"`` source means nothing in the config
-    declared a frequency and 252 was assumed.
+    Looks for a dt column, then a DatetimeIndex. Returns
+    (periods_per_year, "inferred:<label>") or (None, None) when the
+    frame carries no usable timestamps.
+    """
+    stamps = None
+    if "dt" in getattr(perf, "columns", ()):
+        stamps = pd.to_datetime(perf["dt"], errors="coerce")
+    elif isinstance(getattr(perf, "index", None), pd.DatetimeIndex):
+        stamps = pd.Series(perf.index)
+    if stamps is None:
+        return None, None
+    stamps = stamps.dropna().sort_values()
+    if len(stamps) < 3:
+        return None, None
+    gap_days = stamps.diff().dt.total_seconds().dropna().median() / 86400.0
+    if not gap_days or gap_days <= 0:
+        return None, None
+    # Snap to the nearest canonical calendar, in log space so the choice is
+    # scale-free (a 3-day median gap is "daily with weekends", not "weekly").
+    best = min(FREQUENCY_PERIODS_PER_YEAR.items(),
+               key=lambda kv: abs(math.log(365.25 / gap_days) - math.log(kv[1])))
+    return best[1], f"inferred:{best[0]}"
+
+
+def resolve_periods_per_year(cfg: Mapping[str, Any] | None,
+                             perf: "pd.DataFrame | None" = None,
+                             ) -> tuple[int, str]:
+    """Decide the annualisation factor for a return series, with provenance.
+
+    Priority:
+
+    1. ``validation.periods_per_year`` in the config -- an outright
+       statement, for a caller feeding in a series this module cannot
+       measure.
+    2. Inferred from the perf frame's own timestamps (see
+       ``infer_periods_per_year``) -- measured, not declared.
+    3. 252 with source "default", which the report flags as an
+       assumption rather than a derivation.
+
+    Deliberately **not** consulted: the manifest's rebalance key. Rebalance
+    cadence is a strategy decision frequency and says nothing about how often
+    the resulting return series is sampled; wiring it in here produced a CAGR
+    error of 17.66% -> 0.78% on a one-year daily backtest.
     """
     if isinstance(cfg, Mapping):
         validation = cfg.get("validation")
@@ -107,10 +146,10 @@ def resolve_periods_per_year(cfg: Mapping[str, Any] | None) -> tuple[int, str]:
                     return int(explicit), "validation.periods_per_year"
             except (TypeError, ValueError):
                 pass
-        for key in ("rebalance", "data_frequency"):
-            ppy = periods_per_year_for(cfg.get(key))
-            if ppy is not None:
-                return ppy, key
+    if perf is not None:
+        ppy, src = infer_periods_per_year(perf)
+        if ppy is not None:
+            return ppy, src
     return DEFAULT_PERIODS_PER_YEAR, "default"
 
 
@@ -146,15 +185,16 @@ def resolve_n_trials(cfg: Mapping[str, Any] | None = None,
 
 
 UNDEFLATED_DSR_WARNING = (
-    "試驗數未知（n_trials 取預設值 1），DSR 未經 deflate。此時 deflation "
-    "benchmark 退化為 -inf，DSR 對任何序列都恆等於 1.0——那是常數，不是證據，"
-    "不得當作策略未過擬合的依據。請在 config.yaml 的 validation.n_trials "
-    "或環境變數 GS_VALIDATION_N_TRIALS 誠實填入實際試過的參數組數。"
+    "n_trials = 1，DSR 未經 deflate：deflation benchmark 為 0，因此 DSR 等於 "
+    "PSR，未做任何多重檢定校正，不得當作策略未過擬合的依據。請在 "
+    "config.yaml 的 validation.n_trials 或環境變數 GS_VALIDATION_N_TRIALS "
+    "誠實填入實際試過的參數組數（含被丟棄的那些）。"
 )
 
 ASSUMED_FREQUENCY_WARNING = (
-    "設定檔未宣告頻率（rebalance / data_frequency 皆缺），年化係數退回預設 "
-    "252（日頻）。若本策略為週頻或月頻，年化 Sharpe 與 CAGR 會被高估。"
+    "無法從 perf 的時間戳量出觀測頻率（缺 dt 欄與 DatetimeIndex，或列數 < 3），"
+    "年化係數退回預設 252（日頻）。若這份報酬序列不是日頻，年化 Sharpe 與 "
+    "CAGR 都會錯；請在 config.yaml 的 validation.periods_per_year 直接指定。"
 )
 
 
@@ -184,8 +224,8 @@ def cagr(returns: pd.Series,
 
 def build_report(perf: pd.DataFrame, *, n_trials: int = 1,
                  n_trials_source: str = "default",
-                 periods_per_year: int = DEFAULT_PERIODS_PER_YEAR,
-                 periods_per_year_source: str = "default",
+                 periods_per_year: int | None = None,
+                 periods_per_year_source: str | None = None,
                  returns_col: str = "returns") -> dict:
     if returns_col not in perf.columns:
         raise ValueError(
@@ -198,14 +238,31 @@ def build_report(perf: pd.DataFrame, *, n_trials: int = 1,
             f"too few return observations ({len(returns)}) for validation")
 
     n_trials = max(int(n_trials), 1)
+
+    # Measure the annualisation factor from the frame we were handed unless
+    # the caller stated one. build_report() holds the timestamps, so making
+    # the caller supply this was a footgun: forgetting it silently annualised
+    # a monthly series at 252 and reported a 296% CAGR.
+    if periods_per_year is None:
+        measured, measured_src = infer_periods_per_year(perf)
+        if measured is None:
+            periods_per_year = DEFAULT_PERIODS_PER_YEAR
+            periods_per_year_source = periods_per_year_source or "default"
+        else:
+            periods_per_year = measured
+            periods_per_year_source = periods_per_year_source or measured_src
+    elif periods_per_year_source is None:
+        periods_per_year_source = "explicit"
     periods_per_year = max(int(periods_per_year), 1)
 
-    # An N of 1 that came from the *default* means "we do not know how many
-    # trials were run", and the DSR then degenerates to a constant 1.0.  An N
-    # of 1 that was declared explicitly means "exactly one trial was run", for
-    # which no deflation is the mathematically correct answer — the number is
-    # still 1.0, but it is now a stated assumption rather than a hidden one.
-    dsr_deflated = not (n_trials_source == "default" and n_trials <= 1)
+    # dsr_deflated answers one question only: was the Sharpe actually
+    # deflated against a non-zero benchmark? That takes N >= 2 — regardless of
+    # where the N came from. At N == 1 the benchmark is 0 by construction (see
+    # sharpe.deflated_sharpe_ratio) so DSR == PSR and no multiple-testing
+    # correction has been applied. Deriving this from n_trials_source
+    # instead would let anyone write validation: {n_trials: 1} and earn a
+    # "deflated" label for an undeflated number.
+    dsr_deflated = n_trials >= 2
 
     warnings: list[str] = []
     if not dsr_deflated:
@@ -248,6 +305,8 @@ def write_sidecar_for(perf_path: Path, *,
     errors and returns the sidecar path on success / None on failure.
     """
     try:
+        perf = load_perf(Path(perf_path))
+
         if n_trials is None:
             resolved_trials, trials_src = resolve_n_trials(cfg)
         else:
@@ -256,13 +315,15 @@ def write_sidecar_for(perf_path: Path, *,
             trials_src = n_trials_source
 
         if periods_per_year is None:
-            resolved_ppy, ppy_src = resolve_periods_per_year(cfg)
+            # Pass the loaded frame so the annualisation factor is measured
+            # from the return series itself rather than assumed.
+            resolved_ppy, ppy_src = resolve_periods_per_year(cfg, perf)
         else:
             resolved_ppy, ppy_src = int(periods_per_year), "explicit"
         if periods_per_year_source:
             ppy_src = periods_per_year_source
 
-        report = build_report(load_perf(Path(perf_path)),
+        report = build_report(perf,
                               n_trials=resolved_trials,
                               n_trials_source=trials_src,
                               periods_per_year=resolved_ppy,
