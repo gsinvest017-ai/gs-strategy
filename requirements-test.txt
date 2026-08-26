@@ -1,0 +1,26 @@
+# Everything `pytest tests/` needs, and nothing heavier.
+#
+# Deliberately excludes zipline-tej (see requirements-bt.txt). Importing
+# zipline resolves the TEJ trading calendar over the network at module-import
+# time, so it cannot run without a licensed TEJAPI_KEY. The handful of tests
+# that genuinely need a real bundle are marked `@requires_tej` in
+# tests/conftest.py and skip themselves when the key is absent.
+#
+# Also excludes gs_rag: it is an out-of-band shared library, not a PyPI
+# package. tests/test_gsrag_adapter.py skips itself when it is missing.
+#
+# Keep this file in sync with what CI installs (.github/workflows/ci.yml).
+
+-r requirements.txt
+-r requirements-dev.txt
+-r requirements-rag.txt
+
+# Analysis stack used by strategies/_common/validation and quantdata.
+pandas>=2.2,<3.0
+numpy>=2.0,<3.0
+scipy>=1.11          # validation.sharpe (PSR/DSR use scipy.stats.norm)
+pyarrow>=15          # pandas parquet engine; perf frames and the lakehouse
+
+# Config + codegen.
+pyyaml>=6.0
+jinja2>=3.1          # quant_crawler.strategy_gen templates
