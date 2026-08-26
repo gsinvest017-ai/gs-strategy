@@ -1,0 +1,106 @@
+name: ci
+
+# pytest on every PR and every push to main.
+#
+# Scope note (read before trusting a green tick): this job runs the suite
+# WITHOUT a TEJAPI_KEY, so the tests that shell out to the zipline bundle
+# validator skip themselves rather than fail — importing zipline resolves the
+# TEJ trading calendar over the network at module-import time, which a runner
+# cannot do. The "skipped tests" step below prints exactly which ones and why,
+# so the gap is visible in the log instead of silently rolled into a pass.
+#
+# To close that gap, add a TEJAPI_KEY repository secret and uncomment the
+# `env:` block on the pytest step. Note it will still not cover
+# test_dashboard_bundle fully, because those also need an *ingested* bundle,
+# which no runner has.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements*.txt
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Run pytest
+        # env:
+        #   TEJAPI_KEY: ${{ secrets.TEJAPI_KEY }}
+        run: |
+          pytest tests/ -q -rs --junit-xml=pytest-report.xml
+
+      - name: Summarise skipped tests
+        if: always()
+        run: |
+          python - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+
+          try:
+              root = ET.parse("pytest-report.xml").getroot()
+          except (OSError, ET.ParseError) as exc:
+              print(f"no parsable report ({exc}); pytest likely died before writing one")
+              raise SystemExit(0)
+
+          suite = root if root.tag == "testsuite" else root.find("testsuite")
+          totals = {k: suite.get(k, "0") for k in ("tests", "failures", "errors", "skipped")}
+          lines = [
+              "| metric | count |",
+              "| --- | --- |",
+              *(f"| {k} | {v} |" for k, v in totals.items()),
+              "",
+          ]
+
+          skipped = [
+              (case.get("classname", ""), case.get("name", ""),
+               (skip.get("message") or "").strip().replace("\n", " "))
+              for case in suite.iter("testcase")
+              for skip in case.findall("skipped")
+          ]
+          if skipped:
+              lines += ["### Skipped — not covered by this run", ""]
+              lines += [f"- `{cls}::{name}` — {msg}" for cls, name, msg in skipped]
+          else:
+              lines += ["No tests were skipped."]
+
+          body = "\n".join(lines)
+          print(body)
+          if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write(body + "\n")
+          PY
+
+      - name: Upload pytest report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report-py${{ matrix.python-version }}
+          path: pytest-report.xml
+          if-no-files-found: warn

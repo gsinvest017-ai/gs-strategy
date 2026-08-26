@@ -16,6 +16,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from tests.conftest import requires_tej
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 STRATEGIES_ROOT = REPO_ROOT / "strategies"
@@ -38,6 +40,7 @@ def _bundles() -> list[Path]:
 BUNDLES = _bundles()
 
 
+@requires_tej
 @pytest.mark.parametrize("bundle", BUNDLES, ids=lambda p: p.name)
 def test_bundle_passes_validator(bundle: Path) -> None:
     """Every shipped bundle must pass the dashboard-spec validator."""

@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 
 import pytest
+
+from tests.conftest import requires_tej
 import yaml
 
 from quant_crawler.strategy_gen.classify import (
@@ -204,6 +206,7 @@ def test_generate_bundle_buy_and_hold_fallback(tmp_path: Path) -> None:
     assert "BUY-AND-HOLD" in (path / "strategy.py").read_text(encoding="utf-8")
 
 
+@requires_tej
 def test_generate_bundle_passes_validator(tmp_path: Path) -> None:
     """End-to-end: the emitted bundle must pass the dashboard validator."""
     path = generate_bundle(_DUMMY_PAPER, out_root=tmp_path / "gen")
