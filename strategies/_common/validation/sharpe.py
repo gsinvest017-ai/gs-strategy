@@ -70,14 +70,27 @@ def deflated_sharpe_ratio(
         raise ValueError("n_trials must be >= 1")
     if sr_variance_across_trials is None:
         sr_variance_across_trials = 1.0 / (n - 1)
-    # expected max SR among n_trials draws (Bailey & LdP 2014)
-    euler_mascheroni = 0.5772156649015329
-    e = 1.0 / n_trials
-    z1 = norm.ppf(1 - e)
-    z2 = norm.ppf(1 - e * math.exp(-1))
-    expected_max_sr = math.sqrt(sr_variance_across_trials) * (
-        (1 - euler_mascheroni) * z1 + euler_mascheroni * z2
-    )
+    if n_trials == 1:
+        # Single trial: under the null of zero skill the expected maximum SR
+        # over one draw is just E[SR] = 0, so there is nothing to deflate and
+        # DSR collapses to PSR against a zero benchmark.
+        #
+        # This case MUST be special-cased. The Bailey & LdP closed form below
+        # is an extreme-value approximation valid only for n_trials >= 2: at
+        # n_trials == 1 we get e = 1, hence z1 = norm.ppf(0) = -inf, hence
+        # expected_max_sr = -inf, hence PSR(benchmark=-inf) = 1.0 for *every*
+        # return series. That silently turns DSR into a constant perfect
+        # score — strictly worse than reporting nothing at all.
+        expected_max_sr = 0.0
+    else:
+        # expected max SR among n_trials draws (Bailey & LdP 2014)
+        euler_mascheroni = 0.5772156649015329
+        e = 1.0 / n_trials
+        z1 = norm.ppf(1 - e)
+        z2 = norm.ppf(1 - e * math.exp(-1))
+        expected_max_sr = math.sqrt(sr_variance_across_trials) * (
+            (1 - euler_mascheroni) * z1 + euler_mascheroni * z2
+        )
     if sr_benchmark is None:
         sr_benchmark = expected_max_sr
     return probabilistic_sharpe_ratio(r, sr_benchmark=sr_benchmark)
