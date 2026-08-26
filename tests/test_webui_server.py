@@ -14,11 +14,14 @@ from http.server import ThreadingHTTPServer
 
 import pytest
 
+from quant_crawler.storage.db import Storage
+from quant_crawler.storage.models import PaperRecord
 from quant_crawler.webui.server import Handler
 
 
 @pytest.fixture(scope="module")
 def server():
+    # Schema is created once per session by conftest._ensure_db_schema.
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     port = httpd.server_address[1]
     t = threading.Thread(target=httpd.serve_forever, daemon=True)
@@ -26,6 +29,29 @@ def server():
     yield f"http://127.0.0.1:{port}"
     httpd.shutdown()
     httpd.server_close()
+
+
+@pytest.fixture()
+def seeded_paper():
+    """A synthetic paper row this test owns, removed afterwards.
+
+    The label round-trip used to hard-code a real arXiv id that happened to be
+    in the author's crawled DB, so it could only ever pass on that one
+    machine.
+    """
+    rec = PaperRecord(
+        source="pytest",
+        source_id="webui-label-roundtrip",
+        title="Synthetic fixture paper (webui label round-trip)",
+        abstract="Created by tests/test_webui_server.py; safe to delete.",
+        url="https://example.invalid/pytest",
+    )
+    store = Storage()
+    store.upsert(rec)
+    yield rec.source, rec.source_id
+    with store._conn() as conn:
+        conn.execute("DELETE FROM papers WHERE source = ? AND source_id = ?",
+                     (rec.source, rec.source_id))
 
 
 def _get(base: str, path: str):
@@ -141,9 +167,9 @@ def test_api_papers_kind_filter(server: str) -> None:
     assert all(p["kind"] == "factor" for p in d["papers"])
 
 
-def test_post_labels_roundtrip(server: str) -> None:
+def test_post_labels_roundtrip(server: str, seeded_paper) -> None:
     """add_subcat -> appears; set_kind -> overridden; cleanup."""
-    src, sid = "arxiv", "2604.19107"   # real paper in repo DB
+    src, sid = seeded_paper
     try:
         st, rec = _post(server, "/api/labels",
                         {"source": src, "source_id": sid,

@@ -10,6 +10,7 @@ is monkeypatched to a no-op so retry / per-host-delay paths execute fast.
 from __future__ import annotations
 
 import asyncio
+import sys
 import sqlite3
 from pathlib import Path
 
@@ -120,8 +121,12 @@ def test_I_009_mcp_stdio_handshake_list_tools():
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
+    # sys.executable, not ".venv/bin/python": the latter is a path relative to
+    # the cwd that only resolves on a checkout whose venv happens to live
+    # there. Any other layout -- a git worktree, a CI runner, a venv named
+    # anything else -- got FileNotFoundError instead of a protocol failure.
     params = StdioServerParameters(
-        command=".venv/bin/python",
+        command=sys.executable,
         args=["-m", "quant_crawler.rag.mcp_server"],
     )
 

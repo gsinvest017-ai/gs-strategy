@@ -1,5 +1,15 @@
 """接共用 gs-rag 的 adapter 測試 —— 用 tmp_db fixture，不打真實 LLM。"""
-from quant_crawler.gsrag_adapter import ask_papers, build_index, paper_documents
+import pytest
+
+# gs_rag is the shared library from the gs-rag repo. It is not published to
+# PyPI and is installed out-of-band, so it is absent on any clean checkout
+# (CI included). Skipping is honest; a collection error is not.
+pytest.importorskip(
+    "gs_rag",
+    reason="gs_rag is an out-of-band shared library, not a PyPI package",
+)
+
+from quant_crawler.gsrag_adapter import ask_papers, build_index, paper_documents  # noqa: E402
 from quant_crawler.storage.db import Storage
 from quant_crawler.storage.models import PaperRecord
 
