@@ -46,6 +46,22 @@ def test_missing_column_and_short_series_raise():
         report.build_report(pd.DataFrame({"returns": [0.01] * 5}))
 
 
+def test_write_sidecar_for_success_and_silence(tmp_path):
+    p = tmp_path / "perf.parquet"
+    _perf_frame().to_parquet(p, index=False)
+
+    sidecar = report.write_sidecar_for(p, n_trials=3)
+    assert sidecar is not None and sidecar.exists()
+    doc = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert doc["schema"] == report.SCHEMA
+    assert doc["n_trials"] == 3
+    assert sidecar.name == "perf.parquet.validation.json"
+
+    garbage = tmp_path / "bad.parquet"
+    garbage.write_text("not parquet", encoding="utf-8")
+    assert report.write_sidecar_for(garbage) is None   # never raises
+
+
 def test_cli_parquet_roundtrip(tmp_path):
     perf = _perf_frame()
     p = tmp_path / "perf.parquet"
