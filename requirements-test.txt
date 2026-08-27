@@ -22,5 +22,5 @@ scipy>=1.11          # validation.sharpe (PSR/DSR use scipy.stats.norm)
 pyarrow>=15          # pandas parquet engine; perf frames and the lakehouse
 
 # Config + codegen.
-pyyaml>=6.0
+pyyaml>=6.0.3
 jinja2>=3.1          # quant_crawler.strategy_gen templates
