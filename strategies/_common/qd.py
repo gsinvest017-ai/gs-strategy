@@ -265,19 +265,45 @@ def coverage(table: str, key: str = "trading_date") -> dict[str, Any]:
     return {"table": table, "min": df.iloc[0]["lo"], "max": df.iloc[0]["hi"]}
 
 
+#: Fraction of NULL ``adj_close`` above which ``stock_bars(adjusted=True)``
+#: refuses to silently hand back a column of NaN.
+_ADJ_NULL_TOLERANCE = 0.02
+
+
 def stock_bars(
     start: str,
     end: str,
     symbols: Sequence[str] | None = None,
     *,
     adjusted: bool = True,
+    on_missing_adj: str = "raise",
     refresh: bool = False,
 ) -> pd.DataFrame:
     """Daily TW equity bars from ``tw_stock_bars`` (2010-01-04 onward).
 
-    ``adjusted=True`` returns the ``adj_*`` columns renamed to plain OHLC — use
-    it for any return calculation.  The unadjusted ``close`` is what you compare
-    against a price-limit or a disposition threshold, so both are returned.
+    ``adjusted=True`` swaps the ``adj_*`` columns into the plain OHLC names and
+    preserves the originals as ``raw_*``.  Use adjusted prices for returns and
+    ``raw_close`` for anything compared against a price limit or a disposition
+    threshold.
+
+    **The adjustment columns are not populated for the whole history.**  As of
+    2026-08 ``adj_close`` / ``adj_factor`` are NULL for every row before 2026;
+    only the current year is backfilled.  Silently swapping a NULL column into
+    ``close`` turns every pre-2026 return into NaN, and — this is the part that
+    actually burns you — pandas' ``groupby.size()`` still counts those rows
+    while ``groupby.mean()`` skips them, so a study reports a five-year sample
+    size next to a one-year mean and looks perfectly healthy.
+
+    ``on_missing_adj`` controls what happens when more than 2% of ``adj_close``
+    is NULL:
+
+    ``"raise"``  (default) — abort with the per-year NULL rates.  Loud beats wrong.
+    ``"raw"``    — fall back to unadjusted prices, set ``adj_fallback=True`` on
+                   the frame, and emit a ``UserWarning``.  Acceptable for short
+                   holding periods where no corporate action intervenes; wrong
+                   for anything spanning an ex-dividend or split date.
+    ``"keep"``   — the old behaviour: propagate the NaNs. Only for callers that
+                   genuinely want to see the gaps.
     """
     where = ["trading_date BETWEEN '{start}' AND '{end}'"]
     if symbols:
@@ -290,10 +316,46 @@ def stock_bars(
     )
     df = cached_sql(tmpl, start=start, end=end, refresh=refresh, tag="stock_bars")
     df = _coerce_dates(df)
-    if adjusted and not df.empty:
-        for c in ("open", "high", "low", "close"):
-            df[f"raw_{c}"] = df[c]
-            df[c] = df[f"adj_{c}"]
+    if not adjusted or df.empty:
+        return df
+
+    null_rate = float(df["adj_close"].isna().mean())
+    df.attrs["adj_null_rate"] = null_rate
+    if null_rate > _ADJ_NULL_TOLERANCE and on_missing_adj != "keep":
+        by_year = (
+            df.assign(_y=df["trading_date"].dt.year)
+            .groupby("_y")["adj_close"]
+            .apply(lambda s: round(float(s.isna().mean()), 4))
+            .to_dict()
+        )
+        msg = (
+            f"tw_stock_bars.adj_close is {null_rate:.1%} NULL over "
+            f"{start}..{end}; NULL rate by year: {by_year}. "
+            "Swapping it into `close` would produce silently-NaN returns."
+        )
+        if on_missing_adj == "raise":
+            raise QuantdataError(
+                msg + " Pass on_missing_adj='raw' to fall back to unadjusted "
+                "prices (valid only if no corporate action falls inside your "
+                "holding window), or 'keep' to propagate the NaNs deliberately."
+            )
+        if on_missing_adj == "raw":
+            import warnings
+
+            warnings.warn(msg + " Falling back to unadjusted prices.",
+                          UserWarning, stacklevel=2)
+            for c in ("open", "high", "low", "close"):
+                df[f"raw_{c}"] = df[c]
+            df.attrs["adj_fallback"] = True
+            return df
+        raise ValueError(
+            f"on_missing_adj must be 'raise', 'raw' or 'keep', got {on_missing_adj!r}"
+        )
+
+    for c in ("open", "high", "low", "close"):
+        df[f"raw_{c}"] = df[c]
+        df[c] = df[f"adj_{c}"]
+    df.attrs["adj_fallback"] = False
     return df
 
 
