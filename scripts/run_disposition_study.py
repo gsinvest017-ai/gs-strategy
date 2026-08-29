@@ -54,6 +54,22 @@ COST_LONG = 2 * FEE_BPS + TAX_BPS + 2 * AUCTION_SLIP_BPS          # 90.83
 COST_SHORT = COST_LONG + SHORT_EXTRA_BPS                          # 110.83
 
 
+def round_trip_cost_bps(side: str, in_disposition: bool) -> float:
+    """Round-trip cost in bps.
+
+    ``in_disposition`` controls the call-auction slippage charge: it applies only
+    while the name is under 5- or 20-minute periodic matching. A window that opens
+    after the disposition has ended trades on a continuous book and must not be
+    charged for an auction it never faced.
+    """
+    c = 2 * FEE_BPS + TAX_BPS
+    if side == "short":
+        c += SHORT_EXTRA_BPS
+    if in_disposition:
+        c += 2 * AUCTION_SLIP_BPS
+    return c
+
+
 def log(msg):
     print(msg, file=sys.stderr, flush=True)
 
@@ -210,7 +226,15 @@ def variant_sweep(p_in, p_out, out):
                 if len(s) < 100:
                     continue
                 sign = 1.0 if side == "long" else -1.0
-                cost = (COST_SHORT if side == "short" else COST_LONG) / 1e4
+                # Auction slippage applies only while the name is actually under
+                # call-auction matching. An exit-anchored window that opens at
+                # u >= 1 starts after the disposition has ended, so the stock is
+                # back on continuous matching and charging 2 x 25 bps there
+                # overstates its cost by 50 bps. Getting this wrong does not
+                # change any sign here, but it moved four variants' t-stats by up
+                # to 2.5x, which is enough to reorder a leaderboard.
+                in_disposition = not (anchor == "exit" and w[0] >= 1)
+                cost = round_trip_cost_bps(side, in_disposition) / 1e4
                 net = sign * s - cost
                 name = f"{anchor}|{side}|CAR[{w[0]},{w[1]}]"
                 rows.append({"variant": name, "n": len(net),
