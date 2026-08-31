@@ -487,6 +487,21 @@ def audit_record(record: Mapping[str, Any]) -> list[str]:
     if not isinstance(block, Mapping):
         return [f"{record.get('trial_id', '?')}：沒有 stat_decision 區塊，無法回溯。"]
 
+    if block.get("no_statistical_claim") is True:
+        # L0 機械分診這類記錄不做任何統計宣稱，硬要附一份檢定處方反而是把
+        # 「用程式比對了兩份檔案」包裝成統計判決。這裡只確認它確實沒有偷偷
+        # 佔用 N，以及有寫下它憑什麼這樣分診。
+        problems = []
+        tid = record.get("trial_id", "?")
+        if block.get("delta_n", 0) != 0:
+            problems.append(
+                f"{tid}：宣告 no_statistical_claim 卻計入 N（delta_n="
+                f"{block.get('delta_n')}）——不做統計宣稱就不該佔用母體。"
+            )
+        if not block.get("basis"):
+            problems.append(f"{tid}：宣告 no_statistical_claim 但沒寫 basis，無法回溯憑據。")
+        return problems
+
     path = block.get("decision_path")
     if not isinstance(path, Mapping):
         return [f"{record.get('trial_id', '?')}：stat_decision 缺 decision_path。"]
