@@ -407,8 +407,21 @@ multiplicity:
     origin: extension
     method: ADDIS
     alpha: 0.05
-    package: online-fdr
-    semantics: alpha-wealth 耗盡 = 搜尋預算耗盡 = 自動停機
+    defaults: {wealth: alpha/2, lambda: 0.25, tau: 0.5}
+    impl: strategies/_common/validation/online_fdr.py
+    impl_note: >
+      演算法自寫以維持本子套件「只依賴 numpy/scipy/pandas」的不變式；正確性由
+      tests/test_online_fdr.py 對 online-fdr 套件逐步比對 alpha_t 與拒絕決策
+      來保證（套件未安裝時 skip）。不是包一層 wrapper。
+    semantics: >
+      ADDIS 沒有字面上的財富帳戶。每次檢定算出的 alpha_t 會隨著無效變體累積而
+      單調衰減；衰減到呼叫端設定的 floor 以下即視為搜尋預算耗盡、應停機。
+      floor 刻意沒有預設值——「多小的 p 值還當真」是判斷不是統計常數。
+    p_value_contract: >
+      p 值的定義必須在 pre-registration 裡凍結，且 AddisBudget.test_one 強制
+      要求 p_value_source。把 anytime-valid 直接套在 Sharpe 或策略搜尋上的
+      論文查無，這是自己接線不是照抄；不同定義的 p 值不可互換，混著投進同一個
+      預算會讓 FDR 控制失效，而且從輸出上看不出來。
     cite: Tian & Ramdas (2019)；PLAN-auto-research-loop.md §6
 
 
