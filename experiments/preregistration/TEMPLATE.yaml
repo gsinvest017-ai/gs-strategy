@@ -1,0 +1,108 @@
+schema: preregistration/1
+
+# ---------------------------------------------------------------------------
+# 身分
+# ---------------------------------------------------------------------------
+id: "000-template"              # 檔名去掉 .yaml；NNN 遞增不重用
+title: "一句話說明這個研究要問什麼"
+author: ""
+registered_at: ""               # ISO 8601，commit 當下的時間
+supersedes: null                # 若取代某份舊登記，寫它的 id 並在下面說明為什麼
+supersedes_reason: null
+
+# ---------------------------------------------------------------------------
+# 一、假說（Arnott, Harvey & Markowitz 2019 的七項 checklist）
+# ---------------------------------------------------------------------------
+
+# 一句話，且方向必須先押定。「動能或反轉總有一邊顯著」不是假說，是穩賺不賠。
+hypothesis: ""
+
+# 為什麼這個訊號應該存在？**誰在交易的另一邊持續虧錢？**
+# 答不出來通常代表它是從資料裡挖出來的而不是想出來的——那不自動否決，
+# 但你應該把下面的 family 誠實填成 open_mining。
+economic_mechanism: ""
+
+# 論文出處（若有）。注意：關鍵字命中不等於論文支持這個方向——
+# 實際踩過一篇標題含 momentum 卻是在證偽盤中動能的研究。
+sources: []
+
+# ---------------------------------------------------------------------------
+# 二、樣本與宇宙
+# ---------------------------------------------------------------------------
+universe:
+  instruments: []               # 例：[TX, MTX]
+  bundle: "tquant_future"
+  filters: ""                   # 流動性門檻、排除處置股等
+sample:
+  start: ""
+  end: ""
+  # 規範 §五：樣本期至少要含一次完整空頭，否則判決降級為「繼續累積」
+  contains_full_bear_market: null     # true / false，要能指出是哪一段
+  holdout: ""                   # 純樣本外的那一段；定案前不得看
+
+# ---------------------------------------------------------------------------
+# 三、檢定計畫——這一段直接餵 validation.decision.resolve()
+#
+# 填完就等於把檢定選定了。那正是重點：你在看到任何結果之前就把它綁死了。
+# 欄位語意見 strategies/_common/validation/rulesets/stat-ruleset-1.1.yaml
+# ---------------------------------------------------------------------------
+stat_plan:
+  estimand: ""                  # mean_return / rank_ic / sharpe / win_rate / ...
+  design: ""                    # one_sample / paired / two_independent / k_groups / ...
+  overlap: ""                   # none / overlapping / clustered
+  holding_periods: null         # overlap=overlapping 時必填（Newey-West 的 lag）
+  cluster_by: null              # overlap=clustered 時必填
+  unit: null                    # trade / event / period——決定哪道最小樣本閘門適用
+  family: ""                    # single_preregistered / bounded_multiple / open_mining / best_of_M
+  n_trials: null                # family=bounded_multiple 時必填，讀 ledger 不得自估
+  purpose: "selection"          # 事前登記的主假說一律 selection
+  # normal 與 autocorr 留空：它們是 Jarque-Bera 與 Ljung-Box 的**結果**，
+  # 不是可以事先宣告的立場。跑完前置檢定再填進 trial 記錄的 decision_path。
+
+# ---------------------------------------------------------------------------
+# 四、門檻與停止規則（事先定死，事後不得更改）
+# ---------------------------------------------------------------------------
+thresholds:
+  primary_metric: ""            # 例：週頻 Rank IC 均值（Newey-West t）
+  pass_condition: ""            # 例：|IC| >= 0.03 且 |t| >= 2
+  # 預計要測的參數組合總數。這個數字進關卡四的修正，寫大不寫小——
+  # 少報一個，DSR 就被高估一分。
+  planned_trials: null
+
+# family=open_mining 時必填：p 值的定義要在這裡凍結。
+# 把 anytime-valid / online FDR 直接套在 Sharpe 或策略搜尋上的論文查無，
+# 這是自己接線不是照抄；不同定義的 p 值不可互換，混著投進同一個 ADDIS 預算
+# 會讓 FDR 控制失效，而且從輸出上完全看不出來。
+p_value_definition: null        # 例：PSR 的單尾 p（Bailey & López de Prado 2014）
+online_fdr:
+  enabled: false
+  alpha: 0.05
+  # 「多小的 p 值你還當真」是判斷不是統計常數，所以沒有預設值。
+  # 以本專案的有效事件數（約 10-15 個獨立崩盤），1e-3 以下本身就可疑。
+  exhausted_floor: null
+
+# ---------------------------------------------------------------------------
+# 五、證偽條件——事先寫下「什麼結果出現就放棄」
+#
+# 這一欄的作用是擋住「結果不如預期就不斷追加變體直到挖出顯著為止」。
+# 留空的登記檔不算完成。
+# ---------------------------------------------------------------------------
+falsification: []
+# 例：
+#   - 主假說的 IC 不顯著
+#   - 對既有動能因子正交化後殘差 IC 消失
+#   - 成本後 spread 歸零
+
+# ---------------------------------------------------------------------------
+# 六、成本假設（訊號存在與訊號可交易是兩回事）
+# ---------------------------------------------------------------------------
+costs:
+  per_contract: {}              # 例：{TX: 150, MTX: 60}
+  slippage_points: null
+  tax_note: ""
+  stress_test: "成本乘二"        # 規範 §一 關卡六要求的壓力測試
+
+# ---------------------------------------------------------------------------
+# 七、已知限制——現在就寫，不要等到寫報告才想起來
+# ---------------------------------------------------------------------------
+known_limitations: []

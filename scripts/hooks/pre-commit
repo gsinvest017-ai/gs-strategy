@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Git pre-commit hook：擋住對 pre-registration 與 trial ledger 的改寫。
+# 由 scripts/install_hooks.sh 安裝（symlink 到 .git/hooks/pre-commit）。
+#
+# 與 commit-msg hook 不同，這個**預設就阻擋**（STRICT=1）。
+# 理由：commit message 寫得不合規只是可讀性問題，事後可以改；而事前登記被
+# 編輯、或 ledger 既有行被改寫，破壞的是統計結論的效力本身，而且一旦 commit
+# 進歷史就很難察覺。這一類要在寫進去之前擋住，不是事後 lint。
+STRICT=1
+
+ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null)"
+[[ -z "${ROOT_DIR}" ]] && exit 0
+VENV_PY="${ROOT_DIR}/.venv/bin/python"
+[[ ! -x "${VENV_PY}" ]] && VENV_PY="$(command -v python3 || true)"
+[[ -z "${VENV_PY}" ]] && exit 0     # 沒 Python：不擋（與 commit-msg 一致）
+
+"${VENV_PY}" "${ROOT_DIR}/scripts/check_append_only.py"
+EXIT=$?
+if [[ ${EXIT} -ne 0 ]]; then
+    echo "" >&2
+    echo "[pre-commit] 見 docs/spec/statistical-decision-tree.md §7" >&2
+    echo "[pre-commit] 判準真的要改，就開一份新的 pre-registration 並在裡面" >&2
+    echo "[pre-commit] 寫明它取代了哪一份、為什麼。" >&2
+    echo "[pre-commit] \`git commit --no-verify\` 可繞過——刻意留著，但它會在" >&2
+    echo "[pre-commit] reflog 與 CI 上留下痕跡。" >&2
+fi
+[[ "${STRICT}" != "1" ]] && exit 0
+exit ${EXIT}

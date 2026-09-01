@@ -4,6 +4,12 @@
 > 分診工具：`scripts/triage_generated.py`
 > 相關計畫：gs-bulltrap-plan/docs/PLAN-auto-research-loop.md（M7–M13）
 
+> **模組可用性（2026-09-01 查證）**：`reality_check.py`（White RC / Hansen SPA /
+> Romano-Wolf StepM）與 `tradability.py`（VR / Hurst / permutation entropy /
+> Ljung-Box / runs test）**目前只存在於未合併的 `dev/pv-mtf-mdd-disposition`**，
+> `main` 上沒有。本文件先前把它們寫成現成可用，那是錯的。凡是依賴這兩支的
+> 環節（L2 標的可交易性、`best_of_M` 的 SPA/RC 腿），要等那條分支落地才跑得動。
+
 ---
 
 ## 0. 先講結論，因為它改變了問題
@@ -187,7 +193,7 @@ permutation entropy、DFA Hurst。
 
 | 層 | 進 | 出 | 累計 ΔN |
 |---|---:|---:|---:|
-| L0 機械分診 | 349 | 2 + 可撈回的 | 0 |
+| L0 機械分診 | 359 | 2 + 可撈回的 | 0 |
 | L1 假說萃取 | 2 + 撈回 | 讀完論文才知道 | 0 |
 | L2 可交易性 | ↑ | ↑ | 0 |
 | L3 確認回測 | k' | k' | **+k'** |
@@ -275,14 +281,23 @@ UTF-8 被誤以 latin-1 解碼後再編碼（mojibake）。
 - `audit_record` / `audit_ledger` 可回溯稽核
 - L0 分診工具（dry-run 預設），349 → 3 個等價類已實測
 
-**待做，按建議順序**
+**已完成（2026-09-01 續作）**
 
-1. `--apply` 寫入 ledger，讓 harness 前沿反映分診結果（349 → 2）
-2. 修 `quant_crawler` 的解碼層，重跑那 13 份
-3. `experiments/preregistration/` 骨架 ＋ 擋改寫的 pre-commit hook
-4. L2 的 `ta_suitability` 接成可重跑的 CLI（目前是函式庫）
-5. online FDR（ADDIS）接線——規則集已宣告 `also_required: [online_fdr]`，尚未實作
-6. `stat_gate` 作為 CI required check：不過門檻就 exit 1
+- `--apply` 已寫入 ledger，harness 前沿由 349 降到 **0**
+- 修掉 mojibake 的病因（`http.py` 的 charset fallback）、症狀（`papers.db` 32 筆）、
+  以及讓它無法被修的死結（`generate_bundle` 讀不了壞 manifest 就整個炸掉）。
+  359 份 manifest 現在 0 份無法解析
+- online FDR（ADDIS）已實作並接進 resolver：`open_mining` 的處方會帶
+  `online_fdr_required`，測試對 `online-fdr` 套件逐步交叉驗證
+- `experiments/preregistration/` ＋ `TEMPLATE.yaml` ＋ 驗證器 ＋ 擋改寫的
+  pre-commit hook（端到端驗過：登記檔擋、README 放行、`--no-verify` 仍可繞過）
+
+**待做**
+
+1. L2 的 `ta_suitability` 接成可重跑的 CLI——但它在未合併的分支上（見開頭註記）
+2. `stat_gate` 作為 CI required check：不過門檻就 exit 1
+3. 把 `dev/pv-mtf-mdd-disposition` 的 `reality_check.py` / `tradability.py` 落地到
+   `main`，否則 L2 與 `best_of_M` 的 SPA 腿都跑不動
 
 **卡住、需要人決定的**
 
