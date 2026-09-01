@@ -1,0 +1,62 @@
+id: nber_https_www_nber_org_papers_w35506_fromrss
+name: Economic Models of Identity Formation and Cultural Transmission -- by Alberto
+  Bisin, Thierry Verdier
+description: 'Auto-generated buy_and_hold skeleton seeded from nber:https://www.nber.org/papers/w35506#fromrss.
+  Matched keywords: (none — fallback bundle). Abstract: In this paper we survey recent
+  advances in the economic theory of identity formation. We restrict our analysis
+  to models which conceptualize identity formation as embedded into an inter-generational
+  cultural transmission process, and therefore have implications for the dynamics
+  of social identity.  Through the lens of a general framework linking identity formation
+  to cultural evolution, we disc... REQUIRES HUMAN REVIEW before deployment.
+
+  '
+asset_class: future
+bundle: tquant_future
+start: '2020-01-01'
+end: '2026-04-30'
+capital_base: 5000000
+params:
+  root_symbol: TX
+  position_contracts: 1
+  days_before_close: 10
+  per_contract_cost:
+    TX: 150
+    MTX: 60
+  spread_points: 6.0
+tags:
+- paper
+- auto-generated
+- needs-review
+- taiwan
+- futures
+- index-future
+- baseline
+- buy-and-hold
+requires_tej_key: true
+requires_review: true
+extra_deps: []
+symbols:
+- TX
+spec_version: 1
+source:
+  kind: generated
+  generator: quant_crawler.strategy_gen
+  generator_version: '1.0'
+  generated_at: '2026-07-23T22:31:55Z'
+  template: buy_and_hold
+  matched_keywords: []
+  inputs:
+    paper:
+      source: nber
+      source_id: https://www.nber.org/papers/w35506#fromrss
+      title: Economic Models of Identity Formation and Cultural Transmission -- by
+        Alberto Bisin, Thierry Verdier
+      authors: []
+      published: '2026-07-27'
+      url: https://www.nber.org/papers/w35506#fromrss
+  updated_at: '2026-07-26T22:30:19Z'
+review_checklist:
+- Replace `_generate_signal()` with the paper's actual signal formula
+- Verify default params match the paper (lookback, thresholds, etc.)
+- Confirm cost / slippage assumptions for the target instrument
+- Set `requires_review: false` only after a human has signed off

@@ -1,0 +1,70 @@
+id: repec_repec_ags_uersmp_402734
+name: "International Food Security Assessment, 2024â\x80\x9334"
+description: 'Auto-generated buy_and_hold skeleton seeded from repec:RePEc:ags:uersmp:402734.
+  Matched keywords: (none — fallback bundle). Abstract: Millions of people worldwide
+  face food insecurity and do not have access to  sufficient, safe, and nutritious
+  food that meets their dietary needs for an  active and healthy life. This report
+  utilizes the demand-driven International  Food Security Assessment (IFSA) model
+  to assist the U.S. Department of  Agriculture (USDA) and its stakeholders in estimating
+  food security trends in  83 low- and m... REQUIRES HUMAN REVIEW before deployment.
+
+  '
+asset_class: future
+bundle: tquant_future
+start: '2020-01-01'
+end: '2026-04-30'
+capital_base: 5000000
+params:
+  root_symbol: TX
+  position_contracts: 1
+  days_before_close: 10
+  per_contract_cost:
+    TX: 150
+    MTX: 60
+  spread_points: 6.0
+tags:
+- paper
+- auto-generated
+- needs-review
+- taiwan
+- futures
+- index-future
+- baseline
+- buy-and-hold
+requires_tej_key: true
+requires_review: true
+extra_deps: []
+symbols:
+- TX
+spec_version: 1
+source:
+  kind: generated
+  generator: quant_crawler.strategy_gen
+  generator_version: '1.0'
+  generated_at: '2026-06-15T22:30:44Z'
+  template: buy_and_hold
+  matched_keywords: []
+  inputs:
+    paper:
+      source: repec
+      source_id: RePEc:ags:uersmp:402734
+      title: International Food Security Assessment, 2024–34
+      authors:
+      - Cardell, Lila
+      - Zereyesus, Yacob Abrehe
+      - Ajewole, Kayode
+      - Farris, Jarrad
+      - Johnson, Michael E.
+      - Lin, Jessie
+      - Valdes, Constanza
+      - Zeng, Wendy
+      published: '2024-01-01'
+      url: https://econpapers.repec.org/RePEc:ags:uersmp:402734?ref=nep-inv
+      categories:
+      - nep:nep-inv
+  updated_at: '2026-09-01T01:11:57Z'
+review_checklist:
+- Replace `_generate_signal()` with the paper's actual signal formula
+- Verify default params match the paper (lookback, thresholds, etc.)
+- Confirm cost / slippage assumptions for the target instrument
+- Set `requires_review: false` only after a human has signed off

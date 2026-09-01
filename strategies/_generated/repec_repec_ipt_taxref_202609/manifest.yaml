@@ -1,0 +1,68 @@
+id: repec_repec_ipt_taxref_202609
+name: What makes carbon pricing policies acceptable to the public? A systematic review
+  of the impact of policy design
+description: 'Auto-generated buy_and_hold skeleton seeded from repec:RePEc:ipt:taxref:202609.
+  Matched keywords: (none — fallback bundle). Abstract: Carbon pricing policies are
+  often met with resistance from parts of the  public, even if they are designed with
+  efficiency and fairness in mind. To  understand in more depth what the policy design
+  characteristics of carbon  price policies are that increase public acceptability,
+  we perform a systematic  literature review. We use a dual-stage screening process
+  to systematically  review both peer-... REQUIRES HUMAN REVIEW before deployment.
+
+  '
+asset_class: future
+bundle: tquant_future
+start: '2020-01-01'
+end: '2026-04-30'
+capital_base: 5000000
+params:
+  root_symbol: TX
+  position_contracts: 1
+  days_before_close: 10
+  per_contract_cost:
+    TX: 150
+    MTX: 60
+  spread_points: 6.0
+tags:
+- paper
+- auto-generated
+- needs-review
+- taiwan
+- futures
+- index-future
+- fundamental
+- baseline
+- buy-and-hold
+requires_tej_key: true
+requires_review: true
+extra_deps: []
+symbols:
+- TX
+spec_version: 1
+source:
+  kind: generated
+  generator: quant_crawler.strategy_gen
+  generator_version: '1.0'
+  generated_at: '2026-07-23T22:31:53Z'
+  template: buy_and_hold
+  matched_keywords: []
+  inputs:
+    paper:
+      source: repec
+      source_id: RePEc:ipt:taxref:202609
+      title: What makes carbon pricing policies acceptable to the public? A systematic
+        review of the impact of policy design
+      authors:
+      - Unterguggenberger Mara
+      - Dreoni Ilda (European Commission - JRC)
+      - Klenert David (European Commission - JRC)
+      published: '2026-01-01'
+      url: https://econpapers.repec.org/RePEc:ipt:taxref:202609?ref=nep-inv
+      categories:
+      - nep:nep-inv
+  updated_at: '2026-07-26T22:30:17Z'
+review_checklist:
+- Replace `_generate_signal()` with the paper's actual signal formula
+- Verify default params match the paper (lookback, thresholds, etc.)
+- Confirm cost / slippage assumptions for the target instrument
+- Set `requires_review: false` only after a human has signed off

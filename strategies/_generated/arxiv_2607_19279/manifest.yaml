@@ -1,0 +1,85 @@
+id: arxiv_2607_19279
+name: Gaussian Boson Sampling for Asset Clustering in Statistical Arbitrage Portfolios
+description: 'Auto-generated mean_reversion skeleton seeded from arxiv:2607.19279.
+  Matched keywords: statistical arbitrage, statarb. Abstract: Gaussian Boson Sampling
+  (GBS) provides a native photonic quantum heuristic for sampling dense subgraphs
+  from adjacency matrices, offering a scalable physical approach to combinatorial
+  graph search problems. Simultaneously, correlation matrix clustering algorithms,
+  such as Spectral and SPONGE, have established robust benchmarks for identifying
+  co-moving assets from correlation matrices in statis... REQUIRES HUMAN REVIEW before
+  deployment.
+
+  '
+asset_class: future
+bundle: tquant_future
+start: '2020-01-01'
+end: '2026-04-30'
+capital_base: 5000000
+params:
+  root_symbol: TX
+  window: 14
+  upper_threshold: 70.0
+  lower_threshold: 30.0
+  allow_short: true
+  position_contracts: 1
+  days_before_close: 10
+  per_contract_cost:
+    TX: 150
+    MTX: 60
+  spread_points: 6.0
+tags:
+- paper
+- auto-generated
+- needs-review
+- taiwan
+- futures
+- index-future
+- statistical-arbitrage
+- volatility
+- arbitrage
+- market-neutral
+- mean-reversion
+- technical
+requires_tej_key: true
+requires_review: true
+extra_deps: []
+symbols:
+- TX
+spec_version: 1
+source:
+  kind: generated
+  generator: quant_crawler.strategy_gen
+  generator_version: '1.0'
+  generated_at: '2026-07-23T22:31:57Z'
+  template: mean_reversion
+  matched_keywords:
+  - statistical arbitrage
+  - statarb
+  inputs:
+    paper:
+      source: arxiv
+      source_id: '2607.19279'
+      title: Gaussian Boson Sampling for Asset Clustering in Statistical Arbitrage
+        Portfolios
+      authors:
+      - Dayne Marcus Lopena
+      - Daniel Buguks
+      - Zhenghao Li
+      - Ewan Mer
+      - Shana H. Winston
+      - Shang Yu
+      - Mihai Cucuringu
+      - Del Rajan
+      - Philip Intallura
+      - Raj B. Patel
+      published: '2026-07-21T16:48:37Z'
+      url: http://arxiv.org/abs/2607.19279v1
+      categories:
+      - quant-ph
+      - q-fin.CP
+  updated_at: '2026-07-26T22:30:21Z'
+review_checklist:
+- Replace `_generate_signal()` with the paper's actual signal formula
+- Verify default params match the paper (lookback, thresholds, etc.)
+- Confirm cost / slippage assumptions for the target instrument
+- Set `requires_review: false` only after a human has signed off

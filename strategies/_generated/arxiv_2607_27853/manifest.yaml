@@ -1,0 +1,75 @@
+id: arxiv_2607_27853
+name: 'FinanceHarness: Autonomous Financial Deep Research Framework'
+description: 'Auto-generated buy_and_hold skeleton seeded from arxiv:2607.27853. Matched
+  keywords: (none — fallback bundle). Abstract: Powered by advances in LLMs and autonomous
+  agents, deep research has become one of the most widely adopted agentic products.
+  However, most deep research systems write general-purpose reports, which are inadequate
+  for financial deep research. Financial research demands specialized knowledge to
+  analyze historical patterns and forecast upcoming events. Automating financial deep
+  research therefore ... REQUIRES HUMAN REVIEW before deployment.
+
+  '
+asset_class: future
+bundle: tquant_future
+start: '2020-01-01'
+end: '2026-04-30'
+capital_base: 5000000
+params:
+  root_symbol: TX
+  position_contracts: 1
+  days_before_close: 10
+  per_contract_cost:
+    TX: 150
+    MTX: 60
+  spread_points: 6.0
+tags:
+- paper
+- auto-generated
+- needs-review
+- taiwan
+- futures
+- index-future
+- baseline
+- buy-and-hold
+requires_tej_key: true
+requires_review: true
+extra_deps: []
+symbols:
+- TX
+spec_version: 1
+source:
+  kind: generated
+  generator: quant_crawler.strategy_gen
+  generator_version: '1.0'
+  generated_at: '2026-08-15T22:32:57Z'
+  template: buy_and_hold
+  matched_keywords: []
+  inputs:
+    paper:
+      source: arxiv
+      source_id: '2607.27853'
+      title: 'FinanceHarness: Autonomous Financial Deep Research Framework'
+      authors:
+      - Yijia Xiao
+      - Rujun Han
+      - Yanfei Chen
+      - Zifeng Wang
+      - Ke Jiang
+      - Zhongying CuiZhu
+      - Vishy Tirumalashetty
+      - Wei Wang
+      - Burak Gokturk
+      - Tomas Pfister
+      - Chen-Yu Lee
+      published: '2026-07-30T08:32:04Z'
+      url: http://arxiv.org/abs/2607.27853v2
+      categories:
+      - cs.CL
+      - cs.AI
+      - q-fin.CP
+  updated_at: '2026-08-19T22:30:27Z'
+review_checklist:
+- Replace `_generate_signal()` with the paper's actual signal formula
+- Verify default params match the paper (lookback, thresholds, etc.)
+- Confirm cost / slippage assumptions for the target instrument
+- Set `requires_review: false` only after a human has signed off

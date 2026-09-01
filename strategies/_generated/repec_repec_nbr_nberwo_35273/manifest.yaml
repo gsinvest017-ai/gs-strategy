@@ -1,0 +1,68 @@
+id: repec_repec_nbr_nberwo_35273
+name: The Growth and Performance of Artificial Intelligence in Asset Management
+description: 'Auto-generated buy_and_hold skeleton seeded from repec:RePEc:nbr:nberwo:35273.
+  Matched keywords: (none — fallback bundle). Abstract: We examine the growth and
+  performance of AI-driven investing. Using investment  advisers'' regulatory disclosures,
+  labor market data, and fund strategy  descriptions, we document that AI-driven investing
+  has grown steadily since  the early 2010s and is concentrated among hedge funds.
+  AI hedge funds  outperformed non-AI hedge funds in the early years, but this outperformance  declined
+  over time, ... REQUIRES HUMAN REVIEW before deployment.
+
+  '
+asset_class: future
+bundle: tquant_future
+start: '2020-01-01'
+end: '2026-04-30'
+capital_base: 5000000
+params:
+  root_symbol: TX
+  position_contracts: 1
+  days_before_close: 10
+  per_contract_cost:
+    TX: 150
+    MTX: 60
+  spread_points: 6.0
+tags:
+- paper
+- auto-generated
+- needs-review
+- taiwan
+- futures
+- index-future
+- baseline
+- buy-and-hold
+requires_tej_key: true
+requires_review: true
+extra_deps: []
+symbols:
+- TX
+spec_version: 1
+source:
+  kind: generated
+  generator: quant_crawler.strategy_gen
+  generator_version: '1.0'
+  generated_at: '2026-06-23T22:30:22Z'
+  template: buy_and_hold
+  matched_keywords: []
+  inputs:
+    paper:
+      source: repec
+      source_id: RePEc:nbr:nberwo:35273
+      title: The Growth and Performance of Artificial Intelligence in Asset Management
+      authors:
+      - Shuang Chen
+      - Clemens Sialm
+      - David X. Xu
+      published: '2026-01-01'
+      url: https://econpapers.repec.org/RePEc:nbr:nberwo:35273?ref=nep-fmk
+      categories:
+      - nep:nep-fmk
+      - jel:G11
+      - jel:G23
+      - jel:G24
+  updated_at: '2026-06-30T22:30:56Z'
+review_checklist:
+- Replace `_generate_signal()` with the paper's actual signal formula
+- Verify default params match the paper (lookback, thresholds, etc.)
+- Confirm cost / slippage assumptions for the target instrument
+- Set `requires_review: false` only after a human has signed off

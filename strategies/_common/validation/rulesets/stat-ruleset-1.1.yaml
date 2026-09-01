@@ -269,6 +269,9 @@ base:
     origin: extension
     must_report: [vr_profile, ljung_box_p, runs_p, permutation_entropy, hurst_dfa]
     impl: strategies/_common/validation/tradability.py
+    impl_status: >
+      尚未在 main 上——tradability.py 目前只存在於未合併的
+      dev/pv-mtf-mdd-disposition。這一關要等那條分支落地才跑得動。
     verdict_note: >
       這一關檢定的是「標的」不是「策略」，所以不進入 N（見 §四）。
       通過只代表序列在這個樣本上可與隨機漫步區分，是必要條件不是充分條件。
@@ -393,7 +396,10 @@ multiplicity:
         - Deflated Sharpe Ratio，N 讀 ledger 的 selection trial 數
         - 跨 M 個策略另做 Hansen SPA（或 White Reality Check）
         - 需要逐一指認哪些勝出時用 Romano-Wolf StepM
-      impl: strategies/_common/validation/{sharpe,pbo,reality_check}.py
+      impl: strategies/_common/validation/{sharpe,pbo}.py（DSR / PBO 在 main 上）
+      impl_status: >
+        SPA / Reality Check 那一腿在 reality_check.py，目前只存在於未合併的
+        dev/pv-mtf-mdd-disposition。在它落地之前 best_of_M 只能做到 DSR + PBO。
       cite: Bailey & López de Prado (2014)；規範 §一 關卡四、§二
 
   no_preregistration_penalty:

@@ -1,0 +1,69 @@
+id: arxiv_2607_08199
+name: 'Volatility in Prediction Markets: A Structural Approach'
+description: 'Auto-generated buy_and_hold skeleton seeded from arxiv:2607.08199. Matched
+  keywords: (none — fallback bundle). Abstract: Forward-looking volatility forecasts
+  are central inputs to derivatives pricing, market making, risk management, and volatility-linked
+  trading strategies, with ARCH and GARCH models serving as the canonical workhorses.
+  Such models are natural in standard asset markets, where prices are positive-valued
+  stochastic processes and volatility is typically inferred from return dynamics.
+  Prediction mark... REQUIRES HUMAN REVIEW before deployment.
+
+  '
+asset_class: future
+bundle: tquant_future
+start: '2020-01-01'
+end: '2026-04-30'
+capital_base: 5000000
+params:
+  root_symbol: TX
+  position_contracts: 1
+  days_before_close: 10
+  per_contract_cost:
+    TX: 150
+    MTX: 60
+  spread_points: 6.0
+tags:
+- paper
+- auto-generated
+- needs-review
+- taiwan
+- futures
+- index-future
+- carry
+- volatility
+- market-making
+- baseline
+- buy-and-hold
+requires_tej_key: true
+requires_review: true
+extra_deps: []
+symbols:
+- TX
+spec_version: 1
+source:
+  kind: generated
+  generator: quant_crawler.strategy_gen
+  generator_version: '1.0'
+  generated_at: '2026-07-23T22:31:56Z'
+  template: buy_and_hold
+  matched_keywords: []
+  inputs:
+    paper:
+      source: arxiv
+      source_id: '2607.08199'
+      title: 'Volatility in Prediction Markets: A Structural Approach'
+      authors:
+      - Weiye Xi
+      - Ciamac C. Moallemi
+      - Mallesh Pai
+      - Shouqiao Wang
+      published: '2026-07-09T07:57:43Z'
+      url: http://arxiv.org/abs/2607.08199v2
+      categories:
+      - q-fin.TR
+  updated_at: '2026-07-26T22:30:19Z'
+review_checklist:
+- Replace `_generate_signal()` with the paper's actual signal formula
+- Verify default params match the paper (lookback, thresholds, etc.)
+- Confirm cost / slippage assumptions for the target instrument
+- Set `requires_review: false` only after a human has signed off

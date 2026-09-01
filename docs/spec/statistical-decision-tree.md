@@ -4,6 +4,12 @@
 > 實作：`strategies/_common/validation/decision.py`
 > 依據：《策略研究統計檢定規範 v1.1》（gs-bulltrap-plan/docs/統計檢定規範.md）
 
+> **模組可用性（2026-09-01 查證）**：`reality_check.py`（White RC / Hansen SPA /
+> Romano-Wolf StepM）與 `tradability.py`（VR / Hurst / permutation entropy /
+> Ljung-Box / runs test）**目前只存在於未合併的 `dev/pv-mtf-mdd-disposition`**，
+> `main` 上沒有。本文件先前把它們寫成現成可用，那是錯的。凡是依賴這兩支的
+> 環節（L2 標的可交易性、`best_of_M` 的 SPA/RC 腿），要等那條分支落地才跑得動。
+
 ---
 
 ## 0. 這份文件要解決的問題
@@ -298,7 +304,10 @@ L0 機械分診（見 `auto-research-funnel.md`）做的是檔案比對，不是
   資料有偏差一樣全部作廢。
 - **`n_eff` 由呼叫端宣告，本樹不驗算。** 它拒絕在 `n_eff` 缺值時作答，但無法判斷
   你填的 520 是不是真的。事件簇的客觀定義（EVT declustering）是另一項工作。
-- **online FDR 尚未接線。** `open_mining` 的 `also_required: [online_fdr]` 目前只是
-  一個宣告，ADDIS 的 alpha-wealth 追蹤還沒有實作。
+- **online FDR 的 p 值來源要自己接。** ADDIS 本身已實作
+  （`validation/online_fdr.py`，並在測試裡對 `online-fdr` 套件逐步交叉驗證），
+  但「策略搜尋的 p 值該怎麼定義」沒有現成答案——把 anytime-valid 直接套在
+  Sharpe 上的論文查無。所以 `AddisBudget.test_one` 強制要求 `p_value_source`，
+  而那個定義必須在 pre-registration 裡凍結。
 - **把 e-value / anytime-valid 直接套在 Sharpe 或策略搜尋上的論文查無。** 若日後
   要走那條路，是自己接線不是照抄，且必須在 pre-registration 裡寫明 p 值的定義與來源。

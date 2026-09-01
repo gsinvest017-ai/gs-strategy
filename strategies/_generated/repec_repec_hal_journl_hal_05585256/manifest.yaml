@@ -1,0 +1,65 @@
+id: repec_repec_hal_journl_hal_05585256
+name: 'Bank credit risk and sovereign debt exposure: Moral hazard or hedging?'
+description: 'Auto-generated buy_and_hold skeleton seeded from repec:RePEc:hal:journl:hal-05585256.
+  Matched keywords: (none — fallback bundle). Abstract: This study investigates the
+  relationship between credit risk and bank exposure  to sovereign debt. Using an
+  international dataset of commercial banks from  2002 to 2022, we apply various regressions
+  and panel data models to address  potential endogeneity issues. Our results reveal
+  that banks with higher levels  of impaired loans tend to hold more sovereign debt.
+  Furthermore, we observe  that th... REQUIRES HUMAN REVIEW before deployment.
+
+  '
+asset_class: future
+bundle: tquant_future
+start: '2020-01-01'
+end: '2026-04-30'
+capital_base: 5000000
+params:
+  root_symbol: TX
+  position_contracts: 1
+  days_before_close: 10
+  per_contract_cost:
+    TX: 150
+    MTX: 60
+  spread_points: 6.0
+tags:
+- paper
+- auto-generated
+- needs-review
+- taiwan
+- futures
+- index-future
+- baseline
+- buy-and-hold
+requires_tej_key: true
+requires_review: true
+extra_deps: []
+symbols:
+- TX
+spec_version: 1
+source:
+  kind: generated
+  generator: quant_crawler.strategy_gen
+  generator_version: '1.0'
+  generated_at: '2026-05-27T22:31:25Z'
+  template: buy_and_hold
+  matched_keywords: []
+  inputs:
+    paper:
+      source: repec
+      source_id: RePEc:hal:journl:hal-05585256
+      title: 'Bank credit risk and sovereign debt exposure: Moral hazard or hedging?'
+      authors:
+      - Laura Baselga-Pascual
+      - Lidia Loban
+      - Emma-Riikka Myllymäki (Audencia Business School)
+      published: '2025-01-01'
+      url: https://econpapers.repec.org/RePEc:hal:journl:hal-05585256?ref=nep-fmk
+      categories:
+      - nep:nep-fmk
+  updated_at: '2026-09-01T01:11:56Z'
+review_checklist:
+- Replace `_generate_signal()` with the paper's actual signal formula
+- Verify default params match the paper (lookback, thresholds, etc.)
+- Confirm cost / slippage assumptions for the target instrument
+- Set `requires_review: false` only after a human has signed off

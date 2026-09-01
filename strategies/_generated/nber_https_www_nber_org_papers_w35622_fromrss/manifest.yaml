@@ -1,0 +1,62 @@
+id: nber_https_www_nber_org_papers_w35622_fromrss
+name: 'Virtual Tutoring with Computer-Assisted Learning: An Experiment in Take-Up
+  and Learning -- by Philip Oreopoulos, Ruochong Dong, Nina Low'
+description: 'Auto-generated buy_and_hold skeleton seeded from nber:https://www.nber.org/papers/w35622#fromrss.
+  Matched keywords: (none — fallback bundle). Abstract: We explore the efficacy of
+  an online after-school tutoring program that complements teacher-provided computer-assisted
+  learning practice. The aim is to scaffold students struggling with online Khan Academy
+  practice at school with low-cost, one-on-one virtual supervision for about an hour
+  a week at home. In a two-year randomized trial with the Toronto District School
+  Board, teachers identified s... REQUIRES HUMAN REVIEW before deployment.
+
+  '
+asset_class: future
+bundle: tquant_future
+start: '2020-01-01'
+end: '2026-04-30'
+capital_base: 5000000
+params:
+  root_symbol: TX
+  position_contracts: 1
+  days_before_close: 10
+  per_contract_cost:
+    TX: 150
+    MTX: 60
+  spread_points: 6.0
+tags:
+- paper
+- auto-generated
+- needs-review
+- taiwan
+- futures
+- index-future
+- baseline
+- buy-and-hold
+requires_tej_key: true
+requires_review: true
+extra_deps: []
+symbols:
+- TX
+spec_version: 1
+source:
+  kind: generated
+  generator: quant_crawler.strategy_gen
+  generator_version: '1.0'
+  generated_at: '2026-08-17T22:30:20Z'
+  template: buy_and_hold
+  matched_keywords: []
+  inputs:
+    paper:
+      source: nber
+      source_id: https://www.nber.org/papers/w35622#fromrss
+      title: 'Virtual Tutoring with Computer-Assisted Learning: An Experiment in Take-Up
+        and Learning -- by Philip Oreopoulos, Ruochong Dong, Nina Low'
+      authors: []
+      published: '2026-08-21'
+      url: https://www.nber.org/papers/w35622#fromrss
+  updated_at: '2026-08-20T22:32:11Z'
+review_checklist:
+- Replace `_generate_signal()` with the paper's actual signal formula
+- Verify default params match the paper (lookback, thresholds, etc.)
+- Confirm cost / slippage assumptions for the target instrument
+- Set `requires_review: false` only after a human has signed off

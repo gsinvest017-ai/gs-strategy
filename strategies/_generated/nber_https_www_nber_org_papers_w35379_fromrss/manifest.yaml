@@ -1,0 +1,53 @@
+id: nber_https_www_nber_org_papers_w35379_fromrss
+name: "Leaning Against Inflation Experiences -- by Stefan Nagel"
+description: |
+  Auto-generated buy_and_hold skeleton seeded from nber:https://www.nber.org/papers/w35379#fromrss. Matched keywords: (none — fallback bundle). Abstract: A large share of secular variation in real interest rates can be understood as the effect of monetary policy leaning against experience-based long-run inflation expectations. Survey microdata show that adaptive learning from experienced inflation generates highly persistent, slow-moving long-run inflation expectations. When expectations are shaped by experience, central banks cannot anchor them... REQUIRES HUMAN REVIEW before deployment.
+asset_class: future
+bundle: tquant_future
+start: '2020-01-01'
+end: '2026-04-30'
+capital_base: 5000000
+params:
+  root_symbol: TX
+  position_contracts: 1
+  days_before_close: 10
+  per_contract_cost:
+    TX: 150
+    MTX: 60
+  spread_points: 6.0
+tags:
+- paper
+- auto-generated
+- needs-review
+- taiwan
+- futures
+- index-future
+- baseline
+- buy-and-hold
+requires_tej_key: true
+requires_review: true
+extra_deps: []
+symbols:
+- TX
+spec_version: 1
+source:
+  kind: generated
+  generator: quant_crawler.strategy_gen
+  generator_version: '1.0'
+  generated_at: '2026-06-30T22:30:56Z'
+  template: buy_and_hold
+  matched_keywords: []
+  inputs:
+    paper:
+      source: nber
+      source_id: "https://www.nber.org/papers/w35379#fromrss"
+      title: "Leaning Against Inflation Experiences -- by Stefan Nagel"
+      authors: []
+      published: '2026-07-01'
+      url: "https://www.nber.org/papers/w35379#fromrss"
+
+review_checklist:
+  - Replace `_generate_signal()` with the paper's actual signal formula
+  - Verify default params match the paper (lookback, thresholds, etc.)
+  - Confirm cost / slippage assumptions for the target instrument
+  - Set `requires_review: false` only after a human has signed off

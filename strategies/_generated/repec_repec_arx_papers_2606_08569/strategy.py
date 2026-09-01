@@ -1,0 +1,78 @@
+"""Auto-generated MOMENTUM skeleton bundle.
+
+Source paper: Stock Investment: The p-index Approach
+              https://econpapers.repec.org/RePEc:arx:papers:2606.08569?ref=nep-fmk
+
+DO NOT TRADE AS-IS. This file is a *placeholder* produced by
+``quant_crawler.strategy_gen``. The signal function ``_generate_signal``
+returns 0, so the strategy never opens a position. A human must replace
+the body of ``_generate_signal`` with the paper's actual logic and then
+flip ``manifest.requires_review`` to ``false``.
+
+Template defaults follow the 12-1 TSMOM convention (Moskowitz/Ooi/Pedersen
+2012). Edit ``manifest.params`` per-run; this file reads them via
+``context.params`` so dashboard overrides take effect automatically.
+"""
+from __future__ import annotations
+
+import numpy as np
+
+from futures_setup import (
+    apply_taiwan_futures_costs,
+    make_continuous_taiwan_futures,
+    make_roll_futures_handler,
+)
+from zipline.api import (
+    date_rules,
+    order_target,
+    record,
+    schedule_function,
+    time_rules,
+)
+
+
+def _generate_signal(prices: np.ndarray, lookback: int, skip: int) -> int:
+    """SKELETON: returns 0 (no position) until a human fills in the signal.
+
+    Replace this with the paper's actual scoring rule, e.g.:
+        return int(np.sign(log(prices[-skip-1]) - log(prices[-skip-lookback-1])))
+    """
+    return 0
+
+
+def initialize(context):
+    p = context.params
+    context.root = str(p.get("root_symbol", "TX"))
+    context.lookback = int(p.get("lookback", 252))
+    context.skip = int(p.get("skip", 21))
+    context.allow_short = bool(p.get("allow_short", True))
+    context.position_contracts = int(p.get("position_contracts", 1))
+    days_before_close = int(p.get("days_before_close", 10))
+
+    apply_taiwan_futures_costs(
+        per_contract_cost=p.get("per_contract_cost"),
+        spread_points=p.get("spread_points"),
+    )
+    [context.cont] = make_continuous_taiwan_futures([context.root])
+    schedule_function(
+        make_roll_futures_handler(days_before_close=days_before_close),
+        date_rules.every_day(),
+        time_rules.market_close(minutes=30),
+    )
+
+
+def handle_data(context, data):
+    need = context.lookback + context.skip + 1
+    history = data.history(context.cont, "close", need, "1d")
+    if history.isna().any() or len(history) < need:
+        return
+    prices = history.values
+    sig = _generate_signal(prices, context.lookback, context.skip)
+    if sig == 0 or (sig < 0 and not context.allow_short):
+        target = 0
+    else:
+        target = int(np.sign(sig)) * context.position_contracts
+    front = data.current(context.cont, "contract")
+    if front is not None:
+        order_target(front, target)
+    record(signal=sig, target_contracts=target)

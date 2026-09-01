@@ -1,0 +1,71 @@
+id: repec_repec_cnb_wpaper_2026
+name: 'Hedging Against Inflation: International Evidence on Investor Clientele Effects'
+description: 'Auto-generated buy_and_hold skeleton seeded from repec:RePEc:cnb:wpaper:2026.
+  Matched keywords: (none — fallback bundle). Abstract: Governments across the world
+  have issued inflation-linked debt to finance  their deficits. Recent advances in
+  asset pricing models recognize that there  may be clientele effects that affect
+  relative prices, especially in bond  markets. We study investor demand for inflation-linked
+  bonds using detailed  bond portfolio data. Our analysis reveals pronounced market
+  segmentation:  insurance companie... REQUIRES HUMAN REVIEW before deployment.
+
+  '
+asset_class: future
+bundle: tquant_future
+start: '2020-01-01'
+end: '2026-04-30'
+capital_base: 5000000
+params:
+  root_symbol: TX
+  position_contracts: 1
+  days_before_close: 10
+  per_contract_cost:
+    TX: 150
+    MTX: 60
+  spread_points: 6.0
+tags:
+- paper
+- auto-generated
+- needs-review
+- taiwan
+- futures
+- index-future
+- event-driven
+- baseline
+- buy-and-hold
+requires_tej_key: true
+requires_review: true
+extra_deps: []
+symbols:
+- TX
+spec_version: 1
+source:
+  kind: generated
+  generator: quant_crawler.strategy_gen
+  generator_version: '1.0'
+  generated_at: '2026-05-27T22:31:24Z'
+  template: buy_and_hold
+  matched_keywords: []
+  inputs:
+    paper:
+      source: repec
+      source_id: RePEc:cnb:wpaper:2026
+      title: 'Hedging Against Inflation: International Evidence on Investor Clientele
+        Effects'
+      authors:
+      - Martijn Boermans
+      - Laurens Swinkels
+      published: '2026-01-01'
+      url: https://econpapers.repec.org/RePEc:cnb:wpaper:2026/08?ref=nep-fmk
+      categories:
+      - nep:nep-fmk
+      - jel:F21
+      - jel:G11
+      - jel:G15
+      - jel:G22
+      - jel:G23
+  updated_at: '2026-06-07T22:30:20Z'
+review_checklist:
+- Replace `_generate_signal()` with the paper's actual signal formula
+- Verify default params match the paper (lookback, thresholds, etc.)
+- Confirm cost / slippage assumptions for the target instrument
+- Set `requires_review: false` only after a human has signed off
