@@ -2,3 +2,4 @@ requests>=2.31
 feedparser>=6.0
 beautifulsoup4>=4.12
 lxml>=5.0
+ftfy>=6.3          # mojibake 還原：多層編碼(latin-1 外層 + cp1252 內層)自寫往返修不乾淨
