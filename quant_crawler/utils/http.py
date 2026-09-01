@@ -43,13 +43,19 @@ def _fix_charset_fallback(resp: Response) -> None:
     修在這一層而不是各個 crawler 裡，是因為六個 crawler（aqr / arxiv / fed /
     nber / repec / wiley）全都吃 ``resp.text``，逐一修等於留六個可以再犯的地方。
     """
-    declared = "charset=" in resp.headers.get("content-type", "").lower()
-    if declared or resp.encoding != _REQUESTS_CHARSET_FALLBACK:
+    # 用 getattr 而不是直接取屬性：測試用的 MagicMock(spec=Response) 沒有
+    # `encoding`（它是 __init__ 裡設的實例屬性，不在 class 的 spec 裡）。
+    # 拿不到就代表這不是一個正常的 requests.Response，沒有東西可修。
+    encoding = getattr(resp, "encoding", None)
+    if encoding != _REQUESTS_CHARSET_FALLBACK:
         return
-    guess = resp.apparent_encoding
-    if not guess:
+    headers = getattr(resp, "headers", None) or {}
+    if "charset=" in str(headers.get("content-type", "")).lower():
+        return                      # 伺服器明確宣告了，那是宣告不是猜測
+    guess = getattr(resp, "apparent_encoding", None)
+    if not guess or guess == encoding:
         return
-    log.debug("no charset on %s; %s -> %s", resp.url, resp.encoding, guess)
+    log.debug("no charset on %s; %s -> %s", getattr(resp, "url", "?"), encoding, guess)
     resp.encoding = guess
 
 
