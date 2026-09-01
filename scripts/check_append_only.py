@@ -37,11 +37,31 @@ import subprocess
 import sys
 from dataclasses import dataclass
 
-#: 一旦 commit 就凍結的路徑（前綴比對）。新增檔案永遠允許。
-FROZEN_PREFIXES = ("experiments/preregistration/",)
+#: 登記檔所在的目錄。
+PREREG_DIR = "experiments/preregistration/"
+
+#: 這個目錄裡**不是**登記檔的東西。範本與說明文件要能改——凍結它們沒有保護
+#: 到任何統計宣稱，只會讓文件永遠修不了，然後大家開始習慣性地 --no-verify，
+#: 那才是真正的損失。（端到端測試第一版就撞到這個：連 README 都擋。）
+PREREG_NON_REGISTRATION = {"TEMPLATE.yaml", "README.md"}
 
 #: 只准在檔尾追加的檔案。
 APPEND_ONLY_PATHS = ("log/trials.jsonl",)
+
+
+def is_frozen_registration(path: str) -> bool:
+    """這個路徑是不是一份「一旦 commit 就凍結」的登記檔。
+
+    判準刻意窄：必須在登記目錄下、是 ``.yaml``、而且不在
+    :data:`PREREG_NON_REGISTRATION` 裡。把整個目錄都凍結起來很省事，但那會
+    連範本和說明一起鎖死，逼人養成繞過 hook 的習慣。
+    """
+    if not path.startswith(PREREG_DIR):
+        return False
+    name = path[len(PREREG_DIR):]
+    if "/" in name:                      # 子目錄先不納入，需要時再擴充
+        return False
+    return name.endswith(".yaml") and name not in PREREG_NON_REGISTRATION
 
 
 @dataclass
@@ -98,12 +118,9 @@ def _staged_lines(path: str) -> list[str] | None:
 def check(rev_range: str | None = None, base: str = "HEAD") -> list[Violation]:
     violations: list[Violation] = []
     for status, old_path, new_path in _staged_changes(rev_range):
-        # --- 凍結的路徑：只准新增 ---------------------------------------
-        for prefix in FROZEN_PREFIXES:
-            if not (old_path.startswith(prefix) or new_path.startswith(prefix)):
-                continue
-            if status == "A":
-                continue                                  # 新增永遠可以
+        # --- 登記檔：只准新增 -------------------------------------------
+        if ((is_frozen_registration(old_path) or is_frozen_registration(new_path))
+                and status != "A"):
             kind = {"M": "修改", "D": "刪除"}.get(status[0], f"變更（{status}）")
             if status.startswith("R"):
                 kind = "改名"

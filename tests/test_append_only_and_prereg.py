@@ -92,6 +92,25 @@ def test_unrelated_files_are_untouched(repo):
     assert cao.check() == []
 
 
+def test_readme_and_template_in_the_prereg_dir_stay_editable(repo):
+    """凍結的是登記檔，不是那個目錄。
+
+    第一版把整個目錄凍住，端到端測試立刻撞上——連 README 都改不了。那沒有
+    保護到任何統計宣稱，只會逼人養成 --no-verify 的習慣，而那才是真正的損失。
+    """
+    _stage(repo, "experiments/preregistration/README.md", "說明改一改\n")
+    _stage(repo, "experiments/preregistration/TEMPLATE.yaml", "schema: x\n")
+    assert cao.check() == []
+
+
+def test_frozen_predicate_is_narrow_and_explicit():
+    assert cao.is_frozen_registration("experiments/preregistration/001-a.yaml")
+    assert not cao.is_frozen_registration("experiments/preregistration/README.md")
+    assert not cao.is_frozen_registration("experiments/preregistration/TEMPLATE.yaml")
+    assert not cao.is_frozen_registration("experiments/other/001-a.yaml")
+    assert not cao.is_frozen_registration("experiments/preregistration/notes.txt")
+
+
 # ---------------------------------------------------------------------------
 # 二、ledger 只准追加
 # ---------------------------------------------------------------------------
