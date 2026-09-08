@@ -20,6 +20,10 @@ data/papers.db-journal
 data/pdfs/
 data/raw/
 data/cache/
+.claude/local/
 
 # pytest CI artifacts
 pytest-report.xml
+
+# quantdata query cache (content-addressed, regenerable)
+data/qd_cache/
