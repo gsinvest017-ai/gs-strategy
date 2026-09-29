@@ -240,6 +240,21 @@ React Flow 僅採用 Phase B 畫布、互動接點與自訂卡片；所有型別
 
 ## 附錄 B：Phase A 本機 HTTP JSON API
 
+### Phase B 新增契約（既有端點行為維持）
+
+| Method / endpoint | Payload / 回應 |
+|---|---|
+| GET `/api/session` | `{fixture:boolean, label:string}`；fixture 時 label 固定為 `FIXTURE 資料・獨立 ledger`，不得回傳暫存絕對路徑 |
+| GET `/api/run-estimate` | `{graph_hash,backtest_key,selection_n,already_recorded,delta_n,next_selection_n}`；只釘選資料版本並以參數、實作指紋、上游 hash 計算，不執行節點、不讀取績效、不追加 ledger；缺接點／不可快取上游則 400。already_recorded=true 時 delta_n=0，否則 1；next_selection_n=selection_n+delta_n。graph_hash 為目前文件 hash，backtest_key 為本次解析資料版本的執行鍵；實際執行前資料版本或 ledger 改變時必須重新預判 |
+| GET `/api/layout` | `{schema:"live-strategy-layout/1",positions:{node_id:{x:number,y:number}},path}`；對應目前 `strategies/<id>/graph.layout.json`，不存在時 positions 為空，前端依階段排版 |
+| POST `/api/layout` | `{positions:{node_id:{x:number,y:number}}}` → 同 GET；有限座標、已知 node id，整筆驗證後固定鍵序與兩格縮排寫入獨立檔。不更改 graph、dirty、節點狀態、graph hash、backtest_key 或 N |
+
+UI 由同一 GraphHTTPServer 提供 `/` 與本地 `/assets/*`，使用既有 Host／Origin 邊界；不提供任意工作區檔案。執行時 JS、CSS、字型皆來自同一 origin。
+
+`graph-ui --fixture` 使用 Phase A 合成 bundle 與每次啟動獨立的系統暫存工作區（graph、layout、cache、sidecar、ledger 全隔離），禁止接受會覆寫隔離位置的 ledger/cache/root 參數。真實模式維持原 ledger。fixture 頂列常駐標記，不需 TEJ 金鑰。前端使用約 300ms 防抖，只保留最新編輯；取消舊 preview 並確認 worker 結束後才提交新參數與 preview，絕不自動 run。preview 與 run 共用既有 job API。
+
+版面僅經 layout 端點保存；從 sidecar 載入仍用既有端點並顯示 warnings。N 預判為提示，成功執行後以 `/api/ledger` 為準。
+
 啟動：`bash run.sh graph-api --port 9102` 或 `./run.ps1 graph-api --port 9102`。
 預設及目前允許的綁定位址為 `127.0.0.1`。Phase A 不提供 HTML 畫布。
 所有 POST 需 `Content-Type: application/json`，body 上限 2 MB；拒絕外部 Origin／Host。
