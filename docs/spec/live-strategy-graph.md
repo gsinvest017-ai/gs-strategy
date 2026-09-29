@@ -212,3 +212,25 @@ harness 的 trials 搜尋樹（`:9101/trials`）以「一次試驗」為節點�
 - **diagnostic 模式**：必須在執行前宣告一組參數網格，結果只以反應面呈現；日後若有 selection trial 採用了該網格內的值，
   N 須追加整個網格的大小（看過 k 個選項再挑一個，等同 best-of-k）。這會改變 N 記帳規則，
   所以 MUST 與 `stat-ruleset-1.2` 一起修訂，不得單獨在程式裡實作。
+
+## 附錄 A：技術選型（Phase A，2026-09-29）
+
+GitHub API 當日快照；stars 不是品質保證，維護狀態以最後 push 及 archived 為依據。
+
+| 候選 | Stars | 最近 push | License | R1 / R2 / R5 | 判定 |
+|---|---:|---|---|---|---|
+| [Apache Hamilton](https://github.com/apache/hamilton) | 2,601 | 2026-09-29 | Apache-2.0 | Python 型別 DAG / 支援快取 / 需自訂不可繞過記帳 | build |
+| [React Flow / xyflow](https://github.com/xyflow/xyflow) | 38,537 | 2026-09-24 | MIT | 可自訂接點驗證 / 狀態顯示需後端 / 記帳需後端 | partial：Phase B 採用畫布 |
+| [LiteGraph](https://github.com/jagenjo/litegraph.js) | 8,158 | 2024-08-01 | MIT | 接點與 JSON 完整 / JavaScript 執行非 Python / 記帳需後端 | 不採用 |
+
+三者皆未 archived。Hamilton 適合由 Python 函式宣告資料依賴，但本案需要由固定節點白名單載入使用者 JSON 接線、隔離預覽與明確回測、將取消與 ledger 提交序列化。採用它仍須包覆上述生命週期。MVP 僅十三種節點，選擇 stdlib 小型執行核心，避免雙重 DAG 狀態；代價是自行維護快取與排程測試。實作使用與 triage 相同的 AST 去 docstring 正規化，並把明示 helper 依賴納入指紋。
+
+React Flow 僅採用 Phase B 畫布、互動接點與自訂卡片；所有型別驗證、回測授權邊界與 R5 仍以 Python 為唯一真相。LiteGraph 最後更新較早，且內建 JavaScript 執行器與本案 CPU Zipline 事件迴圈重複，無採用優勢。
+
+### 核心契約
+
+`strategies._common.graph`：`NodeType(id, inputs, outputs, params, function, dependencies=(), cacheable=True)`；函式接受 `(inputs, params, context)` 並回傳依輸出接點命名的 dict。參數 schema 使用 JSON Schema 的 type/default/minimum/maximum/enum 子集。helper 函式或 Python 模組 Path 必須列入 dependencies。
+
+圖格式為 `schema: live-strategy-graph/1`、`nodes: [{id,type,params}]`、`edges: [{from:[node,port],to:[node,port]}]`。固定鍵排序與兩格縮排。接點名稱使用規格型別名稱（例如 `Returns`）。節點 hash 含實作、參數及上游 hash；圖 hash 含正規化圖與所有實作指紋。資料來源必須將資料版本納入參數以避免 bundle 更新後重用舊快取。
+
+`Context` 提供 token、ledger、services、progress。成功 Backtest（含快取重播）必經 `ledger.record_success(graph_hash,snapshot,outputs,context)`；取消與提交共用鎖。ledger 節點為非快取外部來源，完整執行時在回測提交後取樣，讓報告使用最新 N。統計失敗不阻擋已成功回測記帳。HTTP 不接收任意 Python 或 pickle。
