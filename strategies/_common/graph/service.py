@@ -121,8 +121,11 @@ class GraphService:
         self.fixture = False
 
     def session(self):
-        return {'fixture': self.fixture,
-                'label': 'FIXTURE 資料・獨立 ledger' if self.fixture else ''}
+        result = {'fixture': self.fixture,
+                  'label': 'FIXTURE 資料・獨立 ledger' if self.fixture else ''}
+        if hasattr(self, 'initial_graph_path'):
+            result['graph_path'] = self.initial_graph_path
+        return result
 
     def run_estimate(self):
         with self.lock:

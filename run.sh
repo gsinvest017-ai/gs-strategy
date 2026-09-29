@@ -9,6 +9,7 @@
 #   ./run.sh test         # pytest tests/
 #   ./run.sh graph-api    # local JSON API (requires setup-bt)
 #   ./run.sh graph-run    # execute graph (requires setup-bt)
+#   ./run.sh graph-ui     # local editor; --fixture uses an isolated ledger
 #   ./run.sh help
 set -euo pipefail
 
@@ -100,6 +101,9 @@ cmd_graph() {
         graph_py="${ROOT_DIR}/.venv-bt/Scripts/python.exe"
     fi
     export PYTHONUTF8=1
+    if [[ "${mode}" == "ui" ]]; then
+        "${graph_py}" "${ROOT_DIR}/scripts/build_graph_ui.py"
+    fi
     exec "${graph_py}" -m strategies._common.graph "${mode}" "$@"
 }
 
@@ -108,6 +112,7 @@ SUBCMD="${1:-webui}"
 case "${SUBCMD}" in
     graph-api) shift; cmd_graph serve "$@" ;;
     graph-run) shift; cmd_graph run "$@" ;;
+    graph-ui) shift; cmd_graph ui "$@" ;;
     setup)    shift; cmd_setup  "$@" ;;
     webui)    shift || true; cmd_webui "$@" ;;
     crawl)    shift; cmd_crawl  "$@" ;;

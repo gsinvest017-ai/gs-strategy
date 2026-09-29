@@ -170,3 +170,47 @@ def test_ui_initialization_failure_does_not_expose_external_text(monkeypatch, ca
     captured = capsys.readouterr()
     assert 'excluded' not in captured.out + captured.err
     assert json.loads(captured.out) == {'error': 'graph UI could not start or continue'}
+
+def test_ui_invalid_edge_still_serves_controlled_load_error(tmp_path, monkeypatch):
+    from strategies._common.graph import __main__ as cli
+    from strategies._common.graph.service import write_json
+    service = make_service(tmp_path)
+    graph = copy.deepcopy(service.graph)
+    graph['edges'][0]['to'] = ['report', 'LedgerN']
+    graph_path = 'strategies/custom_choice/graph.json'
+    write_json(tmp_path / graph_path, graph)
+    service.graph = None
+    service.path = None
+    monkeypatch.setattr(cli, 'GraphService', lambda *args, **kwargs: service)
+    original = GraphHTTPServer.serve_forever
+    observed = []
+    def inspect(server):
+        worker = threading.Thread(target=original, args=(server,), daemon=True)
+        worker.start()
+        try:
+            base = f'http://127.0.0.1:{server.server_port}'
+            with urlopen(base + '/api/session') as response:
+                assert json.load(response)['graph_path'] == graph_path
+            with urlopen(base + '/api/graph') as response:
+                assert json.load(response)['graph'] is None
+            request = Request(base + '/api/graph/load',
+                              data=json.dumps({'path': graph_path}).encode(),
+                              headers={'Content-Type': 'application/json'})
+            with pytest.raises(HTTPError) as caught:
+                urlopen(request)
+            assert caught.value.code == 400
+            assert 'invalid edge at index' in json.load(caught.value)['error']
+            observed.append(True)
+        finally:
+            server.shutdown()
+            worker.join()
+    monkeypatch.setattr(GraphHTTPServer, 'serve_forever', inspect)
+    assert cli.main(['ui', '--root', str(tmp_path), '--graph', graph_path, '--port', '0']) == 0
+    assert observed == [True]
+
+
+def test_session_graph_path_is_opt_in(tmp_path):
+    service = make_service(tmp_path)
+    assert 'graph_path' not in service.session()
+    service.initial_graph_path = 'strategies/custom_choice/graph.json'
+    assert service.session()['graph_path'] == 'strategies/custom_choice/graph.json'

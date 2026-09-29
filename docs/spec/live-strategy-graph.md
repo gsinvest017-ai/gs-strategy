@@ -1,6 +1,6 @@
 # 即時策略圖（Live Strategy Graph）規格
 
-> 狀態：已確認；Phase A 已實作，R5 統計不足邊界見附錄 B，Phase B 編輯器待實作
+> 狀態：Phase A／B 已實作；R5 統計不足邊界見附錄 B，Phase B 驗收見 `docs/acceptance/live-strategy-graph-phase-b.md`
 > 相關：[`statistical-decision-tree.md`](statistical-decision-tree.md)、[`auto-research-funnel.md`](auto-research-funnel.md)
 > 首個落地對象：`strategies/tsmom_tx_mtx`
 
@@ -199,7 +199,7 @@ harness 的 trials 搜尋樹（`:9101/trials`）以「一次試驗」為節點�
 - [x] 4. ledger 記帳與 N／E[max SR] 計算（R5；統計不足時的稽核限制見附錄 B）
 - [x] 5. `stat.facts` / `stat.resolve` / `validation.report` 節點（R6）
 - [x] 6. sidecar／manifest 嵌入圖 hash 與快照，CLI 執行路徑（R7）
-- [ ] 7. Web 編輯器：畫布、接線、預覽、執行／取消、存檔、從產出載入（R1–R4、R7）
+- [x] 7. Web 編輯器：畫布、接線、預覽、執行／取消、存檔、從產出載入（R1–R4、R7）
 - [x] 8. `run.sh` / `run.ps1` 啟動子指令、`.gitignore` 快取目錄（R9）
 - [x] 9. README 補充 CLI／API 用法（Phase A 派工補充）
 
@@ -244,12 +244,13 @@ React Flow 僅採用 Phase B 畫布、互動接點與自訂卡片；所有型別
 
 | Method / endpoint | Payload / 回應 |
 |---|---|
-| GET `/api/session` | `{fixture:boolean, label:string}`；fixture 時 label 固定為 `FIXTURE 資料・獨立 ledger`，不得回傳暫存絕對路徑 |
+| GET `/api/session` | `{fixture:boolean, label:string, graph_path?:string}`；UI 模式的 graph_path 為啟動時的工作區相對圖路徑。fixture 時 label 固定為 `FIXTURE 資料・獨立 ledger`，不得回傳暫存絕對路徑 |
 | GET `/api/run-estimate` | `{graph_hash,backtest_key,selection_n,already_recorded,delta_n,next_selection_n}`；只釘選資料版本並以參數、實作指紋、上游 hash 計算，不執行節點、不讀取績效、不追加 ledger；缺接點／不可快取上游則 400。already_recorded=true 時 delta_n=0，否則 1；next_selection_n=selection_n+delta_n。graph_hash 為目前文件 hash，backtest_key 為本次解析資料版本的執行鍵；實際執行前資料版本或 ledger 改變時必須重新預判 |
 | GET `/api/layout` | `{schema:"live-strategy-layout/1",positions:{node_id:{x:number,y:number}},path}`；對應目前 `strategies/<id>/graph.layout.json`，不存在時 positions 為空，前端依階段排版 |
 | POST `/api/layout` | `{positions:{node_id:{x:number,y:number}}}` → 同 GET；有限座標、已知 node id，整筆驗證後固定鍵序與兩格縮排寫入獨立檔。不更改 graph、dirty、節點狀態、graph hash、backtest_key 或 N |
 
 UI 由同一 GraphHTTPServer 提供 `/` 與本地 `/assets/*`，使用既有 Host／Origin 邊界；不提供任意工作區檔案。執行時 JS、CSS、字型皆來自同一 origin。
+真實 UI 模式啟動時若圖驗證出現受控 GraphError，仍提供畫布頁面；前端透過既有 graph/load 端點顯示原文錯誤及非法接線索引，而非因無 layout 提前中止。第三方啟動錯誤維持固定訊息遮罩。
 
 `graph-ui --fixture` 使用 Phase A 合成 bundle 與每次啟動獨立的系統暫存工作區（graph、layout、cache、sidecar、ledger 全隔離），禁止接受會覆寫隔離位置的 ledger/cache/root 參數。真實模式維持原 ledger。fixture 頂列常駐標記，不需 TEJ 金鑰。前端使用約 300ms 防抖，只保留最新編輯；取消舊 preview 並確認 worker 結束後才提交新參數與 preview，絕不自動 run。preview 與 run 共用既有 job API。
 

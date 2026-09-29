@@ -19,7 +19,13 @@ def serve_ui(args):
                 service = fixture_service(Path(__file__).resolve().parents[3], args.graph)
             else:
                 service = GraphService(args.root or Path.cwd(), cache_dir=args.cache_dir, ledger_path=args.ledger)
-                service.load(args.graph)
+                try:
+                    service.initial_graph_path = service.confined(args.graph).relative_to(service.root).as_posix()
+                    service.load(args.graph)
+                except GraphError:
+                    # The UI retries the validated path through the existing load
+                    # endpoint so its controlled edge error remains reviewable.
+                    pass
             server = GraphHTTPServer(('127.0.0.1', args.port), service,
                                      ui_dist=Path(__file__).parent / 'ui' / 'dist')
         print(f'Live Strategy Graph UI: http://127.0.0.1:{server.server_port}', flush=True)

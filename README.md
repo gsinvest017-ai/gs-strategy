@@ -257,9 +257,50 @@ PYTHONPATH=. .venv/bin/python -m pytest tests/ -v
 - 加 BIS / IMF / ECB working papers（需找對 RSS）
 - export to JSON Lines / Parquet 給下游 backtest 用
 
-### Live Strategy Graph（Phase A）
+### Live Strategy Graph（Phase A／B）
 
-以 CPU 執行節點圖、預覽中間資料並記錄 selection 試驗；Web 畫布留待 Phase B。
+以 CPU 執行節點圖、預覽中間資料並記錄 selection 試驗；React Flow 編輯器由同一個本機 server 提供。
+
+```bash
+# 需要 node/npm 與已安裝 requirements-test.txt 的 .venv-bt
+# 第一次（或來源變動後）會 npm ci + build，再啟動同源編輯器
+bash run.sh graph-ui --fixture
+# 顯示 http://127.0.0.1:9102；無需 TEJ 金鑰，使用真 Zipline 合成資料
+
+# 真實資料模式：需要本機 bundle 與日曆環境
+bash run.sh graph-ui
+```
+
+PowerShell 對應 `./run.ps1 graph-ui --fixture`。可加 `--port 9103`。
+fixture 模式頂列常駐 `FIXTURE 資料・獨立 ledger`；圖、版面、bundle、快取、sidecar 與 ledger
+均放在每次啟動專用的系統暫存工作區，不寫正式 `log/trials.jsonl`。關閉後不保留示範資料。
+fixture 回測每根 bar 加短暫可取消等待，方便展示進度與取消；orders、成交、成本與損益仍走真實引擎。
+
+畫布依資料／特徵／訊號與部位／回測／驗證與檢定分欄，虛線標示 N 記帳邊界。
+參數修改約 300ms 防抖更新上游預覽，Backtest 及下游保留舊結果並標示過期；必須按執行才會回測。
+執行前顯示預計 N 變化，成功後以 ledger 更新常駐讀數。取消在回測提交前生效，已提交的試驗不能撤銷 N。
+接點常駐型別文字，錯誤接線不修改圖；點節點可查看圖表、分頁原始數值與來源資訊。
+存檔寫入 `graph.json`，節點拖動另存 `graph.layout.json`，不改 dirty／hash／N。
+版控中的初始 layout 為空座標，依卡片實測高度自動排版；首次拖曳後保存具體座標。
+「從產出載入」接受工作區相對 `.validation.json` sidecar 路徑，實作指紋不同時顯示警告。
+
+JS、CSS 與 IBM Plex Sans／Mono、Noto Sans TC 字型經 npm 打包；執行時完全離線。
+`dist/` 不入版控，來源指紋未變時啟動器跳過建置；首次安裝相依套件需要 npm 可用。
+開發用 Vite proxy 連到 `127.0.0.1:9102`，驗收使用正式同源 build。
+
+```bash
+cd strategies/_common/graph/ui
+npm ci
+npm test
+npm run build
+# 首次準備瀏覽器（完成安裝後測試本身離線）
+npx playwright install chromium
+npm run test:e2e
+```
+
+e2e 會在 `127.0.0.1:19102` 啟動獨立 fixture 真 server，不 mock API，並斷言沒有外部瀏覽器請求。
+1280×800 完成狀態截圖寫入系統暫存目錄 `live-strategy-graph-fixture-1280x800.png`。
+完整 API 與版面契約見 [規格附錄 B](docs/spec/live-strategy-graph.md#附錄-bphase-a-本機-http-json-api)。
 
 ```bash
 # Windows 請用 Git Bash；Linux 可用 python3.11

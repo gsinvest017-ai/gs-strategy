@@ -8,6 +8,7 @@
 #   .\run.ps1 test         # pytest tests/
 #   .\run.ps1 graph-api    # local JSON API (requires setup-bt)
 #   .\run.ps1 graph-run    # execute graph (requires setup-bt)
+#   .\run.ps1 graph-ui     # local editor; --fixture uses an isolated ledger
 #   .\run.ps1 help
 #
 # Note: For pure-WSL environments, prefer ./run.sh (run from inside WSL).
@@ -117,6 +118,10 @@ function Cmd-Graph($mode) {
     $graphPython = Join-Path $ROOT_DIR ".venv-bt/Scripts/python.exe"
     if (-not (Test-Path $graphPython)) { $graphPython = Join-Path $ROOT_DIR ".venv-bt/bin/python" }
     $env:PYTHONUTF8 = "1"
+    if ($mode -eq "ui") {
+        & $graphPython (Join-Path $ROOT_DIR "scripts/build_graph_ui.py")
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    }
     & $graphPython -m strategies._common.graph $mode @Rest
     exit $LASTEXITCODE
 }
@@ -124,6 +129,7 @@ function Cmd-Graph($mode) {
 switch ($Subcommand) {
     "graph-api" { Cmd-Graph "serve" }
     "graph-run" { Cmd-Graph "run" }
+    "graph-ui" { Cmd-Graph "ui" }
     "setup" { Cmd-Setup }
     "webui" { Cmd-Webui }
     "crawl" { Cmd-Crawl }

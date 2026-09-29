@@ -27,6 +27,10 @@ pytest-report.xml
 # Local graph cache and generated artifacts
 .cache/live-strategy-graph/
 .graph-runs/
+strategies/_common/graph/ui/dist/
+strategies/_common/graph/ui/coverage/
+test-results/
+playwright-report/
 # 此檔為 console 輸出、含機密、不入版控
 log/codex-*
 log/*.lock
