@@ -256,3 +256,34 @@ PYTHONPATH=. .venv/bin/python -m pytest tests/ -v
 - arXiv 加 incremental fetch（last-published 後才抓）
 - 加 BIS / IMF / ECB working papers（需找對 RSS）
 - export to JSON Lines / Parquet 給下游 backtest 用
+
+### Live Strategy Graph（Phase A）
+
+以 CPU 執行節點圖、預覽中間資料並記錄 selection 試驗；Web 畫布留待 Phase B。
+
+```bash
+# Windows 請用 Git Bash；Linux 可用 python3.11
+bash scripts/setup-bt.sh python
+bash run.sh graph-api --port 9102
+curl http://127.0.0.1:9102/api/node-types
+
+# 需已 ingest 的 tquant_future bundle；預覽不跑回測、不增加 N
+bash run.sh graph-run --graph strategies/tsmom_tx_mtx/graph.json --preview
+bash run.sh graph-run --graph strategies/tsmom_tx_mtx/graph.json
+```
+
+PowerShell 對應 `./run.ps1 graph-api --port 9102`、`./run.ps1 graph-run --graph strategies/tsmom_tx_mtx/graph.json`。API 預設只綁 `127.0.0.1`，端點與 payload 見 [規格附錄 B](docs/spec/live-strategy-graph.md#附錄-bphase-a-本機-http-json-api)。節點清單/API 啟動不需要 TEJ 金鑰；讀取真實 bundle 才需要相應資料與日曆環境。
+
+成功回測自動追加 `log/trials.jsonl`，相同圖 hash 不重複增加 N，HTTP 無關閉開關。產出保存在 `.graph-runs/<hash>.validation.json`，包含可還原圖快照；manifest 的 validation 記錄圖 hash。資料版本鎖定 ingestion timestamp，要更新資料可將 data_version 改回 `auto`。統計不足的成功回測仍計 N，紀錄標為 pending，既有 audit 會要求補檢定。
+
+測試使用暫存 ledger 與合成期貨 bundle，真實 Zipline 執行舊路徑及圖路徑比對：
+
+```bash
+.venv-bt/Scripts/python.exe -m pip install -r requirements-test.txt
+PYTHONUTF8=1 .venv-bt/Scripts/python.exe -m pytest tests/ -q
+# Linux 將 Scripts/python.exe 改成 bin/python
+# 有真實 bundle／日曆權限的機器可另外執行：
+GS_TEST_REAL_BUNDLE=1 PYTHONUTF8=1 .venv-bt/Scripts/python.exe -m pytest tests/test_live_graph_tsmom_equivalence.py -k real_tquant -q
+```
+
+離線 fixture 只替代日曆的遠端輸入，不替代 orders、成交、成本或損益事件迴圈。fixture 匯入期間會暫存並還原日曆套件的快取，請勿在同一虛擬環境並行執行 fixture 測試。

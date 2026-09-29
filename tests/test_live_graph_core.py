@@ -106,3 +106,9 @@ def test_multiple_backtests_cannot_hide_selection_trials():
 def test_unrecognized_metadata_is_not_embedded():
     r,g=setup(); g['credentials']={'value':'sensitive input'}
     with pytest.raises(GraphError,match='unsupported graph fields'): r.normalize(g)
+
+
+def test_missing_ledger_rejects_before_backtest_execution(tmp_path):
+    r,g=setup(); e=Engine(r,tmp_path)
+    with pytest.raises(GraphError,match='before execution'): e.run(g)
+    assert not CALLS

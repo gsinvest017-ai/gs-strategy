@@ -1,6 +1,6 @@
 # 即時策略圖（Live Strategy Graph）規格
 
-> 狀態：草案，待確認後派工
+> 狀態：已確認；Phase A 已實作，R5 統計不足邊界見附錄 B，Phase B 編輯器待實作
 > 相關：[`statistical-decision-tree.md`](statistical-decision-tree.md)、[`auto-research-funnel.md`](auto-research-funnel.md)
 > 首個落地對象：`strategies/tsmom_tx_mtx`
 
@@ -190,15 +190,16 @@ harness 的 trials 搜尋樹（`:9101/trials`）以「一次試驗」為節點�
 
 ## 4. 任務清單（派工用）
 
-- [ ] 0. `/survey-first`：評估現成的 Python DAG／快取框架（如 Apache Hamilton）與前端節點編輯器（如 React Flow），決定採用或自建，結論寫進本檔附錄
-- [ ] 1. 節點類型註冊、型別系統、參數 schema（R1）
-- [ ] 2. 執行引擎：hash 快取、程式碼指紋、增量重算、節點狀態（R2）
-- [ ] 3. tsmom 拆成節點，`graph.json` 與等價測試、前視測試（R8）
-- [ ] 4. ledger 記帳與 N／E[max SR] 計算（R5）
-- [ ] 5. `stat.facts` / `stat.resolve` / `validation.report` 節點（R6）
-- [ ] 6. sidecar／manifest 嵌入圖 hash 與快照，CLI 執行路徑（R7）
+- [x] 0. `/survey-first`：評估現成的 Python DAG／快取框架（如 Apache Hamilton）與前端節點編輯器（如 React Flow），決定採用或自建，結論寫進本檔附錄
+- [x] 1. 節點類型註冊、型別系統、參數 schema（R1）
+- [x] 2. 執行引擎：hash 快取、程式碼指紋、增量重算、節點狀態（R2）
+- [x] 3. tsmom 拆成節點，`graph.json` 與等價測試、前視測試（R8）
+- [x] 4. ledger 記帳與 N／E[max SR] 計算（R5；統計不足時的稽核限制見附錄 B）
+- [x] 5. `stat.facts` / `stat.resolve` / `validation.report` 節點（R6）
+- [x] 6. sidecar／manifest 嵌入圖 hash 與快照，CLI 執行路徑（R7）
 - [ ] 7. Web 編輯器：畫布、接線、預覽、執行／取消、存檔、從產出載入（R1–R4、R7）
-- [ ] 8. `run.sh` / `run.ps1` 啟動子指令、`.gitignore` 快取目錄（R9）
+- [x] 8. `run.sh` / `run.ps1` 啟動子指令、`.gitignore` 快取目錄（R9）
+- [x] 9. README 補充 CLI／API 用法（Phase A 派工補充）
 
 檔案切分與哪些項目可平行，派工時由 Claude 依實際檔案範圍宣告。
 
@@ -234,3 +235,46 @@ React Flow 僅採用 Phase B 畫布、互動接點與自訂卡片；所有型別
 圖格式為 `schema: live-strategy-graph/1`、`nodes: [{id,type,params}]`、`edges: [{from:[node,port],to:[node,port]}]`。固定鍵排序與兩格縮排。接點名稱使用規格型別名稱（例如 `Returns`）。節點 hash 含實作、參數及上游 hash；圖 hash 含正規化圖與所有實作指紋。資料來源必須將資料版本納入參數以避免 bundle 更新後重用舊快取。
 
 `Context` 提供 token、ledger、services、progress。成功 Backtest（含快取重播）必經 `ledger.record_success(graph_hash,snapshot,outputs,context)`；取消與提交共用鎖。ledger 節點為非快取外部來源，完整執行時在回測提交後取樣，讓報告使用最新 N。統計失敗不阻擋已成功回測記帳。HTTP 不接收任意 Python 或 pickle。
+
+## 附錄 B：Phase A 本機 HTTP JSON API
+
+啟動：`bash run.sh graph-api --port 9102` 或 `./run.ps1 graph-api --port 9102`。
+預設及目前允許的綁定位址為 `127.0.0.1`。Phase A 不提供 HTML 畫布。
+所有 POST 需 `Content-Type: application/json`，body 上限 2 MB；拒絕外部 Origin／Host。
+路徑均相對啟動工作區；圖只能載入／儲存於 `strategies/<id>/graph.json`，不可越界。
+
+| Method / endpoint | Payload / 回應 |
+|---|---|
+| GET `/api/node-types` | `{node_types:[{id,inputs,outputs,params,fingerprint}]}` |
+| GET `/api/graph` | `{graph,graph_hash,path,dirty}`；尚未載入 graph 為 null |
+| POST `/api/graph/load` | `{path:"strategies/tsmom_tx_mtx/graph.json"}` → 圖狀態 |
+| POST `/api/graph` | `{graph:{schema,nodes,edges,strategy},path?:"strategies/.../graph.json"}` → 驗證後替換；非法接線整筆拒絕 |
+| POST `/api/graph/save` | `{path?:"strategies/.../graph.json"}` → 固定鍵序、2 格縮排儲存，dirty=false |
+| POST `/api/nodes/<id>/params` | `{params:{target_vol:0.10}}` → 合併參數、標記受影響節點 stale；不自動回測 |
+| POST `/api/preview` | `{}` → HTTP 202 `{id,status,preview,progress}`；只執行上游 |
+| POST `/api/run` | `{}` → HTTP 202 job；成功 Backtest 強制 ledger 記帳與 sidecar |
+| GET `/api/jobs/<id>` | `{id,status,preview,progress,sidecar?}`；status=running/complete/error/cancelled |
+| POST `/api/jobs/<id>/cancel` | `{}` → HTTP 202 `{accepted:true,reason}`；回測已提交則 HTTP 409、accepted=false |
+| GET `/api/nodes` | `{nodes:[{id,status,hash?,graph_hash?,message?,outputs,equity?}]}` |
+| GET `/api/nodes/<id>?limit=60&offset=0` | 單節點狀態及預覽；limit 1–1000，offset 從尾端向前分頁 |
+| GET `/api/ledger` | `{selection_n,expected_max_sharpe,session_n}` |
+| POST `/api/graph/from-sidecar` | `{path:".graph-runs/<hash>.validation.json",graph_path?:"strategies/.../graph.json"}` → 還原圖、recorded_graph_hash、warnings |
+
+時間序列 JSON：`{index:[ISO時間],columns:[欄名],data:[[數值]],total:總列數}`；最新列為 data 最後一列。節點 envelope 有 values 時取其可視資料，內部 as-of 歷史矩陣不傳送。Returns 額外提供累乘 equity；Report 為既有 report 欄位，Prescription 提供 slots/base/se/primary/threshold/gates、各自 facts/rule_id 與 forbids。
+
+節點狀態：`cached` 快取、`running` 執行中、`recomputed` 已重算、`error` 錯誤、`not_ready` 未就緒、`stale` 過期。過期結果保留原 graph_hash；查詢目前圖可比較差異。執行中不接受改圖／改參數／另一個工作（409），Phase B 應在滑桿防抖後觸發 preview，避免排隊。GET 可在執行時讀進度。
+
+取消與成功 Backtest 提交共用鎖。取消先取得鎖則不記帳；成功回測先提交則該次已完成 selection，後續取消回覆不接受，避免把已看過績效從 N 移除。節點執行異常僅輸出受控錯誤；第三方例外不回傳原文。UnderdeterminedError 保留既有規則的補救訊息。
+
+CLI 與 HTTP 共用 GraphService；`bash run.sh graph-run --graph strategies/tsmom_tx_mtx/graph.json [--preview]`。`--ledger`／`--cache-dir` 只在啟動 CLI/server 指定，HTTP 不可調整或關閉記帳。測試一律指定暫存 ledger。成功回測自動存 `.graph-runs/<hash>.validation.json`，含 graph_hash 與 graph_snapshot；存在策略 manifest 時更新 validation.graph_hash。
+
+資料的 `initial`／`auto` 版本在執行前鎖定本機 bundle ingestion timestamp，納入 snapshot/hash；再次執行保持該版本。要採新版資料，顯式將 data_version 改回 auto。舊快照的 ingestion 不存在時拒絕執行，不偷換最新資料。
+
+### 與既有規則的兩個相容邊界
+
+1. 現有 harness 以 manifest 相對路徑比對 config_ref。因此 trial.config_ref 保留該字串；trial.graph_ref 保存 graph_hash 與 snapshot，config_sha256 同時為圖 hash。此為 R5 config_ref 要求的相容延伸，不把既有欄位改成物件。
+2. 回測成功但零波動／樣本不足／統計未定時，R5 要求 N+1，而規則集 1.1 無法產生可重算的完整處方。此情況追加 selection、delta_n=1、status=pending 並保留未知事實，既有 audit 明確回報不可稽核。正常可判定資料的 audit 必須無問題。未修改 decision.py／規則集，亦未偽造 autocorr／n_eff。此邊界仍需未來規格／規則集明確定義；不可把 pending 宣稱為完整通過 R5 稽核。
+
+MVP 每張圖最多一個 Backtest，避免同一圖塞入多個策略卻只計一次 N；purpose 目前僅接受 selection。未知圖 metadata 拒收，避免把無關內容嵌入 ledger／sidecar。
+
+TSMOM 保留舊策略的有限歷史視窗：EWMA 的有效樣本亦受 lookback + skip + 5 限制。Sigma 攜帶 as-of histories 與 vol_com，Sizing 依 Score 傳入的 window 取相同估計；因此改 lookback 後 Sigma 的基準預覽可維持快取，但 Sizing 使用的有效波動率會隨視窗改變。這是既有策略的耦合，未改成全歷史 EWMA 以免破壞等價。

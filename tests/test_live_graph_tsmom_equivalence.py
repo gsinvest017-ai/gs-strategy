@@ -51,6 +51,86 @@ def run_upstream(bundle, start, end):
     return weights
 
 
+def assert_independent_futures_pnl(perf, config):
+    """Reconcile raw contract prices and actual fills, independent of Zipline PnL."""
+    from collections import defaultdict, deque
+    from zipline.assets import Future
+    from zipline.data.bundles import load
+
+    capital = config['capital_base']
+    delta = perf['portfolio_value'].diff()
+    delta.iloc[0] = perf['portfolio_value'].iloc[0] - capital
+    np.testing.assert_allclose(perf['pnl'], delta, atol=1e-7, rtol=0)
+    gain = perf['portfolio_value'].iloc[-1] - capital
+    assert abs(perf['pnl'].sum() - gain) < 1e-7
+
+    bundle = load(config['bundle'])
+    reader = bundle.equity_daily_bar_reader
+    previous = {}
+    last_close = {}
+    lots = defaultdict(deque)
+    trade_pnl = []
+    overnight, intraday, fees = [], [], []
+    for timestamp, row in perf.iterrows():
+        session = timestamp.tz_convert('UTC').normalize()
+        fills = row['transactions']
+        assets = set(previous) | {fill['sid'] for fill in fills}
+        on = day = commission = 0.0
+        close = {}
+        for asset in assets:
+            assert isinstance(asset, Future), 'PnL check requires actual futures'
+            opening = float(reader.get_value(asset.sid, session, 'open'))
+            close[asset] = float(reader.get_value(asset.sid, session, 'close'))
+            assert np.isfinite(opening) and np.isfinite(close[asset])
+            quantity = previous.get(asset, 0)
+            if quantity:
+                on += quantity * asset.price_multiplier * (opening - last_close[asset])
+                day += quantity * asset.price_multiplier * (close[asset] - opening)
+        for fill in fills:
+            asset, quantity, price = fill['sid'], fill['amount'], fill['price']
+            multiplier = asset.price_multiplier
+            day += quantity * multiplier * (close[asset] - price)
+            # Zipline synthetic auto-close fills have no order and charge no
+            # commission. Ordinary fills use the explicitly configured fee.
+            fee = (abs(quantity) * config['params']['per_contract_cost'][asset.root_symbol]
+                   if fill['order_id'] is not None else 0.0)
+            commission += fee
+            trade_pnl.append(-fee)
+            remaining = quantity
+            queue = lots[asset]
+            while remaining and queue and np.sign(remaining) != np.sign(queue[0][0]):
+                held, entry = queue[0]
+                matched = min(abs(remaining), abs(held))
+                trade_pnl.append(matched * np.sign(held) * multiplier * (price - entry))
+                remaining += matched * np.sign(held)
+                held -= matched * np.sign(held)
+                if held:
+                    queue[0] = (held, entry)
+                else:
+                    queue.popleft()
+            if remaining:
+                queue.append((remaining, price))
+        previous = {position['sid']: position['amount'] for position in row['positions'] if position['amount']}
+        fifo_positions = {asset: sum(q for q, _ in queue) for asset, queue in lots.items() if queue}
+        assert fifo_positions == previous, 'fills must reconstruct reported inventory'
+        last_close = close
+        overnight.append(on)
+        intraday.append(day)
+        fees.append(commission)
+
+    # Terminal MTM values open lots without fabricating a closing transaction.
+    for asset, queue in lots.items():
+        for quantity, entry in queue:
+            trade_pnl.append(quantity * asset.price_multiplier * (last_close[asset] - entry))
+    rebuilt = np.asarray(overnight) + np.asarray(intraday) - np.asarray(fees)
+    np.testing.assert_allclose(rebuilt, perf['pnl'], atol=1e-7, rtol=0)
+    assert abs(rebuilt.sum() - gain) < 1e-7
+    assert abs(sum(trade_pnl) - gain) < 1e-7
+    assert np.any(np.asarray(overnight) != 0), 'fixture must exercise overnight PnL'
+    assert np.any(np.asarray(intraday) != 0), 'fixture must exercise intraday PnL'
+    assert sum(fees) > 0, 'fixture must exercise commissions'
+
+
 def compare_paths(bundle, start, end, tmp_path):
     from strategies._common.runner import run_strategy_from_config
     config = yaml.safe_load((HERE / 'config.yaml').read_text(encoding='utf8'))
@@ -58,6 +138,7 @@ def compare_paths(bundle, start, end, tmp_path):
     path = tmp_path / 'config.yaml'
     path.write_text(yaml.safe_dump(config), encoding='utf8')
     old = run_strategy_from_config(HERE / 'strategy.py', path)
+    assert_independent_futures_pnl(old, config)
     registry = Registry()
     nodes.register_nodes(registry)
     register_stats(registry)

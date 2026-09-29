@@ -7,6 +7,8 @@
 #   ./run.sh webui        # start webui on http://127.0.0.1:5057
 #   ./run.sh crawl        # quant-crawl run + fetch-pdfs + rag-ingest
 #   ./run.sh test         # pytest tests/
+#   ./run.sh graph-api    # local JSON API (requires setup-bt)
+#   ./run.sh graph-run    # execute graph (requires setup-bt)
 #   ./run.sh help
 set -euo pipefail
 
@@ -90,9 +92,22 @@ cmd_help() {
     exit 0
 }
 
+cmd_graph() {
+    local mode="$1"
+    shift
+    local graph_py="${ROOT_DIR}/.venv-bt/bin/python"
+    if [[ -f "${ROOT_DIR}/.venv-bt/Scripts/python.exe" ]]; then
+        graph_py="${ROOT_DIR}/.venv-bt/Scripts/python.exe"
+    fi
+    export PYTHONUTF8=1
+    exec "${graph_py}" -m strategies._common.graph "${mode}" "$@"
+}
+
 # --- dispatch --------------------------------------------------------------
 SUBCMD="${1:-webui}"
 case "${SUBCMD}" in
+    graph-api) shift; cmd_graph serve "$@" ;;
+    graph-run) shift; cmd_graph run "$@" ;;
     setup)    shift; cmd_setup  "$@" ;;
     webui)    shift || true; cmd_webui "$@" ;;
     crawl)    shift; cmd_crawl  "$@" ;;

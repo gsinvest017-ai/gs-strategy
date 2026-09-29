@@ -167,3 +167,31 @@ def test_external_console_output_and_errors_are_not_exposed(tmp_path,capsys):
     captured=capsys.readouterr()
     assert 'sensitive' not in captured.out+captured.err+json.dumps(s.engine.states)
     assert not s.ledger.path.exists()
+
+def test_cli_server_defaults_loopback_and_serves_json(tmp_path):
+    import queue
+    import subprocess
+    import sys
+    from urllib.parse import urlsplit
+    process=subprocess.Popen([sys.executable,'-m','strategies._common.graph','serve',
+        '--root',str(tmp_path),'--port','0'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+    lines=queue.Queue()
+    reader=threading.Thread(target=lambda:lines.put(process.stdout.readline()),daemon=True)
+    reader.start()
+    try:
+        address=lines.get(timeout=20).strip().split()[-1]
+        assert urlsplit(address).hostname=='127.0.0.1'
+        with urlopen(address+'/api/node-types',timeout=10) as response:
+            assert response.status==200
+            assert len(json.load(response)['node_types'])==13
+        assert not (tmp_path/'log/trials.jsonl').exists()
+    finally:
+        process.terminate()
+        process.communicate(timeout=10)
+        reader.join(timeout=1)
+
+def test_generated_cache_and_console_logs_are_gitignored():
+    import subprocess
+    paths=['.cache/live-strategy-graph/probe.pkl','.graph-runs/probe.validation.json','log/codex-probe.txt']
+    result=subprocess.run(['git','check-ignore',*paths],text=True,capture_output=True,check=True)
+    assert result.stdout.splitlines()==paths

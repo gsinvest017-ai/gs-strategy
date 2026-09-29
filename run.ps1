@@ -6,6 +6,8 @@
 #   .\run.ps1 webui        # start webui on http://127.0.0.1:5057
 #   .\run.ps1 crawl        # quant-crawl run + fetch-pdfs + rag-ingest
 #   .\run.ps1 test         # pytest tests/
+#   .\run.ps1 graph-api    # local JSON API (requires setup-bt)
+#   .\run.ps1 graph-run    # execute graph (requires setup-bt)
 #   .\run.ps1 help
 #
 # Note: For pure-WSL environments, prefer ./run.sh (run from inside WSL).
@@ -111,7 +113,17 @@ function Cmd-Help {
     }
 }
 
+function Cmd-Graph($mode) {
+    $graphPython = Join-Path $ROOT_DIR ".venv-bt/Scripts/python.exe"
+    if (-not (Test-Path $graphPython)) { $graphPython = Join-Path $ROOT_DIR ".venv-bt/bin/python" }
+    $env:PYTHONUTF8 = "1"
+    & $graphPython -m strategies._common.graph $mode @Rest
+    exit $LASTEXITCODE
+}
+
 switch ($Subcommand) {
+    "graph-api" { Cmd-Graph "serve" }
+    "graph-run" { Cmd-Graph "run" }
     "setup" { Cmd-Setup }
     "webui" { Cmd-Webui }
     "crawl" { Cmd-Crawl }

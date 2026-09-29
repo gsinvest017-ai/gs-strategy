@@ -225,6 +225,8 @@ class Engine:
             ctx.check_cancelled()
             ctx.token.committed = False
         g, nodes, incoming, order = self.registry.normalize(graph)
+        if not preview and ctx.ledger is None and any(n['type'].startswith('backtest.') for n in nodes.values()):
+            raise GraphError('backtest requires selection ledger before execution')
         ctx.graph_hash, ctx.snapshot = self.identity(g)
         blocked = set()
         current = {}
