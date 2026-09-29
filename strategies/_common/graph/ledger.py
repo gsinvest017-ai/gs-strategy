@@ -124,6 +124,15 @@ class SelectionLedger:
             return {'selection_n': n, 'expected_max_sharpe': expected_max_sharpe(n),
                     'session_n': self.session_n}
 
+    def estimate(self, backtest_key):
+        """Read membership and N under one lock; never inspect performance."""
+        with _exclusive(self.path):
+            records = _records(self.path)
+            n = count_existing_selection_trials(self.path)
+            recorded = any(r.get('backtest_key') == backtest_key for r in records)
+            return {'selection_n': n, 'already_recorded': recorded,
+                    'delta_n': int(not recorded), 'next_selection_n': n + int(not recorded)}
+
     def record_success(self, graph_hash, snapshot, outputs, context):
         """Return whether this Backtest cache key first entered the selection population."""
         with context.token.lock, _exclusive(self.path):

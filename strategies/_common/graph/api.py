@@ -1,7 +1,9 @@
 """Local JSON API; all mutations require same-origin application/json requests."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-from urllib.parse import parse_qs, urlsplit
+import mimetypes
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit, unquote
 
 from .core import GraphError
 from .service import json_value, restore_sidecar
@@ -9,8 +11,9 @@ from .service import json_value, restore_sidecar
 
 class GraphHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
-    def __init__(self, address, service):
+    def __init__(self, address, service, ui_dist=None):
         self.service = service
+        self.ui_dist = Path(ui_dist).resolve() if ui_dist else None
         super().__init__(address, Handler)
 
 
@@ -58,6 +61,14 @@ class Handler(BaseHTTPRequestHandler):
             url = urlsplit(self.path)
             parts = url.path.strip('/').split('/')
             query = parse_qs(url.query)
+            if not mutation and parts == ['api','session']:
+                return self.reply(200, s.session())
+            if not mutation and parts == ['api','run-estimate']:
+                return self.reply(200, s.run_estimate())
+            if parts == ['api','layout']:
+                if mutation and not isinstance(body.get('positions'), dict):
+                    raise GraphError('layout positions must be an object')
+                return self.reply(200, s.layout(body['positions']) if mutation else s.layout())
             if not mutation and parts == ['api','node-types']:
                 return self.reply(200, {'node_types': s.registry.describe()})
             if not mutation and parts == ['api','graph']:
@@ -92,6 +103,21 @@ class Handler(BaseHTTPRequestHandler):
             if mutation and len(parts) == 4 and parts[:2] == ['api','jobs'] and parts[3] == 'cancel':
                 result = s.cancel(parts[2])
                 return self.reply(202 if result['accepted'] else 409, result)
+            if not mutation and self.server.ui_dist and (url.path == '/' or url.path.startswith('/assets/')):
+                root = self.server.ui_dist
+                relative = 'index.html' if url.path == '/' else unquote(url.path).lstrip('/')
+                target = (root / relative).resolve()
+                if target.is_relative_to(root) and target.is_file():
+                    data = target.read_bytes()
+                    self.send_response(200)
+                    self.send_header('Content-Type', mimetypes.guess_type(target.name)[0] or 'application/octet-stream')
+                    self.send_header('Content-Length', str(len(data)))
+                    self.send_header('Cache-Control', 'no-cache')
+                    self.send_header('X-Content-Type-Options', 'nosniff')
+                    self.send_header('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; script-src 'self'")
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
             return self.reply(404, {'error': 'unknown endpoint'})
         except GraphError as exc:
             return self.reply(409 if 'active' in str(exc) else 400, {'error': str(exc)})

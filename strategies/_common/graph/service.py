@@ -118,6 +118,71 @@ class GraphService:
         self.active = None
         self.lock = threading.RLock()
         self.completed = {}
+        self.fixture = False
+
+    def session(self):
+        return {'fixture': self.fixture,
+                'label': 'FIXTURE 資料・獨立 ledger' if self.fixture else ''}
+
+    def run_estimate(self):
+        with self.lock:
+            if self.graph is None:
+                raise GraphError('load a graph first')
+            graph = copy.deepcopy(self.graph)
+            if any(n['type'] == 'data.futures_bars' for n in graph['nodes']):
+                with quiet_worker_output():
+                    from strategies.tsmom_tx_mtx.graph_nodes import prepare_graph
+                    graph = prepare_graph(graph)
+            _, nodes, incoming, order = self.registry.normalize(graph)
+            targets = [i for i in order if nodes[i]['type'].startswith('backtest.')]
+            if len(targets) != 1:
+                raise GraphError('run estimate requires one backtest')
+            needed = set(targets)
+            for i in reversed(order):
+                if i in needed:
+                    needed.update(s for s, _ in incoming[i].values())
+            hashes = {}
+            for i in order:
+                if i not in needed:
+                    continue
+                node = nodes[i]
+                kind = self.registry.types[node['type']]
+                missing = set(kind.inputs) - set(incoming[i])
+                if missing:
+                    raise GraphError(f'{i}: missing inputs: ' + ', '.join(sorted(missing)))
+                if not kind.cacheable:
+                    raise GraphError(f'{i}: run estimate requires cacheable upstream nodes')
+                hashes[i] = digest({'type': kind.id, 'implementation': kind.fingerprint,
+                                    'params': node['params'],
+                                    'upstream': {p: hashes[s] for p, (s, _) in incoming[i].items()}})
+            key = hashes[targets[0]]
+            return {'graph_hash': self.document()['graph_hash'], 'backtest_key': key,
+                    **self.ledger.estimate(key)}
+
+    def layout(self, positions=None):
+        with self.lock:
+            if self.graph is None or self.path is None:
+                raise GraphError('load a graph with a path first')
+            path = self.path.with_name('graph.layout.json').resolve()
+            if not path.is_relative_to(self.root / 'strategies'):
+                raise GraphError('layout path must be inside strategies')
+            if positions is None:
+                positions = json.loads(path.read_text(encoding='utf-8')).get('positions', {}) if path.exists() else {}
+                saving = False
+            else:
+                saving = True
+            ids = {n['id'] for n in self.graph['nodes']}
+            if not isinstance(positions, dict) or set(positions) - ids:
+                raise GraphError('layout contains unknown node')
+            for point in positions.values():
+                if not isinstance(point, dict) or set(point) != {'x', 'y'}:
+                    raise GraphError('layout requires x and y')
+                if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in point.values()):
+                    raise GraphError('layout coordinates must be finite numbers')
+            result = {'schema': 'live-strategy-layout/1', 'positions': positions}
+            if saving:
+                write_json(path, result)
+            return {**result, 'path': path.relative_to(self.root).as_posix()}
 
     def confined(self, relative, *, sidecar=False):
         path = (self.root / relative).resolve()
@@ -218,7 +283,14 @@ class GraphService:
             job_id = uuid.uuid4().hex
             job = {'id': job_id, 'status': 'running', 'preview': preview, 'progress': {}}
             document_hash = self.engine.identity(graph)[0]
-            ctx = Context(ledger=self.ledger, progress=lambda value: job.update(progress=value),
+            def progress(value):
+                job.update(progress=value)
+                if self.fixture and value.get('phase') == 'backtest':
+                    # Demonstration pacing remains cancellable before ledger commit.
+                    import time
+                    time.sleep(0.01)
+                    ctx.check_cancelled()
+            ctx = Context(ledger=self.ledger, progress=progress,
                           services={'root': self.root, 'document_graph_hash': document_hash})
             self.jobs[job_id] = job
             self.active = job_id
