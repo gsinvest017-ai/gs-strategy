@@ -294,7 +294,9 @@ def write_sidecar_for(perf_path: Path, *,
                       n_trials_source: str | None = None,
                       periods_per_year: int | None = None,
                       periods_per_year_source: str | None = None,
-                      manifest_path: Path | None = None) -> Path | None:
+                      manifest_path: Path | None = None,
+                      graph_hash: str | None = None,
+                      graph_snapshot: Mapping[str, Any] | None = None) -> Path | None:
     """Best-effort: write ``<perf>.validation.json`` next to a perf file.
 
     Callers may either hand over already-derived numbers (what the runner
@@ -328,6 +330,9 @@ def write_sidecar_for(perf_path: Path, *,
                               n_trials_source=trials_src,
                               periods_per_year=resolved_ppy,
                               periods_per_year_source=ppy_src)
+        if graph_hash is not None:
+            report['graph_hash'] = graph_hash
+            report['graph_snapshot'] = graph_snapshot
         sidecar = Path(perf_path).with_name(
             Path(perf_path).name + ".validation.json")
         sidecar.write_text(json.dumps(report, ensure_ascii=False, indent=2),
@@ -364,6 +369,7 @@ def _fmt_int(value: Any) -> str:
 #: numbers make the cut; the sidecar JSON stays the full record.
 _MANIFEST_FIELDS: tuple[tuple[str, str, Any], ...] = (
     ("schema", "schema", str),
+    ("graph_hash", "graph_hash", str),
     ("annualized_sharpe", "annualized_sharpe", lambda v: _fmt_float(v, 4)),
     ("psr", "psr", lambda v: _fmt_float(v, 4)),
     ("dsr", "dsr", lambda v: _fmt_float(v, 4)),

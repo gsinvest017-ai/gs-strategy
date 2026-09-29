@@ -81,3 +81,28 @@ def test_schema_cycles_and_parameter_validation():
     with pytest.raises(GraphError): r.normalize(g)
     g['nodes'][1]['params'] = {'n_trials': 1}
     with pytest.raises(GraphError): r.normalize(g)
+
+def test_cancel_during_backtest_never_commits(tmp_path):
+    def cancelled(inputs, params, ctx):
+        ctx.token.cancel()
+        return {'Returns': [1]}
+    r,g = setup(); r.types['backtest.test'].function = cancelled
+    ledger = Ledger(); e = Engine(r,tmp_path)
+    with pytest.raises(Cancelled): e.run(g,context=Context(ledger=ledger))
+    assert not ledger.seen
+    assert e.states['c']['status'] == 'stale'
+
+def test_cannot_cancel_after_successful_commit(tmp_path):
+    r,g=setup(); ctx=Context(ledger=Ledger()); e=Engine(r,tmp_path)
+    e.run(g,context=ctx)
+    assert ctx.token.committed and not ctx.token.cancel()
+    assert not ctx.token.cancelled
+
+def test_multiple_backtests_cannot_hide_selection_trials():
+    r,g = setup()
+    g['nodes'].append({'id':'second','type':'backtest.test'})
+    with pytest.raises(GraphError,match='one backtest'): r.normalize(g)
+
+def test_unrecognized_metadata_is_not_embedded():
+    r,g=setup(); g['credentials']={'value':'sensitive input'}
+    with pytest.raises(GraphError,match='unsupported graph fields'): r.normalize(g)

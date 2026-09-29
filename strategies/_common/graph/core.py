@@ -8,6 +8,7 @@ import json
 import math
 import os
 import pickle
+import re
 import tempfile
 import textwrap
 import threading
@@ -103,9 +104,19 @@ class Registry:
 
     def normalize(self, graph):
         graph = copy.deepcopy(graph)
+        if not isinstance(graph, dict) or set(graph) - {'schema', 'strategy', 'nodes', 'edges'}:
+            raise GraphError('unsupported graph fields')
+        if 'strategy' in graph and not re.fullmatch(r'[a-z][a-z0-9_]*', str(graph['strategy'])):
+            raise GraphError('invalid strategy identifier')
         if graph.get('schema') != 'live-strategy-graph/1':
             raise GraphError('unsupported graph schema')
         nodes = graph.get('nodes', [])
+        if not isinstance(nodes, list) or any(not isinstance(n, dict) or set(n) - {'id', 'type', 'params'} for n in nodes):
+            raise GraphError('invalid node fields')
+        if any(not re.fullmatch(r'[A-Za-z0-9_.-]{1,80}', str(n.get('id', ''))) for n in nodes):
+            raise GraphError('invalid node identifier')
+        if sum(n.get('type', '').startswith('backtest.') for n in nodes) > 1:
+            raise GraphError('MVP permits one backtest per graph for selection accounting')
         ids = [n['id'] for n in nodes]
         if len(set(ids)) != len(ids):
             raise GraphError('duplicate node id')
@@ -115,16 +126,18 @@ class Registry:
                 raise GraphError(f'unknown node type {n["type"]}')
             n['params'] = self.types[n['type']].parameters(n.get('params', {}))
         incoming = {i: {} for i in ids}
-        for edge in graph.get('edges', []):
+        for index, edge in enumerate(graph.get('edges', [])):
+            if not isinstance(edge, dict) or set(edge) != {'from', 'to'}:
+                raise GraphError(f'invalid edge at index {index}')
             try:
                 src, out = edge['from']
                 dst, inp = edge['to']
                 a, b = self.types[by_id[src]['type']], self.types[by_id[dst]['type']]
                 valid = a.outputs[out] == b.inputs[inp] and inp not in incoming[dst]
-            except (KeyError, ValueError):
+            except (KeyError, ValueError, TypeError):
                 valid = False
             if not valid:
-                raise GraphError(f'invalid edge: {canonical(edge)}')
+                raise GraphError(f'invalid edge at index {index}: incompatible or unknown ports')
             incoming[dst][inp] = (src, out)
         order = []
         while len(order) < len(ids):
@@ -144,10 +157,14 @@ class CancelToken:
     def __init__(self):
         self.lock = threading.RLock()
         self.cancelled = False
+        self.committed = False
 
     def cancel(self):
         with self.lock:
+            if self.committed:
+                return False
             self.cancelled = True
+            return True
 
     def check(self):
         if self.cancelled:
@@ -204,6 +221,9 @@ class Engine:
 
     def run(self, graph, *, preview=False, context=None):
         ctx = context or Context()
+        with ctx.token.lock:
+            ctx.check_cancelled()
+            ctx.token.committed = False
         g, nodes, incoming, order = self.registry.normalize(graph)
         ctx.graph_hash, ctx.snapshot = self.identity(g)
         blocked = set()
@@ -220,7 +240,8 @@ class Engine:
             missing = set(kind.inputs) - set(incoming[i])
             unavailable = [p for p, (s, _) in incoming[i].items() if s not in current]
             if missing or unavailable:
-                self.states[i] = {'status': 'not_ready', 'message': 'missing inputs: ' + ', '.join(sorted(missing | set(unavailable)))}
+                causes = [self.states.get(s, {}).get('message', '') for s, _ in incoming[i].values() if s not in current]
+                self.states[i] = {'status': 'not_ready', 'message': 'missing inputs: ' + ', '.join(sorted(missing | set(unavailable))) + '; '.join(causes)}
                 continue
             key = digest({'type': kind.id, 'implementation': kind.fingerprint, 'params': n['params'],
                           'upstream': {p: self.hashes[s] for p, (s, _) in incoming[i].items()}})
@@ -247,6 +268,7 @@ class Engine:
                     with ctx.token.lock:
                         ctx.check_cancelled()
                         ctx.ledger.record_success(ctx.graph_hash, ctx.snapshot, result, ctx)
+                        ctx.token.committed = True
                 if kind.cacheable and status == 'recomputed':
                     self._write_cache(key, result)
                 self.hashes[i] = key if kind.cacheable else digest([key, repr(result)])

@@ -1,0 +1,254 @@
+{
+  "edges": [
+    {
+      "from": [
+        "backtest",
+        "Returns"
+      ],
+      "to": [
+        "facts",
+        "Returns"
+      ]
+    },
+    {
+      "from": [
+        "backtest",
+        "Returns"
+      ],
+      "to": [
+        "report",
+        "Returns"
+      ]
+    },
+    {
+      "from": [
+        "bars",
+        "Bars"
+      ],
+      "to": [
+        "continuous",
+        "Bars"
+      ]
+    },
+    {
+      "from": [
+        "cap",
+        "Weights"
+      ],
+      "to": [
+        "backtest",
+        "Weights"
+      ]
+    },
+    {
+      "from": [
+        "continuous",
+        "ContinuousBars"
+      ],
+      "to": [
+        "momentum",
+        "ContinuousBars"
+      ]
+    },
+    {
+      "from": [
+        "continuous",
+        "ContinuousBars"
+      ],
+      "to": [
+        "volatility",
+        "ContinuousBars"
+      ]
+    },
+    {
+      "from": [
+        "cost",
+        "CostModel"
+      ],
+      "to": [
+        "backtest",
+        "CostModel"
+      ]
+    },
+    {
+      "from": [
+        "direction",
+        "Direction"
+      ],
+      "to": [
+        "sizing",
+        "Direction"
+      ]
+    },
+    {
+      "from": [
+        "facts",
+        "Facts"
+      ],
+      "to": [
+        "resolve",
+        "Facts"
+      ]
+    },
+    {
+      "from": [
+        "ledger",
+        "LedgerN"
+      ],
+      "to": [
+        "report",
+        "LedgerN"
+      ]
+    },
+    {
+      "from": [
+        "ledger",
+        "LedgerN"
+      ],
+      "to": [
+        "resolve",
+        "LedgerN"
+      ]
+    },
+    {
+      "from": [
+        "momentum",
+        "Score"
+      ],
+      "to": [
+        "direction",
+        "Score"
+      ]
+    },
+    {
+      "from": [
+        "sizing",
+        "RawWeights"
+      ],
+      "to": [
+        "cap",
+        "RawWeights"
+      ]
+    },
+    {
+      "from": [
+        "volatility",
+        "Sigma"
+      ],
+      "to": [
+        "sizing",
+        "Sigma"
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "backtest",
+      "params": {
+        "calendar": "TEJ_morning_future",
+        "capital_base": 10000000,
+        "days_before_close": 10
+      },
+      "type": "backtest.zipline"
+    },
+    {
+      "id": "bars",
+      "params": {
+        "bundle": "tquant_future",
+        "calendar": "TEJ_morning_future",
+        "data_version": "initial",
+        "end": "2026-04-30",
+        "history_days": 1024,
+        "roots": [
+          "TX",
+          "MTX"
+        ],
+        "start": "2018-01-01"
+      },
+      "type": "data.futures_bars"
+    },
+    {
+      "id": "cap",
+      "params": {
+        "max_gross_leverage": 1.5
+      },
+      "type": "sizing.gross_cap"
+    },
+    {
+      "id": "continuous",
+      "params": {},
+      "type": "data.continuous"
+    },
+    {
+      "id": "cost",
+      "params": {
+        "per_contract_cost": {
+          "MTX": 100,
+          "TX": 200
+        },
+        "spread_points": 6.0
+      },
+      "type": "cost.futures"
+    },
+    {
+      "id": "direction",
+      "params": {
+        "allow_short": true
+      },
+      "type": "signal.direction"
+    },
+    {
+      "id": "facts",
+      "params": {
+        "design": "one_sample",
+        "estimand": "sharpe",
+        "family": "open_mining",
+        "holding_periods": 1,
+        "overlap": "none",
+        "purpose": "selection"
+      },
+      "type": "stat.facts"
+    },
+    {
+      "id": "ledger",
+      "params": {},
+      "type": "ledger.selection_n"
+    },
+    {
+      "id": "momentum",
+      "params": {
+        "lookback": 252,
+        "skip": 21
+      },
+      "type": "feature.signed_momentum"
+    },
+    {
+      "id": "report",
+      "params": {},
+      "type": "validation.report"
+    },
+    {
+      "id": "resolve",
+      "params": {
+        "ruleset_version": "1.1"
+      },
+      "type": "stat.resolve"
+    },
+    {
+      "id": "sizing",
+      "params": {
+        "target_vol": 0.15
+      },
+      "type": "sizing.vol_target"
+    },
+    {
+      "id": "volatility",
+      "params": {
+        "vol_com": 60
+      },
+      "type": "feature.ewma_vol"
+    }
+  ],
+  "schema": "live-strategy-graph/1",
+  "strategy": "tsmom_tx_mtx"
+}
