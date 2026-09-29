@@ -136,7 +136,9 @@ harness 的 trials 搜尋樹（`:9101/trials`）以「一次試驗」為節點�
 
 ### R5 N 記帳（核心約束）
 
-- **需求**：每一個**新的**圖 hash 第一次成功跑完 `backtest.zipline`，系統 MUST 自動在 `log/trials.jsonl` 追加一筆 `purpose: selection` 的 trial 記錄，`stat_decision.delta_n = 1`。使用者 MUST NOT 能關閉這個行為。
+- **需求**：每一個**新的回測組態**（`backtest.zipline` 節點 hash，即 Backtest 及其全部上游的組合；**不含**下游 Validation／Facts／Resolver 的參數與任何 UI 版面欄位）第一次成功跑完 `backtest.zipline`，系統 MUST 自動在 `log/trials.jsonl` 追加一筆 `purpose: selection` 的 trial 記錄，`stat_decision.delta_n = 1`。使用者 MUST NOT 能關閉這個行為。
+  - **理由**：只改下游統計宣告不會產生新的績效資訊，不得讓 N 增加（Phase A code review 修訂）。
+  - **情境**：GIVEN 已跑過一次 → WHEN 只改 `stat.facts.family` 再執行 → THEN Backtest 命中快取、N 不變。
   - **情境**：GIVEN ledger 上 selection N = 33 → WHEN 以一組從未跑過的參數執行回測 → THEN ledger 多一筆記錄，畫面上的 N 變為 34，deflation 門檻（E[max SR]）同步更新。
   - **判準**：整合測試以暫存 ledger 驗證；`decision.audit_ledger` 對新記錄稽核無問題；`scripts/triage_generated.py` 的 `count_existing_selection_trials` 讀出的 N 與畫面一致。
 
