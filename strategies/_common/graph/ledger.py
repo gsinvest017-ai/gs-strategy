@@ -71,13 +71,14 @@ def _config_ref(snapshot, context):
     strategy = graph.get('strategy')
     if strategy is not None and (not isinstance(strategy, str) or not re.fullmatch(r'[a-z][a-z0-9_]*', strategy)):
         raise GraphError('invalid strategy identifier')
-    value = context.services.get('config_ref') or (
-        f'strategies/{strategy}/manifest.yaml' if strategy else 'strategies/live_graph/manifest.yaml')
+    value = context.services.get('config_ref') or f'.graph-runs/{context.backtest_key}.config.json'
     value = str(value).replace('\\', '/')
     path = PurePosixPath(value)
     if (path.is_absolute() or '..' in path.parts or ':' in value
             or not re.fullmatch(r'[A-Za-z0-9_./-]+', value)):
         raise GraphError('config_ref must be a repository-relative path')
+    if path.as_posix() != f'.graph-runs/{context.backtest_key}.config.json':
+        raise GraphError('config_ref must identify the backtest configuration snapshot')
     return path.as_posix()
 
 
@@ -124,17 +125,21 @@ class SelectionLedger:
                     'session_n': self.session_n}
 
     def record_success(self, graph_hash, snapshot, outputs, context):
-        """Return whether this completed graph first entered the selection population."""
+        """Return whether this Backtest cache key first entered the selection population."""
         with context.token.lock, _exclusive(self.path):
             context.check_cancelled()
             records = _records(self.path)
-            if any(record.get('graph_hash') == graph_hash for record in records):
+            backtest_key = context.backtest_key
+            if not backtest_key:
+                raise GraphError('backtest cache key required for selection accounting')
+            if any(record.get('backtest_key') == backtest_key for record in records):
                 return False
             n = count_existing_selection_trials(self.path) + 1
             stat = _stat_record(outputs, snapshot, n)
             now = datetime.now(timezone.utc).isoformat()
             record = {
-                'schema': 'research-trial/v1', 'trial_id': 't-graph-' + graph_hash,
+                'schema': 'research-trial/v1', 'trial_id': 't-graph-' + backtest_key,
+                'backtest_key': backtest_key,
                 'parent_trial_id': None, 'repo': 'gs-strategy', 'level': 'trial',
                 'state': 'complete', 'started_at': now, 'finished_at': now,
                 'purpose': 'selection', 'config_ref': _config_ref(snapshot, context),
@@ -142,6 +147,13 @@ class SelectionLedger:
                 'graph_ref': {'graph_hash': graph_hash, 'snapshot': snapshot},
                 'stat_decision': stat,
             }
+            # Persist the immutable configuration before the append-only reference.
+            from .service import write_json
+            root = Path(context.services.get('root', self.path.parent))
+            write_json(root / record['config_ref'], {
+                'backtest_key': backtest_key, 'graph_hash': graph_hash,
+                'graph_snapshot': snapshot,
+            })
             data = (canonical(record) + '\n').encode('utf-8')
             context.check_cancelled()
             with self.path.open('ab') as handle:

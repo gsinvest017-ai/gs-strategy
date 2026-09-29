@@ -44,7 +44,7 @@ def run_upstream(bundle, start, end):
     bars = nodes.futures_bars({}, data, ctx)
     cont = nodes.continuous(bars, {}, ctx)
     score = nodes.momentum(cont, {'lookback': 252, 'skip': 21}, ctx)
-    sigma = nodes.volatility(cont, {'vol_com': 60}, ctx)
+    sigma = nodes.volatility({**cont, **score}, {'vol_com': 60}, ctx)
     direction = nodes.direction(score, {'allow_short': True}, ctx)
     raw = nodes.vol_target({**direction, **sigma}, {'target_vol': .15}, ctx)
     weights = nodes.gross_cap(raw, {'max_gross_leverage': 1.5}, ctx)
@@ -158,6 +158,11 @@ def compare_paths(bundle, start, end, tmp_path):
     engine.run(definition, context=context)
     assert ledger.summary()['selection_n'] == 1
     assert engine.states['backtest']['status'] == 'cached'
+    next(n for n in definition['nodes'] if n['id'] == 'facts')['params']['family'] = 'bounded_multiple'
+    engine.run(definition, context=context)
+    assert engine.states['backtest']['status'] == 'cached'
+    assert ledger.summary()['selection_n'] == 1
+    next(n for n in definition['nodes'] if n['id'] == 'facts')['params']['family'] = 'open_mining'
 
     np.testing.assert_allclose(old['returns'], graph['Returns'], atol=1e-10, rtol=0)
 
@@ -169,10 +174,22 @@ def compare_paths(bundle, start, end, tmp_path):
     # HTTP and CLI both use this service, with the same real cached fixture run.
     from strategies._common.graph.service import GraphService, restore_sidecar
     service = GraphService(tmp_path, registry=registry, cache_dir=tmp_path / 'cache', ledger_path=tmp_path / 'trials.jsonl')
-    service.set_graph(definition)
+    import copy
+    from strategies._common.graph.service import write_json
+    editable = copy.deepcopy(definition)
+    next(n for n in editable['nodes'] if n['id'] == 'bars')['params']['data_version'] = 'auto'
+    graph_path = tmp_path / 'strategies/tsmom_tx_mtx/graph.json'
+    write_json(graph_path, registry.normalize(editable)[0])
+    service.load('strategies/tsmom_tx_mtx/graph.json')
+    before = graph_path.read_bytes()
+    document = service.document()
     job = service.start()
     service._thread.join(timeout=60)
     assert service.jobs[job['id']]['status'] == 'complete', service.engine.states
+    assert service.document() == document and not service.document()['dirty']
+    assert graph_path.read_bytes() == before
+    service.save()
+    assert graph_path.read_bytes() == before
     sidecar = json.loads((tmp_path / service.jobs[job['id']]['sidecar']).read_text(encoding='utf8'))
     restored = restore_sidecar(sidecar, registry)
     assert restored['graph_hash'] == engine.identity(definition)[0]
@@ -194,6 +211,7 @@ def compare_paths(bundle, start, end, tmp_path):
         engine.run(definition, context=cancel_context)
     assert ledger.summary()['selection_n'] == 1
     # Alter only the wired sizing node: the actual event loop must now hold zero.
+    capital['capital_base'] = config['capital_base']
     next(n for n in definition['nodes'] if n['id'] == 'sizing')['params']['target_vol'] = 0
     zero = engine.run(definition, context=Context(ledger=ledger))['backtest']
     assert not any(positions(zero['Positions']))
@@ -283,7 +301,7 @@ def test_r8_future_prices_do_not_change_past_weights(fixture_bundle):
         cont = {'ContinuousBars': {'source': {'history_days': 1024}, 'values': frame,
                                   'histories': {dt: frame.loc[:dt] for dt in frame.index}}}
         score = nodes.momentum(cont, {'lookback': 252, 'skip': 21}, Context())
-        sigma = nodes.volatility(cont, {'vol_com': 60}, Context())
+        sigma = nodes.volatility({**cont, **score}, {'vol_com': 60}, Context())
         direction = nodes.direction(score, {'allow_short': True}, Context())
         raw = nodes.vol_target({**direction, **sigma}, {'target_vol': .15}, Context())
         return nodes.gross_cap(raw, {'max_gross_leverage': 1.5}, Context())['Weights']['values']
@@ -291,3 +309,27 @@ def test_r8_future_prices_do_not_change_past_weights(fixture_bundle):
     changed = prices.copy()
     changed.iloc[351:] *= 7
     pd.testing.assert_frame_equal(original.iloc[:351], calc(changed).iloc[:351])
+
+
+def test_sigma_preview_is_sizing_sigma_lookback_50_skip_5(fixture_bundle, monkeypatch):
+    index = pd.bdate_range('2018-01-01', periods=300)
+    frame = pd.DataFrame({'TX': np.exp(np.arange(300)*.002 + np.sin(np.arange(300))*.02)}, index=index)
+    cont = {'ContinuousBars': {'source': {'history_days': 1024}, 'values': frame,
+                              'histories': {dt: frame.loc[:dt] for dt in frame.index}}}
+    score = nodes.momentum(cont, {'lookback': 50, 'skip': 5}, Context())
+    original = nodes._sigma
+    calls = []
+    def once(histories, com, window):
+        calls.append(window)
+        return original(histories, com, window)
+    monkeypatch.setattr(nodes, '_sigma', once)
+    sigma = nodes.volatility({**cont, **score}, {'vol_com': 60}, Context())
+    direction = nodes.direction(score, {'allow_short': True}, Context())
+    raw = nodes.vol_target({**direction, **sigma}, {'target_vol': .15}, Context())['RawWeights']['values']
+    expected = (direction['Direction']['values']*.15/sigma['Sigma']['values']).where(score['Score']['values'].notna())
+    pd.testing.assert_frame_equal(raw, expected)
+    assert calls == [60]
+    inferred = (direction['Direction']['values']*.15/raw).dropna()
+    pd.testing.assert_frame_equal(inferred, sigma['Sigma']['values'].loc[inferred.index], check_freq=False)
+    legacy = nodes._legacy()._ewma_vol(np.diff(np.log(frame['TX'].tail(60))), 60)
+    assert sigma['Sigma']['values'].iloc[-1, 0] == legacy

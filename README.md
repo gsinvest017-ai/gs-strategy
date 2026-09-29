@@ -274,7 +274,7 @@ bash run.sh graph-run --graph strategies/tsmom_tx_mtx/graph.json
 
 PowerShell 對應 `./run.ps1 graph-api --port 9102`、`./run.ps1 graph-run --graph strategies/tsmom_tx_mtx/graph.json`。API 預設只綁 `127.0.0.1`，端點與 payload 見 [規格附錄 B](docs/spec/live-strategy-graph.md#附錄-bphase-a-本機-http-json-api)。節點清單/API 啟動不需要 TEJ 金鑰；讀取真實 bundle 才需要相應資料與日曆環境。
 
-成功回測自動追加 `log/trials.jsonl`，相同圖 hash 不重複增加 N，HTTP 無關閉開關。產出保存在 `.graph-runs/<hash>.validation.json`，包含可還原圖快照；manifest 的 validation 記錄圖 hash。資料版本鎖定 ingestion timestamp，要更新資料可將 data_version 改回 `auto`。統計不足的成功回測仍計 N，紀錄標為 pending，既有 audit 會要求補檢定。
+成功回測自動追加 `log/trials.jsonl`，以 Backtest 及全部上游的快取鍵去重；只改下游統計宣告不增加 N，HTTP 無關閉開關。產出保存在 `.graph-runs/<hash>.validation.json`，trial.config_ref 指向 `.graph-runs/<backtest_key>.config.json` 的完整快照。只有明確存檔且目前圖已有成功回測時，才更新 manifest.validation。`auto`／`initial` 在每次執行副本鎖定 ingestion timestamp，不改使用者圖或 dirty；可從 sidecar 還原固定版本。統計不足的成功回測仍計 N，紀錄標為 pending，既有 audit 會要求補檢定。
 
 測試使用暫存 ledger 與合成期貨 bundle，真實 Zipline 執行舊路徑及圖路徑比對：
 

@@ -122,6 +122,16 @@
     },
     {
       "from": [
+        "momentum",
+        "Score"
+      ],
+      "to": [
+        "volatility",
+        "Score"
+      ]
+    },
+    {
+      "from": [
         "sizing",
         "RawWeights"
       ],

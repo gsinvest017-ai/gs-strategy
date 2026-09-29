@@ -236,7 +236,7 @@ React Flow 僅採用 Phase B 畫布、互動接點與自訂卡片；所有型別
 
 圖格式為 `schema: live-strategy-graph/1`、`nodes: [{id,type,params}]`、`edges: [{from:[node,port],to:[node,port]}]`。固定鍵排序與兩格縮排。接點名稱使用規格型別名稱（例如 `Returns`）。節點 hash 含實作、參數及上游 hash；圖 hash 含正規化圖與所有實作指紋。資料來源必須將資料版本納入參數以避免 bundle 更新後重用舊快取。
 
-`Context` 提供 token、ledger、services、progress。成功 Backtest（含快取重播）必經 `ledger.record_success(graph_hash,snapshot,outputs,context)`；取消與提交共用鎖。ledger 節點為非快取外部來源，完整執行時在回測提交後取樣，讓報告使用最新 N。統計失敗不阻擋已成功回測記帳。HTTP 不接收任意 Python 或 pickle。
+`Context` 提供 token、ledger、services、progress。成功 Backtest（含快取重播）必經 `ledger.record_success(graph_hash,snapshot,outputs,context)`，呼叫前由引擎設定 context.backtest_key；ledger 缺少此鍵時拒絕記帳，不退回整張圖 hash 去重。取消與提交共用鎖。ledger 節點為非快取外部來源，完整執行時在回測提交後取樣，讓報告使用最新 N。統計失敗不阻擋已成功回測記帳。HTTP 不接收任意 Python 或 pickle。
 
 ## 附錄 B：Phase A 本機 HTTP JSON API
 
@@ -251,11 +251,11 @@ React Flow 僅採用 Phase B 畫布、互動接點與自訂卡片；所有型別
 | GET `/api/graph` | `{graph,graph_hash,path,dirty}`；尚未載入 graph 為 null |
 | POST `/api/graph/load` | `{path:"strategies/tsmom_tx_mtx/graph.json"}` → 圖狀態 |
 | POST `/api/graph` | `{graph:{schema,nodes,edges,strategy},path?:"strategies/.../graph.json"}` → 驗證後替換；非法接線整筆拒絕 |
-| POST `/api/graph/save` | `{path?:"strategies/.../graph.json"}` → 固定鍵序、2 格縮排儲存，dirty=false |
+| POST `/api/graph/save` | `{path?:"strategies/.../graph.json"}` → 固定鍵序、2 格縮排儲存，dirty=false；僅當目前圖有成功 Backtest 產出，更新 manifest.validation |
 | POST `/api/nodes/<id>/params` | `{params:{target_vol:0.10}}` → 合併參數、標記受影響節點 stale；不自動回測 |
 | POST `/api/preview` | `{}` → HTTP 202 `{id,status,preview,progress}`；只執行上游 |
 | POST `/api/run` | `{}` → HTTP 202 job；成功 Backtest 強制 ledger 記帳與 sidecar |
-| GET `/api/jobs/<id>` | `{id,status,preview,progress,sidecar?}`；status=running/complete/error/cancelled |
+| GET `/api/jobs/<id>` | `{id,status,preview,progress,sidecar?,graph_hash?,backtest_key?,message?}`；hash/key 為已提交的執行快照與 Backtest 快取鍵；status=running/complete/error/cancelled |
 | POST `/api/jobs/<id>/cancel` | `{}` → HTTP 202 `{accepted:true,reason}`；回測已提交則 HTTP 409、accepted=false |
 | GET `/api/nodes` | `{nodes:[{id,status,hash?,graph_hash?,message?,outputs,equity?}]}` |
 | GET `/api/nodes/<id>?limit=60&offset=0` | 單節點狀態及預覽；limit 1–1000，offset 從尾端向前分頁 |
@@ -266,17 +266,17 @@ React Flow 僅採用 Phase B 畫布、互動接點與自訂卡片；所有型別
 
 節點狀態：`cached` 快取、`running` 執行中、`recomputed` 已重算、`error` 錯誤、`not_ready` 未就緒、`stale` 過期。過期結果保留原 graph_hash；查詢目前圖可比較差異。執行中不接受改圖／改參數／另一個工作（409），Phase B 應在滑桿防抖後觸發 preview，避免排隊。GET 可在執行時讀進度。
 
-取消與成功 Backtest 提交共用鎖。取消先取得鎖則不記帳；成功回測先提交則該次已完成 selection，後續取消回覆不接受，避免把已看過績效從 N 移除。節點執行異常僅輸出受控錯誤；第三方例外不回傳原文。UnderdeterminedError 保留既有規則的補救訊息。
+取消與成功 Backtest 提交共用鎖。取消先取得鎖則不記帳；成功回測先提交則該次已完成 selection，後續取消回覆不接受，避免把已看過績效從 N 移除。GraphError 與 UnderdeterminedError 的受控訊息傳入 job.message 與 CLI，包含 prepare_graph 失敗；第三方例外不回傳原文。worker 的 console／logging 輸出依執行緒隔離，不改全域 logging disable 門檻，其他執行緒的安全錯誤仍可見。
 
-CLI 與 HTTP 共用 GraphService；`bash run.sh graph-run --graph strategies/tsmom_tx_mtx/graph.json [--preview]`。`--ledger`／`--cache-dir` 只在啟動 CLI/server 指定，HTTP 不可調整或關閉記帳。測試一律指定暫存 ledger。成功回測自動存 `.graph-runs/<hash>.validation.json`，含 graph_hash 與 graph_snapshot；存在策略 manifest 時更新 validation.graph_hash。
+CLI 與 HTTP 共用 GraphService；`bash run.sh graph-run --graph strategies/tsmom_tx_mtx/graph.json [--preview]`。`--ledger`／`--cache-dir` 只在啟動 CLI/server 指定，HTTP 不可調整或關閉記帳。測試一律指定暫存 ledger。成功回測自動存 `.graph-runs/<hash>.validation.json`，含 graph_hash、graph_snapshot、backtest_key 與 document_graph_hash。平常執行不更新 manifest；明確存檔目前圖且該圖已有成功 Backtest 產出時，才同步 manifest.validation.graph_hash（執行快照 hash）。
 
-資料的 `initial`／`auto` 版本在執行前鎖定本機 bundle ingestion timestamp，納入 snapshot/hash；再次執行保持該版本。要採新版資料，顯式將 data_version 改回 auto。舊快照的 ingestion 不存在時拒絕執行，不偷換最新資料。
+資料的 `initial`／`auto` 版本每次執行前於副本鎖定本機 bundle ingestion timestamp，納入執行 snapshot/hash、Backtest 快取鍵與 N 去重鍵。GET graph 的 graph_hash 仍代表使用者文件；執行不改動 graph、不使 dirty 改變，存檔不寫入執行期時間戳。需要固定資料版本時可從 sidecar 還原已釘選快照；舊快照的 ingestion 不存在時拒絕執行，不偷換最新資料。
 
 ### 與既有規則的兩個相容邊界
 
-1. 現有 harness 以 manifest 相對路徑比對 config_ref。因此 trial.config_ref 保留該字串；trial.graph_ref 保存 graph_hash 與 snapshot，config_sha256 同時為圖 hash。此為 R5 config_ref 要求的相容延伸，不把既有欄位改成物件。
+1. trial.config_ref 為 `.graph-runs/<backtest_key>.config.json`，指向首次完成該回測組態的 graph_hash 與 graph_snapshot；trial.graph_ref 亦保留完整快照，config_sha256 為該圖 hash。不同回測組態有不同參照；下游宣告改動不改參照、不增加 N。此欄位仍為 repo 相對路徑字串，沿用 triage_generated.Candidate.config_ref 的精確字串比對契約；generated manifest 候選與 graph 組態各自使用其實際候選路徑，不能混用。
 2. 回測成功但零波動／樣本不足／統計未定時，R5 要求 N+1，而規則集 1.1 無法產生可重算的完整處方。此情況追加 selection、delta_n=1、status=pending 並保留未知事實，既有 audit 明確回報不可稽核。正常可判定資料的 audit 必須無問題。未修改 decision.py／規則集，亦未偽造 autocorr／n_eff。此邊界仍需未來規格／規則集明確定義；不可把 pending 宣稱為完整通過 R5 稽核。
 
 MVP 每張圖最多一個 Backtest，避免同一圖塞入多個策略卻只計一次 N；purpose 目前僅接受 selection。未知圖 metadata 拒收，避免把無關內容嵌入 ledger／sidecar。
 
-TSMOM 保留舊策略的有限歷史視窗：EWMA 的有效樣本亦受 lookback + skip + 5 限制。Sigma 攜帶 as-of histories 與 vol_com，Sizing 依 Score 傳入的 window 取相同估計；因此改 lookback 後 Sigma 的基準預覽可維持快取，但 Sizing 使用的有效波動率會隨視窗改變。這是既有策略的耦合，未改成全歷史 EWMA 以免破壞等價。
+TSMOM 保留舊策略的有限歷史視窗：EWMA 的有效樣本亦受 lookback + skip + 5 限制。feature.ewma_vol 新增 Score 輸入，依其 window 計算一次 Sigma.values；Sigma 攜帶 source、window、values，sizing.vol_target 直接使用 values，拒絕來源或視窗不一致。改 lookback／skip 會使 Sigma 及 sizing 失效重算；節點卡片預覽即為 sizing 的實際波動值，未改成全歷史 EWMA。

@@ -25,27 +25,27 @@ def _read(path):
 
 
 def _process_record(path, graph_hash):
-    SelectionLedger(path).record_success(graph_hash, SNAPSHOT, _outputs(), Context())
+    SelectionLedger(path).record_success(graph_hash, SNAPSHOT, _outputs(), Context(backtest_key=graph_hash))
 
 
 def test_selection_33_to_34_revert_and_cancel_append_only(tmp_path):
     path = tmp_path / 'trials.jsonl'
     initial = SelectionLedger(path)
-    initial.record_success('original', SNAPSHOT, _outputs(), Context())
+    initial.record_success('original', SNAPSHOT, _outputs(), Context(backtest_key='original'))
     record = _read(path)[0]
     with path.open('a', encoding='utf-8') as handle:
         for i in range(32):
-            handle.write(json.dumps({**record, 'graph_hash': f'seed-{i}', 'trial_id': f'seed-{i}'}) + '\n')
+            handle.write(json.dumps({**record, 'graph_hash': f'seed-{i}', 'backtest_key': f'seed-{i}', 'trial_id': f'seed-{i}'}) + '\n')
     before = path.read_bytes()
     ledger = SelectionLedger(path)
     assert ledger.summary()['selection_n'] == 33
-    assert ledger.record_success('new-parameters', SNAPSHOT, _outputs(), Context())
+    assert ledger.record_success('new-parameters', SNAPSHOT, _outputs(), Context(backtest_key='new-parameters'))
     assert ledger.summary() == {'selection_n': 34, 'session_n': 1,
                                 'expected_max_sharpe': expected_max_sharpe(34)}
     assert path.read_bytes().startswith(before)
     after = path.read_bytes()
-    assert not ledger.record_success('original', SNAPSHOT, _outputs(), Context())
-    assert not ledger.record_success('new-parameters', SNAPSHOT, _outputs(), Context())
+    assert not ledger.record_success('original', SNAPSHOT, _outputs(), Context(backtest_key='original'))
+    assert not ledger.record_success('new-parameters', SNAPSHOT, _outputs(), Context(backtest_key='new-parameters'))
     cancelled = Context()
     cancelled.token.cancel()
     with pytest.raises(Cancelled):
@@ -55,7 +55,7 @@ def test_selection_33_to_34_revert_and_cancel_append_only(tmp_path):
     assert audit['problems'] == []
     assert audit['n_selection_recomputed'] == count_existing_selection_trials(path) == 34
     added = _read(path)[-1]
-    assert added['config_ref'] == 'strategies/tsmom_tx_mtx/manifest.yaml'
+    assert added['config_ref'] == '.graph-runs/new-parameters.config.json'
     assert added['graph_ref'] == {'graph_hash': 'new-parameters', 'snapshot': SNAPSHOT}
     assert added['stat_decision']['decision_path']['n_trials'] == 34
 
@@ -64,7 +64,7 @@ def test_concurrent_threads_only_append_one_record(tmp_path):
     path = tmp_path / 'trials.jsonl'
     ledgers = [SelectionLedger(path) for _ in range(12)]
     with ThreadPoolExecutor(max_workers=12) as pool:
-        results = list(pool.map(lambda ledger: ledger.record_success('same', SNAPSHOT, _outputs(), Context()), ledgers))
+        results = list(pool.map(lambda ledger: ledger.record_success('same', SNAPSHOT, _outputs(), Context(backtest_key='same')), ledgers))
     assert sum(results) == sum(ledger.session_n for ledger in ledgers) == 1
     assert len(_read(path)) == 1
     assert audit_ledger(_read(path))['auditable']
@@ -87,7 +87,7 @@ def test_concurrent_processes_share_lock_and_deduplicate(tmp_path):
 def test_inference_failure_counts_without_inventing_facts(tmp_path, values):
     path = tmp_path / 'trials.jsonl'
     ledger = SelectionLedger(path)
-    assert ledger.record_success('short', SNAPSHOT, {'Returns': pd.Series(values, dtype=float)}, Context())
+    assert ledger.record_success('short', SNAPSHOT, {'Returns': pd.Series(values, dtype=float)}, Context(backtest_key='short'))
     record = _read(path)[0]
     assert ledger.summary()['selection_n'] == 1
     assert record['stat_decision']['status'] == 'pending'
@@ -101,11 +101,11 @@ def test_no_final_newline_is_preserved_and_malformed_file_is_rejected(tmp_path):
     assert ledger.summary() == {'selection_n': 0, 'session_n': 0, 'expected_max_sharpe': 0.0}
     path.write_bytes(b'{"stat_decision":{"delta_n":0}}')
     before = path.read_bytes()
-    ledger.record_success('new', SNAPSHOT, _outputs(), Context())
+    ledger.record_success('new', SNAPSHOT, _outputs(), Context(backtest_key='new'))
     assert path.read_bytes().startswith(before + b'\n')
     path.write_bytes(b'{broken')
     with pytest.raises(GraphError, match='malformed'):
-        ledger.record_success('other', SNAPSHOT, _outputs(), Context())
+        ledger.record_success('other', SNAPSHOT, _outputs(), Context(backtest_key='other'))
     assert path.read_bytes() == b'{broken'
 
 
@@ -114,7 +114,7 @@ def test_session_count_resets_and_declared_purpose_cannot_disable_accounting(tmp
     ledger = SelectionLedger(path)
     snapshot = {'graph': {'strategy': 'tsmom_tx_mtx', 'nodes': [
         {'type': 'stat.facts', 'params': {'purpose': 'screening'}}]}}
-    ledger.record_success('graph', snapshot, _outputs(), Context())
+    ledger.record_success('graph', snapshot, _outputs(), Context(backtest_key='graph'))
     assert _read(path)[0]['stat_decision']['decision_path']['purpose'] == 'selection'
     assert ledger.summary()['session_n'] == 1
     assert SelectionLedger(path).summary()['session_n'] == 0
@@ -123,12 +123,12 @@ def test_session_count_resets_and_declared_purpose_cannot_disable_accounting(tmp
 def test_machine_specific_config_ref_rejected(tmp_path):
     ledger = SelectionLedger(tmp_path / 'trials.jsonl')
     with pytest.raises(GraphError, match='repository-relative'):
-        ledger.record_success('graph', SNAPSHOT, _outputs(), Context(services={'config_ref': '/private/file'}))
+        ledger.record_success('graph', SNAPSHOT, _outputs(), Context(backtest_key='graph', services={'config_ref': '/private/file'}))
     assert ledger.summary()['selection_n'] == 0
 
 
 def test_strategy_identifier_rejects_uncontrolled_metadata(tmp_path):
     ledger = SelectionLedger(tmp_path / 'trials.jsonl')
     with pytest.raises(GraphError, match='strategy identifier'):
-        ledger.record_success('graph', {'graph': {'strategy': '../outside', 'nodes': []}}, _outputs(), Context())
+        ledger.record_success('graph', {'graph': {'strategy': '../outside', 'nodes': []}}, _outputs(), Context(backtest_key='graph'))
     assert ledger.summary()['selection_n'] == 0

@@ -176,6 +176,7 @@ class Context:
     token: CancelToken = field(default_factory=CancelToken)
     ledger: object = None
     graph_hash: str = ''
+    backtest_key: str = ''
     snapshot: dict = field(default_factory=dict)
     services: dict = field(default_factory=dict)
     progress: Callable = lambda value: None
@@ -269,6 +270,7 @@ class Engine:
                     # Cancellation and successful selection commit have one linearization point.
                     with ctx.token.lock:
                         ctx.check_cancelled()
+                        ctx.backtest_key = key
                         ctx.ledger.record_success(ctx.graph_hash, ctx.snapshot, result, ctx)
                         ctx.token.committed = True
                 if kind.cacheable and status == 'recomputed':

@@ -5,6 +5,8 @@ from pathlib import Path
 
 from .api import GraphHTTPServer
 from .service import GraphService, json_value
+from .core import GraphError
+from strategies._common.validation.decision import UnderdeterminedError
 
 
 def main(argv=None):
@@ -43,6 +45,9 @@ def main(argv=None):
         result = {**service.jobs[job['id']], 'nodes':service.engine.states, 'ledger':service.ledger.summary()}
         print(json.dumps(json_value(result),ensure_ascii=False,sort_keys=True))
         return 0 if result['status'] == 'complete' else 1
+    except (GraphError, UnderdeterminedError) as exc:
+        print(json.dumps({'error': str(exc)}, ensure_ascii=False))
+        return 1
     except Exception:
         print(json.dumps({'error':'graph execution could not start'}))
         return 1

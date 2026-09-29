@@ -6,6 +6,10 @@ name: ci
 # Its fixture supplies only offline calendar input, never mocked accounting.
 # Production bundle tests remain explicitly skipped without licensed data;
 # the skipped-test summary below makes that coverage boundary visible.
+# To enable licensed bundle coverage, add TEJAPI_KEY in repository Settings >
+# Secrets and variables > Actions, then uncomment the Run pytest env mapping.
+# Provision/ingest tquant_future in the runner's ZIPLINE_ROOT and set
+# GS_TEST_REAL_BUNDLE=1 to enable the production graph equivalence test.
 
 on:
   pull_request:

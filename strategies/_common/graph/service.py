@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import copy
-import contextlib
-import logging
 import dataclasses
 import json
 import math
@@ -15,6 +13,8 @@ import uuid
 
 from .core import Cancelled, Context, Engine, GraphError, Registry, digest
 from .ledger import SelectionLedger
+from .output_guard import quiet_worker_output
+from strategies._common.validation.decision import UnderdeterminedError
 
 
 def default_registry():
@@ -85,7 +85,7 @@ def restore_sidecar(document, registry):
     return {'graph': copy.deepcopy(snapshot['graph']), 'graph_hash': document['graph_hash'], 'warnings': warnings}
 
 
-def save_artifact(context, values, path, manifest=None):
+def save_artifact(context, values, path):
     from strategies._common.validation import report
     from .stat_nodes import returns_frame
     output = next((v for v in values.values() if 'Returns' in v), None)
@@ -98,10 +98,10 @@ def save_artifact(context, values, path, manifest=None):
                 n_trials=context.ledger.summary()['selection_n'], n_trials_source='ledger')
         except (ValueError, ArithmeticError):
             validation = {'schema': report.SCHEMA, 'warnings': ['統計資料不足，請補足觀測後再檢定。']}
-    document = {**validation, 'graph_hash': context.graph_hash, 'graph_snapshot': context.snapshot}
+    document = {**validation, 'graph_hash': context.graph_hash, 'graph_snapshot': context.snapshot,
+                'backtest_key': context.backtest_key,
+                'document_graph_hash': context.services.get('document_graph_hash')}
     write_json(path, document)
-    if manifest is not None:
-        report.apply_to_manifest(Path(manifest), document)
     return Path(path)
 
 
@@ -117,6 +117,7 @@ class GraphService:
         self.jobs = {}
         self.active = None
         self.lock = threading.RLock()
+        self.completed = {}
 
     def confined(self, relative, *, sidecar=False):
         path = (self.root / relative).resolve()
@@ -171,6 +172,26 @@ class GraphService:
             write_json(path, self.graph)
             self.path = path
             self.saved_hash = self.engine.identity(self.graph)[0]
+            artifact = self.completed.get(self.saved_hash)
+            if artifact is None:
+                candidates = sorted((self.root / '.graph-runs').glob('*.validation.json'),
+                                    key=lambda item: item.stat().st_mtime_ns, reverse=True)
+                for candidate in candidates:
+                    try:
+                        document = json.loads(candidate.read_text(encoding='utf-8'))
+                        if self.saved_hash not in (document.get('document_graph_hash'), document.get('graph_hash')):
+                            continue
+                        restored = restore_sidecar(document, self.registry)
+                        if restored['warnings'] or not document.get('backtest_key'):
+                            continue
+                    except (ValueError, OSError):
+                        continue
+                    artifact = candidate
+                    break
+            if artifact is not None:
+                from strategies._common.validation import report
+                document = json.loads(artifact.read_text(encoding='utf-8'))
+                report.apply_to_manifest(path.parent / 'manifest.yaml', document)
             return self.document()
 
     def parameters(self, node_id, params):
@@ -196,7 +217,9 @@ class GraphService:
             graph = copy.deepcopy(self.graph)
             job_id = uuid.uuid4().hex
             job = {'id': job_id, 'status': 'running', 'preview': preview, 'progress': {}}
-            ctx = Context(ledger=self.ledger, progress=lambda value: job.update(progress=value))
+            document_hash = self.engine.identity(graph)[0]
+            ctx = Context(ledger=self.ledger, progress=lambda value: job.update(progress=value),
+                          services={'root': self.root, 'document_graph_hash': document_hash})
             self.jobs[job_id] = job
             self.active = job_id
             self._token = ctx.token
@@ -205,8 +228,6 @@ class GraphService:
                     if any(n['type'] == 'data.futures_bars' for n in graph['nodes']):
                         from strategies.tsmom_tx_mtx.graph_nodes import prepare_graph
                         prepared = prepare_graph(graph)
-                        with self.lock:
-                            self.graph = prepared
                     else:
                         prepared = graph
                     values = self.engine.run(prepared, preview=preview, context=ctx)
@@ -214,24 +235,26 @@ class GraphService:
                     errors = [state for node_id, state in self.engine.states.items() if node_id in inspected and state['status'] in ('error','not_ready')]
                     if not preview and ctx.token.committed:
                         artifact = self.root / '.graph-runs' / (ctx.graph_hash + '.validation.json')
-                        manifest = self.path.parent / 'manifest.yaml' if self.path else None
-                        save_artifact(ctx, values, artifact, manifest)
+                        save_artifact(ctx, values, artifact)
+                        self.completed[document_hash] = artifact
                         job['sidecar'] = artifact.relative_to(self.root).as_posix()
+                        job['graph_hash'] = ctx.graph_hash
+                        job['backtest_key'] = ctx.backtest_key
+                    if errors:
+                        job['message'] = '; '.join(dict.fromkeys(state['message'] for state in errors))
                     job['status'] = 'error' if errors else 'complete'
                 except Cancelled:
                     job['status'] = 'cancelled'
+                except (GraphError, UnderdeterminedError) as exc:
+                    job['status'] = 'error'
+                    job['message'] = str(exc)
                 except Exception:
                     job['status'] = 'error'
                     job['message'] = 'execution failed; no external error text exposed'
             def quiet_work():
-                # Third-party imports may print connection settings; never persist or expose them.
-                previous = logging.root.manager.disable
-                with open(os.devnull, 'w') as sink, contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
-                    logging.disable(logging.CRITICAL)
-                    try:
-                        work()
-                    finally:
-                        logging.disable(previous)
+                # Third-party console output is confidential and never persisted.
+                with quiet_worker_output():
+                    work()
             thread = threading.Thread(target=quiet_work, name='live-graph-worker', daemon=True)
             self._thread = thread
             thread.start()

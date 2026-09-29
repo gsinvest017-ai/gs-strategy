@@ -63,11 +63,11 @@ curl.exe http://127.0.0.1:19103/api/node-types
 ## 未覆蓋與限制
 
 - **R5 並非所有邊界情境完全達標**：零波動、觀測不足等情況已看到回測績效，必須計入 N；但 ruleset 1.1 無法對未知 autocorr/n_eff 產生可稽核處方。此時保留 purpose=selection、delta_n=1、status=pending，audit 如實回報不可稽核。正常資料的 audit 通過。不可把 pending 當作合格處方；未修改規則或捏造事實。
-- `config_ref` 為既有 harness 相容 manifest 路徑；`graph_ref` 保存圖 hash 與完整快照，`config_sha256` 為圖 hash。這是規格欄位要求的相容調整。
+- 本輪已修正 `config_ref`：每個 Backtest 快取鍵對應 `.graph-runs/<backtest_key>.config.json`，保存首次完成組態的完整圖快照；精確 repo 相對路徑比對測試通過。
 - 真實 tquant_future 測試未執行：本機 TEJ 憑證可用性=false、production bundle 目錄可用性=false。測試需 GS_TEST_REAL_BUNDLE=1，並以獨立子程序避免 fixture 日曆污染。
 - 另六個既有 skip：外部 gs_rag 套件一項，TEJ 資料依賴五項。既有測試與 skip 條件未弱化。
 - fixture 使用 2016–2020 廠商靜態日曆範圍，回測區間 2018–2020；動態日曆輸入由離線 fixture 提供，orders、fills、costs、accounting 均真實 Zipline。未宣稱已驗證真實資料的 alpha 品質或策略獲利。
-- Sigma 的基準預覽與 Sizing 的有效歷史視窗關係見主規格附錄 B；保留舊策略有限視窗語意，未改動 alpha 定義。
+- 本輪已修正 Sigma 預覽：節點新增 Score 輸入並使用相同有限視窗，只計算一次，Sizing 直接使用 Sigma.values；未改動 alpha 定義。
 
 ## 風險檢查
 
@@ -108,4 +108,34 @@ curl.exe http://127.0.0.1:19103/api/node-types
 - `.github/workflows/ci.yml`
 - `requirements-test.txt`
 - `README.md`
+
+## Code review 單輪修正（2026-09-29）
+
+依新版 R5，由單一 agent 依序處理；不修改 decision.py、規則集、原 strategy.py 或正式 ledger。此輪是遷移與記帳修正，不是新 alpha 或 filter，不以回測績效選參數。
+
+| 項目 | 修正 | 對應測試 |
+|---|---|---|
+| 1 N 灌水 | Context.backtest_key 取 Backtest 節點實際快取鍵；ledger 以此去重，完整圖 hash 與快照仍保留 | `test_downstream_family_cached_without_new_selection_and_config_ref`；`test_r8_fixture_real_zipline_equivalence` 實際測 family 改動 cached／N 不變，target_vol=0 後 N+1 |
+| 2 Sigma 預覽 | feature.ewma_vol 接收 Score.window，顯示 sizing 使用的 Sigma.values | `test_sigma_preview_is_sizing_sigma_lookback_50_skip_5`：以權重反推 sigma，並獨立對照 legacy 有限視窗 |
+| 3 重複計算 | vol_target 直接使用 Sigma.values，不再呼叫 _sigma | 同上：_sigma 呼叫數為一次，視窗為 60 |
+| 4 全域靜音 | 執行緒區域的 console／logging 隔離；不更動 logging.disable，worker 輸出不落地 | `test_worker_output_isolation_preserves_other_thread_errors`；`test_external_console_output_and_errors_are_not_exposed` |
+| 5 domain 錯誤 | prepare_graph、節點執行及 CLI 啟動保留 GraphError／UnderdeterminedError；第三方例外遮蔽 | `test_prepare_errors_reach_job_and_cli_only_when_controlled` 的三組情境；上列 worker 測試另驗節點訊息 |
+| 6 config_ref | `.graph-runs/<backtest_key>.config.json` 先原子寫入，再追加 trial；不同組態可區分，cached 不覆寫首次快照 | `test_downstream_family_cached_without_new_selection_and_config_ref`：以 triage_generated.Candidate.config_ref 精確比對 |
+| 7 manifest 寫入時機 | run 只寫 sidecar；save 僅套用目前圖已完成的回測，支援重啟後讀取相符 sidecar | `test_manifest_changes_only_on_save_of_completed_graph`；`test_save_after_restart_uses_matching_completed_sidecar` |
+| 8 執行期資料版本 | prepare_graph 僅操作副本；版本入快取鍵、trial 與 sidecar，不回寫文件 | `test_run_pins_runtime_version_without_dirtying_document`；`test_r8_fixture_real_zipline_equivalence` 另驗真 fixture 執行與存檔前後 graph.json bytes 相同 |
+| 9 CI 說明 | 補回 Actions secret 設定、bundle 準備及 GS_TEST_REAL_BUNDLE 開關，保留離線 fixture 說明 | `test_ci_documents_optional_secret_and_fixture_coverage` |
+
+API 附錄 B 與 README 已同步：分清文件 graph_hash 與執行 graph_hash，列出 job.message／backtest_key、sidecar.document_graph_hash、config_ref 與 manifest 存檔語意。
+
+### 最終驗收
+
+命令：`PYTHONUTF8=1 .venv-bt/Scripts/python.exe -m pytest tests/ -q -rs`。
+
+最終結果：**432 passed、7 skipped、7 warnings，49.44 秒**。既有 422 個測試全部保留，新增 10 個測試案例；skip 條件未變（外部 gs_rag 一項、TEJ 依賴五項、真實 bundle 一項）。warnings 均為既有 Zipline co_lnotab 棄用警告。R8 fixture、前視檢查、獨立損益對帳及本輪所有回歸測試通過；真實 bundle 限制與 pending 統計稽核邊界仍如前述。`git diff --check` 通過；正式 ledger、decision.py、規則集及原策略未變；未 push。
+
+### 量化自查
+
+Pre-mortem 的三個風險為：快取／去重漏上游或資料版本、Sigma 有限視窗改變 legacy sizing、輸出隔離吞掉其他執行緒的錯誤。獨立方案以實際 Backtest 快取鍵及 Score 視窗為準，反例覆蓋下游 family 改動、資料版本更新、未執行即存檔與第三方例外。
+
+20 條清單的本輪相關檢查通過：訊號可得時點／前視（1–5、10–11）、Sigma 定義與缺資料語意（12、15）、測試本身（19）；R8 既有獨立損益對帳覆蓋 6–9。年化、MDD、filter、branch、exit、alpha 評選（13–14、16–18、20）未修改，不把此輪 fixture 結果解讀成策略可交易性認證。
 - `docs/spec/live-strategy-graph.md`

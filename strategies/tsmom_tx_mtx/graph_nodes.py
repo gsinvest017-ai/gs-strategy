@@ -107,11 +107,11 @@ def momentum(inputs, p, ctx):
 
 def volatility(inputs, p, ctx):
     data = inputs['ContinuousBars']
-    # Store per-window estimates so the Score branch's actual lookback controls
-    # the same finite history window used by legacy _rebalance.
-    return {'Sigma': {'source': data['source'], 'histories': data['histories'],
-                      'values': _sigma(data['histories'], p['vol_com'], p['vol_com'] * 4 + 1),
-                      'vol_com': p['vol_com']}}
+    score = inputs['Score']
+    if data['source'] != score['source']:
+        raise GraphError('Score and volatility data sources must match')
+    return {'Sigma': {'source': data['source'], 'window': score['window'],
+                      'values': _sigma(data['histories'], p['vol_com'], score['window'])}}
 
 
 def _sigma(histories, com, window):
@@ -135,7 +135,9 @@ def vol_target(inputs, p, ctx):
     d, s = inputs['Direction'], inputs['Sigma']
     if d['source'] != s['source']:
         raise GraphError('Direction and Sigma data sources must match')
-    sigma = _sigma(s['histories'], s['vol_com'], d['window'])
+    if d['window'] != s['window']:
+        raise GraphError('Direction and Sigma history windows must match')
+    sigma = s['values']
     valid = (sigma > 0) & d['values'].notna()
     raw = (d['values'] * p['target_vol'] / sigma).where(valid)
     weights = raw.div(valid.sum(axis=1).clip(lower=1), axis=0)
@@ -213,7 +215,7 @@ def register_nodes(registry):
         ('data.futures_bars', [], ['Bars'], {'bundle': param('string', 'tquant_future'), 'roots': param('array', ['TX', 'MTX']), 'start': param('string', '2018-01-01'), 'end': param('string', '2026-04-30'), 'calendar': param('string', 'TEJ_morning_future'), 'data_version': param('string', 'initial'), 'history_days': param('integer', 1024, minimum=5)}, futures_bars),
         ('data.continuous', ['Bars'], ['ContinuousBars'], {}, continuous),
         ('feature.signed_momentum', ['ContinuousBars'], ['Score'], {'lookback': param('integer', 252, minimum=1), 'skip': param('integer', 21, minimum=0)}, momentum),
-        ('feature.ewma_vol', ['ContinuousBars'], ['Sigma'], {'vol_com': param('integer', 60, minimum=1)}, volatility),
+        ('feature.ewma_vol', ['ContinuousBars', 'Score'], ['Sigma'], {'vol_com': param('integer', 60, minimum=1)}, volatility),
         ('signal.direction', ['Score'], ['Direction'], {'allow_short': param('boolean', True)}, direction),
         ('sizing.vol_target', ['Direction', 'Sigma'], ['RawWeights'], {'target_vol': param('number', .15, minimum=0)}, vol_target),
         ('sizing.gross_cap', ['RawWeights'], ['Weights'], {'max_gross_leverage': param('number', 1.5, minimum=0)}, gross_cap),
@@ -224,7 +226,6 @@ def register_nodes(registry):
         'data.futures_bars': (_portal,), 'data.continuous': (_portal,),
         'feature.signed_momentum': (_legacy, HERE / 'strategy.py'),
         'feature.ewma_vol': (_sigma, _legacy, HERE / 'strategy.py'),
-        'sizing.vol_target': (_sigma, _legacy, HERE / 'strategy.py'),
         'backtest.zipline': (_legacy, HERE / 'strategy.py', HERE / 'futures_setup.py'),
     }
     for name, ins, outs, params, fn in specs:

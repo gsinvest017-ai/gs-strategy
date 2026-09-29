@@ -63,6 +63,8 @@ def test_shared_lifecycle_sidecar_manifest_and_restart(tmp_path):
     assert restored['graph_hash']==s.document()['graph_hash']
     assert restored['graph']==s.graph and not restored['warnings']
     import yaml
+    assert 'validation' not in yaml.safe_load((s.path.parent/'manifest.yaml').read_text(encoding='utf-8'))
+    s.save()
     manifest=yaml.safe_load((s.path.parent/'manifest.yaml').read_text(encoding='utf-8'))
     assert manifest['validation']['graph_hash']==restored['graph_hash']
     s.parameters('feature',{'value':2})
@@ -195,3 +197,173 @@ def test_generated_cache_and_console_logs_are_gitignored():
     paths=['.cache/live-strategy-graph/probe.pkl','.graph-runs/probe.validation.json','log/codex-probe.txt']
     result=subprocess.run(['git','check-ignore',*paths],text=True,capture_output=True,check=True)
     assert result.stdout.splitlines()==paths
+
+
+def test_downstream_family_cached_without_new_selection_and_config_ref(tmp_path):
+    from scripts.triage_generated import Candidate
+    s = make_service(tmp_path)
+    first = finish(s)
+    records = lambda: [json.loads(line) for line in s.ledger.path.read_text().splitlines()]
+    original = records()[0]
+    s.parameters('facts', {'family': 'bounded_multiple'})
+    second = finish(s)
+    assert second['graph_hash'] != first['graph_hash']
+    assert s.engine.states['backtest']['status'] == 'cached'
+    assert s.ledger.summary()['selection_n'] == 1
+    assert records() == [original]
+    s.parameters('feature', {'value': 2})
+    finish(s)
+    assert s.ledger.summary()['selection_n'] == 2
+    refs = [record['config_ref'] for record in records()]
+    assert len(set(refs)) == 2
+    for record in records():
+        path = tmp_path / record['config_ref']
+        snapshot = json.loads(path.read_text())
+        assert snapshot['graph_hash'] == record['graph_hash']
+        assert snapshot['graph_snapshot'] == record['graph_ref']['snapshot']
+        candidate = Candidate('', path, {}, '', '', '', [], '', '', rel_base=tmp_path)
+        assert candidate.config_ref in refs
+    assert json.loads((tmp_path/original['config_ref']).read_text())['graph_hash'] == first['graph_hash']
+
+
+def test_manifest_changes_only_on_save_of_completed_graph(tmp_path):
+    s = make_service(tmp_path)
+    manifest = s.path.with_name('manifest.yaml')
+    before = manifest.read_bytes()
+    first = finish(s)
+    assert manifest.read_bytes() == before
+    s.parameters('feature', {'value': 2})
+    s.save()
+    assert manifest.read_bytes() == before
+    finish(s, preview=True)
+    s.save()
+    assert manifest.read_bytes() == before
+    second = finish(s)
+    assert manifest.read_bytes() == before
+    s.save()
+    import yaml
+    assert yaml.safe_load(manifest.read_text())['validation']['graph_hash'] == second['graph_hash']
+    after = manifest.read_bytes()
+    s.parameters('feature', {'value': 1})
+    assert finish(s)['graph_hash'] == first['graph_hash']
+    assert manifest.read_bytes() == after
+    s.save()
+    assert yaml.safe_load(manifest.read_text())['validation']['graph_hash'] == first['graph_hash']
+
+
+def test_worker_output_isolation_preserves_other_thread_errors(tmp_path, capsys, caplog):
+    import logging
+    import sys
+    entered, release = threading.Event(), threading.Event()
+    def noisy(inputs, params, ctx):
+        print('sensitive fixture output')
+        print('sensitive fixture error', file=sys.stderr)
+        logging.error('sensitive fixture log')
+        entered.set()
+        assert release.wait(10)
+        raise GraphError('controlled graph failure')
+    s = make_service(tmp_path)
+    s.registry.types['backtest.test'].function = noisy
+    disabled = logging.root.manager.disable
+    s.start()
+    try:
+        assert entered.wait(10)
+        print('server remains visible', file=sys.stderr)
+        logging.error('server error remains visible')
+        assert logging.root.manager.disable == disabled
+    finally:
+        release.set()
+        s._thread.join(20)
+    captured = capsys.readouterr()
+    assert 'server remains visible' in captured.err
+    assert 'server error remains visible' in caplog.text
+    assert 'sensitive' not in captured.out + captured.err + caplog.text
+    assert 'controlled graph failure' in s.jobs[s.active]['message']
+
+
+@pytest.mark.parametrize('domain', [True, False, 'underdetermined'])
+def test_prepare_errors_reach_job_and_cli_only_when_controlled(tmp_path, monkeypatch, capsys, domain):
+    from strategies.tsmom_tx_mtx import graph_nodes
+    from strategies._common.graph import __main__ as cli
+    s = make_service(tmp_path)
+    s.registry.register(NodeType('data.futures_bars', {}, {'Bars': 'Bars'}, {}, feature))
+    graph = copy.deepcopy(s.graph)
+    graph['nodes'].append({'id': 'bars', 'type': 'data.futures_bars'})
+    s.set_graph(graph)
+    def fail(graph):
+        if domain == 'underdetermined':
+            raise decision.UnderdeterminedError('bundle has no ingestions; supply observations')
+        raise (GraphError('bundle has no ingestions') if domain else RuntimeError('sensitive fixture'))
+    monkeypatch.setattr(graph_nodes, 'prepare_graph', fail)
+    job = finish(s)
+    assert job['status'] == 'error'
+    assert ('bundle has no ingestions' in job['message']) == bool(domain)
+    assert 'sensitive' not in json.dumps(job)
+    monkeypatch.setattr(cli, 'GraphService', lambda *a, **kw: s)
+    monkeypatch.setattr(s, 'load', lambda path: None)
+    assert cli.main(['run', '--root', str(tmp_path)]) == 1
+    output = capsys.readouterr().out
+    assert ('bundle has no ingestions' in output) == bool(domain)
+    assert 'sensitive' not in output
+    monkeypatch.setattr(s, 'load', fail)
+    assert cli.main(['run', '--root', str(tmp_path)]) == 1
+    output = capsys.readouterr().out
+    assert ('bundle has no ingestions' in output) == bool(domain)
+    assert 'sensitive' not in output
+
+
+def test_run_pins_runtime_version_without_dirtying_document(tmp_path, monkeypatch):
+    from strategies.tsmom_tx_mtx import graph_nodes
+    s = make_service(tmp_path)
+    def source(inputs, params, ctx):
+        return {'Bars': params}
+    s.registry.register(NodeType('data.futures_bars', {}, {'Bars': 'Bars'},
+        {'data_version': {'type': 'string', 'default': 'auto'}}, source))
+    # Use a source dependency so its pinned version participates in Backtest identity.
+    s.registry.types['feature.test'].inputs = {'Bars': 'Bars'}
+    graph = copy.deepcopy(s.graph)
+    graph['nodes'].append({'id': 'bars', 'type': 'data.futures_bars'})
+    graph['edges'].append({'from': ['bars','Bars'], 'to': ['feature','Bars']})
+    write_json(s.path, s.registry.normalize(graph)[0])
+    s.load('strategies/tsmom_tx_mtx/graph.json')
+    before, document = s.path.read_bytes(), s.document()
+    version = ['2020-01-01T00:00:00']
+    def prepare(graph):
+        result = copy.deepcopy(graph)
+        next(n for n in result['nodes'] if n['id'] == 'bars')['params']['data_version'] = version[0]
+        return result
+    monkeypatch.setattr(graph_nodes, 'prepare_graph', prepare)
+    first = finish(s)
+    assert first['status'] == 'complete'
+    assert s.document() == document and not s.document()['dirty']
+    assert s.path.read_bytes() == before
+    sidecar = json.loads((tmp_path/first['sidecar']).read_text())
+    assert next(n for n in sidecar['graph_snapshot']['graph']['nodes'] if n['id']=='bars')['params']['data_version'] == version[0]
+    finish(s)
+    assert s.engine.states['backtest']['status'] == 'cached'
+    assert s.ledger.summary()['selection_n'] == 1
+    version[0] = '2020-01-02T00:00:00'
+    second = finish(s)
+    assert second['backtest_key'] != first['backtest_key']
+    assert s.ledger.summary()['selection_n'] == 2
+    s.save()
+    assert s.path.read_bytes() == before
+    assert version[0] not in s.path.read_text()
+
+
+def test_ci_documents_optional_secret_and_fixture_coverage():
+    text = (Path(__file__).parents[1]/'.github/workflows/ci.yml').read_text()
+    assert 'Secrets and variables > Actions' in text
+    assert 'TEJAPI_KEY' in text and 'GS_TEST_REAL_BUNDLE=1' in text
+    assert 'ZIPLINE_ROOT' in text and 'never mocked accounting' in text
+
+
+def test_save_after_restart_uses_matching_completed_sidecar(tmp_path):
+    s = make_service(tmp_path)
+    first = finish(s)
+    other = GraphService(tmp_path, registry=s.registry)
+    other.load('strategies/tsmom_tx_mtx/graph.json')
+    other.save()
+    import yaml
+    manifest = other.path.with_name('manifest.yaml')
+    assert yaml.safe_load(manifest.read_text())['validation']['graph_hash'] == first['graph_hash']
