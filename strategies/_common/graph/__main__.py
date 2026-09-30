@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from .api import GraphHTTPServer
-from .service import GraphService, json_value
+from .service import GraphService, json_value, user_message
 from .core import GraphError
 from strategies._common.validation.decision import UnderdeterminedError
 
@@ -34,7 +34,7 @@ def serve_ui(args):
     except KeyboardInterrupt:
         return 0
     except Exception:
-        print(json.dumps({'error': 'graph UI could not start or continue'}))
+        print(json.dumps({'error': '策略圖介面無法啟動或繼續執行'}, ensure_ascii=False))
         return 1
     finally:
         if server is not None:
@@ -48,7 +48,7 @@ def serve_ui(args):
                     with quiet_worker_output():
                         close_fixture(service)
                 except Exception:
-                    print(json.dumps({'error': 'fixture cleanup could not complete'}))
+                    print(json.dumps({'error': '測試資料清理未能完成'}, ensure_ascii=False))
 
 
 def main(argv=None):
@@ -63,7 +63,7 @@ def main(argv=None):
     parser.add_argument('--fixture', action='store_true')
     args = parser.parse_args(argv)
     if args.fixture and (args.command != 'ui' or args.root or args.cache_dir or args.ledger):
-        parser.error('--fixture requires ui and forbids root/cache-dir/ledger overrides')
+        parser.error('測試資料模式僅適用於 ui，且不可覆寫儲存位置')
     if args.command == 'ui':
         return serve_ui(args)
     service = GraphService(args.root or Path.cwd(), cache_dir=args.cache_dir, ledger_path=args.ledger)
@@ -89,14 +89,16 @@ def main(argv=None):
         except KeyboardInterrupt:
             service.cancel(job['id'])
             service._thread.join()
-        result = {**service.jobs[job['id']], 'nodes':service.engine.states, 'ledger':service.ledger.summary()}
+        states = {node_id: {**state, **({'message': user_message(state['message'])} if 'message' in state else {})}
+                  for node_id, state in service.engine.states.items()}
+        result = {**service.job(job['id']), 'nodes': states, 'ledger':service.ledger.summary()}
         print(json.dumps(json_value(result),ensure_ascii=False,sort_keys=True))
         return 0 if result['status'] == 'complete' else 1
     except (GraphError, UnderdeterminedError) as exc:
-        print(json.dumps({'error': str(exc)}, ensure_ascii=False))
+        print(json.dumps({'error': user_message(exc)}, ensure_ascii=False))
         return 1
     except Exception:
-        print(json.dumps({'error':'graph execution could not start'}))
+        print(json.dumps({'error':'策略圖無法開始執行'}, ensure_ascii=False))
         return 1
 
 

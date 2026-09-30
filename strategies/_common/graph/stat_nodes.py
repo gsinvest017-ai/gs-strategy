@@ -31,23 +31,32 @@ def derive_facts(returns, declarations=None):
     series = pd.to_numeric(returns_frame(returns)['returns'], errors='coerce')
     values = series.replace([np.inf, -np.inf], np.nan).dropna().to_numpy()
     n = len(values)
-    lags = min(10, n // 5)
+    lags = min(max(21, int(10 * np.log10(max(n, 1)))), n // 5)
+    tested_lags = sorted({min(10, lags), min(21, lags), lags}) if lags else []
     provenance = {
         'normal': {'test': 'Jarque-Bera', 'p_value': None, 'alpha': 0.05},
-        'autocorr': {'test': 'Ljung-Box', 'p_value': None, 'alpha': 0.05, 'lags': lags},
+        'autocorr': {'test': 'Ljung-Box', 'p_value': None, 'alpha': 0.05, 'lags': lags,
+                     'tested_lags': tested_lags, 'p_values': {}, 'decision_p_value': None,
+                     'p_value_lag': tested_lags[0] if tested_lags else None},
         'n_eff': {'method': 'floor(n / max(1, 1 + 2*sum(positive ACF[1:lags])))',
                   'n_observations': n, 'lags': lags, 'p_value': None},
     }
     facts = dict(declared, normal='unknown', autocorr='unknown', n_eff=None, unit='period')
     if n >= 20 and float(np.var(values)) > 0:
         jb = float(jarque_bera(values).pvalue)
-        lb = float(acorr_ljungbox(values, lags=[lags], return_df=True)['lb_pvalue'].iloc[0])
+        probabilities = acorr_ljungbox(values, lags=tested_lags, return_df=True)['lb_pvalue']
+        provenance['autocorr']['p_values'] = {str(lag): float(p) if np.isfinite(p) else None
+                                             for lag, p in probabilities.items()}
+        lb = float(probabilities.min())
         if np.isfinite(jb):
             facts['normal'] = 'yes' if jb >= 0.05 else 'no'
             provenance['normal']['p_value'] = jb
         if np.isfinite(lb):
             facts['autocorr'] = 'yes' if lb < 0.05 else 'no'
-            provenance['autocorr']['p_value'] = lb
+            # Preserve the original short-lag statistic for existing consumers;
+            # the conservative decision uses every recorded lag probability.
+            provenance['autocorr']['p_value'] = float(probabilities.iloc[0])
+            provenance['autocorr']['decision_p_value'] = lb
         correlations = acf(values, nlags=lags, fft=False)[1:]
         denominator = max(1.0, 1 + 2 * float(np.maximum(correlations, 0).sum()))
         if declared['overlap'] == 'overlapping':

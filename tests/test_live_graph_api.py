@@ -303,12 +303,12 @@ def test_prepare_errors_reach_job_and_cli_only_when_controlled(tmp_path, monkeyp
     monkeypatch.setattr(s, 'load', lambda path: None)
     assert cli.main(['run', '--root', str(tmp_path)]) == 1
     output = capsys.readouterr().out
-    assert ('bundle has no ingestions' in output) == bool(domain)
+    assert ('資料集沒有可用的匯入版本' in output) == bool(domain)
     assert 'sensitive' not in output
     monkeypatch.setattr(s, 'load', fail)
     assert cli.main(['run', '--root', str(tmp_path)]) == 1
     output = capsys.readouterr().out
-    assert ('bundle has no ingestions' in output) == bool(domain)
+    assert ('資料集沒有可用的匯入版本' in output) == bool(domain)
     assert 'sensitive' not in output
 
 

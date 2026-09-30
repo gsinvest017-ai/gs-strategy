@@ -89,7 +89,7 @@ def test_new_http_routes_and_static_boundaries(tmp_path):
         assert call('/secret.txt')[0] == 404
         assert call('/', headers={'Host': 'evil.invalid'})[0] == 403
         assert call('/', headers={'Origin': 'https://evil.invalid'})[0] == 403
-        assert json.loads(call('/api/session')[1]) == {'fixture': False, 'label': ''}
+        assert json.loads(call('/api/session')[1]) == {'fixture': False, 'label': '', 'active_job': None}
         assert call('/api/run-estimate')[0] == 200
         assert call('/api/layout')[0] == 200
         assert call('/api/layout', {'positions': {'feature': {'x': 1, 'y': 2}}})[0] == 200
@@ -157,7 +157,7 @@ def test_ui_bind_failure_cleans_fixture_and_redacts(tmp_path, monkeypatch, capsy
         occupied.listen()
         assert cli.main(['ui', '--fixture', '--port', str(occupied.getsockname()[1])]) == 1
     assert closed == [service]
-    assert json.loads(capsys.readouterr().out) == {'error': 'graph UI could not start or continue'}
+    assert json.loads(capsys.readouterr().out) == {'error': '策略圖介面無法啟動或繼續執行'}
 
 
 def test_ui_initialization_failure_does_not_expose_external_text(monkeypatch, capsys):
@@ -169,7 +169,7 @@ def test_ui_initialization_failure_does_not_expose_external_text(monkeypatch, ca
     assert cli.main(['ui', '--fixture']) == 1
     captured = capsys.readouterr()
     assert 'excluded' not in captured.out + captured.err
-    assert json.loads(captured.out) == {'error': 'graph UI could not start or continue'}
+    assert json.loads(captured.out) == {'error': '策略圖介面無法啟動或繼續執行'}
 
 def test_ui_invalid_edge_still_serves_controlled_load_error(tmp_path, monkeypatch):
     from strategies._common.graph import __main__ as cli
@@ -199,7 +199,7 @@ def test_ui_invalid_edge_still_serves_controlled_load_error(tmp_path, monkeypatc
             with pytest.raises(HTTPError) as caught:
                 urlopen(request)
             assert caught.value.code == 400
-            assert 'invalid edge at index' in json.load(caught.value)['error']
+            assert '接線索引 0 無效' in json.load(caught.value)['error']
             observed.append(True)
         finally:
             server.shutdown()

@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit, unquote
 
 from .core import GraphError
-from .service import json_value, restore_sidecar
+from .service import json_value, restore_sidecar, user_message
 
 
 class GraphHTTPServer(ThreadingHTTPServer):
@@ -23,6 +23,8 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def reply(self, status, data):
+        if isinstance(data, dict) and 'error' in data:
+            data = {**data, 'error': user_message(data['error'])}
         body = json.dumps(json_value(data), ensure_ascii=False, allow_nan=False).encode('utf-8')
         self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
@@ -84,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
             if not mutation and len(parts) == 3 and parts[:2] == ['api','jobs']:
                 if parts[2] not in s.jobs:
                     return self.reply(404, {'error': 'unknown job'})
-                return self.reply(200, dict(s.jobs[parts[2]]))
+                return self.reply(200, s.job(parts[2]))
             if mutation and parts == ['api','graph','load']:
                 return self.reply(200, s.load(body['path']))
             if mutation and parts == ['api','graph']:

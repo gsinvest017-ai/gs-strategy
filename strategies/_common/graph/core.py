@@ -33,6 +33,13 @@ def digest(value):
     return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
+def node_cache_key(kind, params, upstream, *, revision='', ledger_summary=None):
+    """Single identity formula shared by execution and selection estimates."""
+    key = digest({'type': kind.id, 'implementation': kind.fingerprint,
+                  'params': params, 'upstream': upstream})
+    return key if kind.cacheable else digest([key, revision, ledger_summary])
+
+
 def code_fingerprint(source):
     """Same AST normalization and digest length as triage_generated."""
     if callable(source):
@@ -206,7 +213,7 @@ class Engine:
         for i in order:
             if i in affected or any(s in affected for s, _ in incoming[i].values()):
                 affected.add(i)
-                self.states[i] = {'status': 'stale', 'result_hash': self.hashes.get(i)}
+                self.states[i] = {**self.states.get(i, {}), 'status': 'stale', 'result_hash': self.hashes.get(i)}
         return affected
 
     def _write_cache(self, key, value):
@@ -246,14 +253,15 @@ class Engine:
                 causes = [self.states.get(s, {}).get('message', '') for s, _ in incoming[i].values() if s not in current]
                 self.states[i] = {'status': 'not_ready', 'message': 'missing inputs: ' + ', '.join(sorted(missing | set(unavailable))) + '; '.join(causes)}
                 continue
-            key = digest({'type': kind.id, 'implementation': kind.fingerprint, 'params': n['params'],
-                          'upstream': {p: self.hashes[s] for p, (s, _) in incoming[i].items()}})
-            # Cache identity of mutable external sources includes their current revision.
-            if not kind.cacheable:
-                key = digest([key, ctx.services.get('revision', ''), ctx.ledger.summary() if ctx.ledger else None])
+            key = node_cache_key(kind, n['params'],
+                {p: self.hashes[s] for p, (s, _) in incoming[i].items()},
+                revision=ctx.services.get('revision', ''),
+                ledger_summary=ctx.ledger.summary() if ctx.ledger and not kind.cacheable else None)
             path = self.cache_dir / (key + '.pkl')
             self.states[i] = {'status': 'running', 'hash': key}
             try:
+                if kind.fingerprint != ctx.snapshot['fingerprints'][kind.id]:
+                    raise GraphError('implementation changed during execution; retry')
                 if path.exists() and kind.cacheable:
                     with path.open('rb') as f:
                         result = pickle.load(f)
@@ -262,9 +270,14 @@ class Engine:
                     result = kind.function({p: current[s][out] for p, (s, out) in incoming[i].items()}, n['params'], ctx)
                     status = 'recomputed'
                 ctx.check_cancelled()
+                if kind.fingerprint != ctx.snapshot['fingerprints'][kind.id]:
+                    raise GraphError('implementation changed during execution; retry')
                 if not isinstance(result, dict) or set(result) != set(kind.outputs):
                     raise GraphError('node output ports do not match declaration')
                 if kind.id.startswith('backtest.'):
+                    if any(self.registry.types[name].fingerprint != fingerprint
+                           for name, fingerprint in ctx.snapshot['fingerprints'].items()):
+                        raise GraphError('implementation changed during execution; retry')
                     if ctx.ledger is None:
                         raise GraphError('backtest requires selection ledger')
                     # Cancellation and successful selection commit have one linearization point.

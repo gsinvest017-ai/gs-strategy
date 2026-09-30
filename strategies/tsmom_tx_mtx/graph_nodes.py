@@ -1,10 +1,10 @@
 """TSMOM graph nodes: as-of continuous histories and real Zipline execution."""
 from __future__ import annotations
 
-import importlib.util
+import builtins
 import copy
 from pathlib import Path
-import sys
+from types import ModuleType
 
 import numpy as np
 import pandas as pd
@@ -28,18 +28,32 @@ def prepare_graph(graph):
         version = params.get('data_version', 'initial')
         if version in ('initial', 'auto'):
             params['data_version'] = versions[0].isoformat()
-        elif pd.Timestamp(version).tz_localize(None) not in [v.tz_localize(None) for v in versions]:
-            raise GraphError('pinned bundle ingestion is unavailable')
+        else:
+            matched = next((v for v in versions if v.tz_localize(None) == pd.Timestamp(version).tz_localize(None)), None)
+            if matched is None:
+                raise GraphError('pinned bundle ingestion is unavailable')
+            params['data_version'] = matched.isoformat()
     return graph
 
 
 def _legacy():
-    # Keep the original strategy untouched and fingerprint its helpers.
-    sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location('_tsmom_legacy_graph', HERE / 'strategy.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    # Fresh source compilation bypasses both sys.modules and timestamp-based pyc.
+    # A private import namespace avoids mutating imports used by other workers.
+    modules = {}
+    def local_import(name, globals=None, locals=None, fromlist=(), level=0):
+        path = HERE / (name + '.py')
+        if level == 0 and '.' not in name and path.is_file():
+            return load(name, path)
+        return builtins.__import__(name, globals, locals, fromlist, level)
+    def load(name, path):
+        if name not in modules:
+            module = ModuleType('_tsmom_graph_' + name)
+            modules[name] = module
+            module.__file__ = str(path)
+            module.__dict__['__builtins__'] = dict(vars(builtins), __import__=local_import)
+            exec(compile(path.read_text(encoding='utf-8-sig'), str(path), 'exec'), module.__dict__)
+        return modules[name]
+    return load('strategy', HERE / 'strategy.py')
 
 
 def _portal(p):

@@ -6,15 +6,52 @@ import dataclasses
 import json
 import math
 import os
+import re
 from pathlib import Path
 import tempfile
 import threading
 import uuid
 
+from . import core
 from .core import Cancelled, Context, Engine, GraphError, Registry, digest
 from .ledger import SelectionLedger
 from .output_guard import quiet_worker_output
 from strategies._common.validation.decision import UnderdeterminedError
+
+
+def user_message(message):
+    """Translate controlled categories without echoing input or external text."""
+    message = str(message)
+    edge = re.fullmatch(r'invalid edge at index (\d+)(?:: incompatible or unknown ports)?', message)
+    if edge:
+        return f'接線索引 {edge[1]} 無效：接點不相容或不存在'
+    # Only fixed remedies are emitted; arbitrary exception text is never echoed.
+    if 'Ljung-Box' in message:
+        return '自相關尚未判定，請先執行 Ljung-Box 檢定並補足觀測資料；無法預設使用獨立樣本標準誤'
+    if 'n_eff' in message:
+        return '缺少有效獨立觀測數，請先處理重疊或群聚觀測，再計算有效樣本數'
+    translations = {
+        'execution active; cancel or wait before editing': '目前有工作正在執行，請取消或等待完成後再編輯',
+        'bundle has no ingestions': '資料集沒有可用的匯入版本',
+        'bundle has no ingestions; supply observations': '資料集沒有可用的匯入版本，請補足觀測資料',
+        'pinned bundle ingestion is unavailable': '指定的資料匯入版本已無法使用',
+        'load a graph first': '請先載入策略圖',
+        'job is not running': '此工作目前未在執行',
+        'unknown job': '找不到指定的工作',
+        'unknown node': '找不到指定的節點',
+        'unknown endpoint': '找不到指定的功能',
+        'local Host required': '僅允許本機連線',
+        'same origin required': '僅允許相同來源的請求',
+        'application/json required': '請使用 JSON 格式提交',
+        'JSON body required; maximum 2 MB': '請提交 JSON 內容，大小不得超過 2 MB',
+        'invalid request or unavailable file': '請求格式無效或檔案無法使用',
+        'execution cancelled': '執行已取消',
+        'graph contains a cycle': '策略圖含有循環接線',
+        'implementation changed during execution; retry': '執行期間程式碼已變更，請重新執行',
+    }
+    if message in translations.values():
+        return message
+    return translations.get(message, '操作失敗，請檢查設定後重試')
 
 
 def default_registry():
@@ -121,7 +158,9 @@ class GraphService:
         self.fixture = False
 
     def session(self):
-        result = {'fixture': self.fixture,
+        with self.lock:
+            active_job = self.job(self.active) if self.active and self.jobs[self.active]['status'] == 'running' else None
+        result = {'fixture': self.fixture, 'active_job': active_job,
                   'label': 'FIXTURE 資料・獨立 ledger' if self.fixture else ''}
         if hasattr(self, 'initial_graph_path'):
             result['graph_path'] = self.initial_graph_path
@@ -132,35 +171,35 @@ class GraphService:
             if self.graph is None:
                 raise GraphError('load a graph first')
             graph = copy.deepcopy(self.graph)
-            if any(n['type'] == 'data.futures_bars' for n in graph['nodes']):
-                with quiet_worker_output():
-                    from strategies.tsmom_tx_mtx.graph_nodes import prepare_graph
-                    graph = prepare_graph(graph)
-            _, nodes, incoming, order = self.registry.normalize(graph)
-            targets = [i for i in order if nodes[i]['type'].startswith('backtest.')]
-            if len(targets) != 1:
-                raise GraphError('run estimate requires one backtest')
-            needed = set(targets)
-            for i in reversed(order):
-                if i in needed:
-                    needed.update(s for s, _ in incoming[i].values())
-            hashes = {}
-            for i in order:
-                if i not in needed:
-                    continue
-                node = nodes[i]
-                kind = self.registry.types[node['type']]
-                missing = set(kind.inputs) - set(incoming[i])
-                if missing:
-                    raise GraphError(f'{i}: missing inputs: ' + ', '.join(sorted(missing)))
-                if not kind.cacheable:
-                    raise GraphError(f'{i}: run estimate requires cacheable upstream nodes')
-                hashes[i] = digest({'type': kind.id, 'implementation': kind.fingerprint,
-                                    'params': node['params'],
-                                    'upstream': {p: hashes[s] for p, (s, _) in incoming[i].items()}})
-            key = hashes[targets[0]]
-            return {'graph_hash': self.document()['graph_hash'], 'backtest_key': key,
-                    **self.ledger.estimate(key)}
+            document_hash = self.engine.identity(graph)[0]
+        if any(n['type'] == 'data.futures_bars' for n in graph['nodes']):
+            with quiet_worker_output():
+                from strategies.tsmom_tx_mtx.graph_nodes import prepare_graph
+                graph = prepare_graph(graph)
+        _, nodes, incoming, order = self.registry.normalize(graph)
+        targets = [i for i in order if nodes[i]['type'].startswith('backtest.')]
+        if len(targets) != 1:
+            raise GraphError('run estimate requires one backtest')
+        needed = set(targets)
+        for i in reversed(order):
+            if i in needed:
+                needed.update(s for s, _ in incoming[i].values())
+        hashes = {}
+        for i in order:
+            if i not in needed:
+                continue
+            node = nodes[i]
+            kind = self.registry.types[node['type']]
+            missing = set(kind.inputs) - set(incoming[i])
+            if missing:
+                raise GraphError(f'{i}: missing inputs: ' + ', '.join(sorted(missing)))
+            if not kind.cacheable:
+                raise GraphError(f'{i}: run estimate requires cacheable upstream nodes')
+            hashes[i] = core.node_cache_key(kind, node['params'],
+                {p: hashes[s] for p, (s, _) in incoming[i].items()})
+        key = hashes[targets[0]]
+        return {'graph_hash': document_hash, 'backtest_key': key,
+                **self.ledger.estimate(key)}
 
     def layout(self, positions=None):
         with self.lock:
@@ -333,20 +372,30 @@ class GraphService:
             thread = threading.Thread(target=quiet_work, name='live-graph-worker', daemon=True)
             self._thread = thread
             thread.start()
-            return dict(job)
+            return self.job(job_id)
+
+    def job(self, job_id):
+        with self.lock:
+            result = {**copy.deepcopy(self.jobs[job_id]),
+                      'node_states': {i: state['status'] for i, state in list(self.engine.states.items())}}
+            if 'message' in result:
+                result['message'] = user_message(result['message'])
+            return result
 
     def cancel(self, job_id):
         with self.lock:
             if self.active != job_id or self.jobs[job_id]['status'] != 'running':
                 raise GraphError('job is not running')
             accepted = self._token.cancel()
-            return {'accepted': accepted, 'reason': 'cancellation requested' if accepted else 'backtest already committed'}
+            return {'accepted': accepted, 'reason': '已要求取消執行' if accepted else '回測已提交，無法取消'}
 
     def node(self, node_id, limit=60, offset=0):
         if node_id not in self.engine.states:
             raise GraphError('unknown node')
         outputs = self.engine.values.get(node_id, {})
         result = {'id': node_id, **dict(self.engine.states[node_id]), 'outputs': json_value(outputs,limit,offset)}
+        if 'message' in result:
+            result['message'] = user_message(result['message'])
         if 'Returns' in outputs:
             from .stat_nodes import returns_frame
             equity = (1 + returns_frame(outputs['Returns'])['returns']).cumprod()
