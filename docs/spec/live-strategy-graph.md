@@ -296,3 +296,12 @@ CLI 與 HTTP 共用 GraphService；`bash run.sh graph-run --graph strategies/tsm
 MVP 每張圖最多一個 Backtest，避免同一圖塞入多個策略卻只計一次 N；purpose 目前僅接受 selection。未知圖 metadata 拒收，避免把無關內容嵌入 ledger／sidecar。
 
 TSMOM 保留舊策略的有限歷史視窗：EWMA 的有效樣本亦受 lookback + skip + 5 限制。feature.ewma_vol 新增 Score 輸入，依其 window 計算一次 Sigma.values；Sigma 攜帶 source、window、values，sizing.vol_target 直接使用 values，拒絕來源或視窗不一致。改 lookback／skip 會使 Sigma 及 sizing 失效重算；節點卡片預覽即為 sizing 的實際波動值，未改成全歷史 EWMA。
+
+### 單輪審查修正：執行接手與輕量輪詢契約
+
+- GET `/api/session` 新增 `active_job`：無正在執行的工作時為 null；否則為目前 job 的唯讀快照，包含 `id,status,preview,progress,node_states`。不啟動、取消或改動工作。
+- GET `/api/jobs/<id>` 新增 `node_states`，為 `{node_id:status}` 的精簡摘要；不含 outputs。前端每 300ms 輪詢 job，只有摘要改變或 job 結束才讀取完整 `/api/nodes`。
+- UI 啟動先讀 session 與現有 graph；若 active_job 非 null，接手該 id 的輪詢、進度與取消，不重新 load graph、不提交 preview。接手工作結束後更新節點與 ledger，再啟動一次自己的 preview。
+- 即使 session 與啟動 preview 之間有其他工作開始，前端也須重新取得 active_job 並接手，避免卡住或顯示執行衝突橫幅。
+- HTTP error、job.message、節點 message 與取消 reason 的使用者可見文字皆提供繁體中文；未知錯誤使用固定安全中文訊息，不洩漏第三方例外原文。此規則取代上述顯示英文受控原文的描述。
+- run-estimate 以鎖內取得的圖快照計算並回傳該快照的 graph_hash；資料版本解析在鎖外進行，估算與執行共用唯一節點鍵函式。
