@@ -158,6 +158,80 @@ test.describe.serial('Live Strategy Graph fixture acceptance', () => {
     await expect(page.getByTestId('node-backtest')).toContainText('過期');
   });
 
+  test('another tab changes parameters then stale run returns 409 and re-estimates without N', async ({ page, context }) => {
+    // Establish the exact cached estimate the user sees before the other tab edits.
+    await page.getByTestId('run').click();
+    await idle(page);
+    await expect(page.getByTestId('estimate')).toContainText('快取重播，N 不變');
+    const shown = await api(page, 'run-estimate');
+    const ledger = await api(page, 'ledger');
+    const other = await context.newPage();
+    try {
+      await other.goto('/');
+      await idle(other);
+      const input = other.getByTestId('param-momentum-lookback');
+      const value = Number(await input.inputValue()) + 1;
+      await input.fill(String(value));
+      await idle(other);
+      await expect(page.getByTestId('estimate')).toContainText('快取重播，N 不變');
+      let runRequests = 0;
+      page.on('request', request => {
+        if (request.method() === 'POST' && request.url().endsWith('/api/run')) runRequests++;
+      });
+      const rejected = page.waitForResponse(r => r.url().endsWith('/api/run') && r.request().method() === 'POST');
+      await page.getByTestId('run').click();
+      const response = await rejected;
+      expect(response.status()).toBe(409);
+      expect(response.request().postDataJSON()).toEqual({
+        expected_backtest_key: shown.backtest_key, expected_revision: shown.revision,
+      });
+      await expect(page.locator('.error-banner')).toContainText('圖已被其他分頁修改，已重新載入');
+      await expect(page.getByTestId('param-momentum-lookback')).toHaveValue(String(value));
+      await expect(page.getByTestId('estimate')).toContainText(`${ledger.selection_n}→${ledger.selection_n + 1}`);
+      await idle(page);
+      expect(runRequests).toBe(1);
+      expect((await api(page, 'session')).active_job).toBeNull();
+      expect((await api(page, 'ledger')).selection_n).toBe(ledger.selection_n);
+    } finally {
+      await other.close();
+    }
+  });
+
+  test('stale tab deletes an edge and reloads after 409 while preserving new parameters', async ({ page, context }) => {
+    const before = await api(page, 'graph');
+    const ledger = await api(page, 'ledger');
+    const other = await context.newPage();
+    try {
+      await other.goto('/');
+      await idle(other);
+      const input = other.getByTestId('param-momentum-lookback');
+      const value = Number(await input.inputValue()) + 1;
+      await input.fill(String(value));
+      await idle(other);
+      const selectedEdge = before.graph.edges[0];
+      const edgeId = 'edge-' + JSON.stringify([selectedEdge.from, selectedEdge.to]);
+      const edge = page.getByTestId('rf__edge-' + edgeId);
+      await edge.focus();
+      await page.keyboard.press('Enter');
+      await expect(edge).toHaveClass(/selected/);
+      const rejected = page.waitForResponse(r => r.url().endsWith('/api/graph') && r.request().method() === 'POST');
+      await page.keyboard.press('Delete');
+      const response = await rejected;
+      expect(response.status()).toBe(409);
+      expect(response.request().postDataJSON().expected_revision).toBe(before.revision);
+      expect(response.request().postDataJSON().graph.edges).toHaveLength(before.graph.edges.length - 1);
+      await expect(page.locator('.error-banner')).toContainText('圖已被其他分頁修改，已重新載入');
+      await expect(page.getByTestId('param-momentum-lookback')).toHaveValue(String(value));
+      const current = await api(page, 'graph');
+      expect(current.graph.nodes.find(n => n.id === 'momentum').params.lookback).toBe(value);
+      expect(current.graph.edges).toEqual(before.graph.edges);
+      await expect(edge).toBeVisible();
+      expect((await api(page, 'ledger')).selection_n).toBe(ledger.selection_n);
+    } finally {
+      await other.close();
+    }
+  });
+
   test('moving a node persists layout without dirty/hash/N estimate changes', async ({ page }) => {
     await page.getByRole('button', { name: '存檔', exact: true }).click();
     await expect(page.getByTestId('dirty')).toHaveCount(0);

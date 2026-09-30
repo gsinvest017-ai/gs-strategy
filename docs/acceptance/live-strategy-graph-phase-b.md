@@ -120,3 +120,48 @@ Pre-mortem：舊程式污染新鍵、鎖外解析混用不同圖、接手工作�
 pytest警告包含依賴套件棄用、fixture bundle重註冊與零波動統計運算；未隱藏警告，外部依賴及授權資料的7項skip條件未變。完整結果無失敗，沒有回滾項目。所有e2e仍檢查無外部請求及未捕捉瀏覽器錯誤。
 
 里程碑：M9固定契約、M10後端修正、M11前端修正、M12整合e2e與驗收紀錄。各commit皆使用繁體中文與指定Codex trailer；不push。
+
+## Phase B 最後一輪對抗式修正（2026-09-30）
+
+起點 `d8b60fa`。本輪僅處理 C1–C4；審查意見不納入。先於附錄 B 固定 `expected_revision`、`expected_backtest_key` 及具名繁中 409 契約，再以不重疊檔案集合並行後端與前端，最後串行整合兩個 e2e 情境。
+
+### 重現、修正與驗證
+
+後端三項重現先實跑 **3 failed**；C4 兩個渲染情境先實跑 **2 failed、15 passed**，確認原版問題後才修正。
+
+| 項目 | 修正及測試名稱 | 實測結果 |
+|---|---|---|
+| C1 | `/run` 在 service 鎖內比對畫面預判的修訂號與 Backtest 鍵，以核對後的同一份已解析快照執行；UI 不再丟棄新預判並直接執行。`test_seen_estimate_conflict_does_not_add_selection`、`test_run_key_conflict_creates_no_job`、`test_run_executes_once_prepared_checked_snapshot` | 舊預判回 409，N 維持 1、不新增 job；缺鍵與錯鍵同樣拒絕，正常提交只解析一次 |
+| C2 | `import_zipline_offline` 在程序內注入輔助日曆，完全移除共用套件 CSV 的寫入／還原。`test_two_fixture_processes_never_write_shared_calendar` | 兩個程序依閘門交錯進出；兩者等待中及結束後，共用快取均與原內容一致 |
+| C3 | 五個改圖端點皆核對修訂號；文件讀取及提交共用鎖。UI 保留待提交編輯的原始修訂基線，衝突清除佇列、重新載入並顯示指定提示。`test_stale_edge_delete_preserves_new_parameters`、`test_every_graph_mutation_rejects_invalid_revision_atomically`、`C3 clears queued stale edits while recovering a conflict` | 舊刪線回 409、value=2 與原接線保留；缺少／過期／非整數修訂號均不改文件或存檔 |
+| C4 | 名稱、狀態、座標及接點查詢使用自有屬性；待提交編輯、缺輸入傳播與自動座標使用無原型字典。`C4 renders node and drawer for reserved id %s`、`C4 propagates missing inputs through reserved node ids without inherited state` | `__proto__`、`constructor` 均可渲染卡片及抽屜；缺輸入訊息正常傳播 |
+
+新增後端測試位於 `tests/test_live_graph_conflicts.py`，共 **27 passed**。前端新增測試位於 `src/model.test.js` 與 `src/render.test.js`；`C1/C3 never retries %s` 另確認兩種具名衝突都不自動重試。
+
+新增真實雙分頁 e2e（不 mock API）：
+
+- `another tab changes parameters then stale run returns 409 and re-estimates without N`：畫面先顯示「N 不變」，另一分頁改參數後，舊分頁只送一次原預判；回 409、載入新參數及新預判，N 不增加、無活動工作。
+- `stale tab deletes an edge and reloads after 409 while preserving new parameters`：另一分頁先改參數，舊分頁以鍵盤實際選取並刪線；送出舊修訂號、回 409，最新參數與接線保留。
+
+### 範圍及複核
+
+主端複核特別檢查預判核對後不得再次解析、409 不得進自動重試、背景 refresh 不得替待提交舊編輯洗掉修訂基線，以及所有寫入端點不能以省略欄位繞過。原 HTTP 測試只補新契約的前置條件，既有斷言保留。
+
+整合首輪 e2e 的舊預判情境通過；刪線情境指出受控畫布未保存接線選取狀態，導致尚未送出刪線請求。補上 `onEdgesChange` 的選取狀態保存，衝突時清除選取；保留實際鍵盤選取、刪除及 409 的全部斷言後重跑。
+
+本輪未修改 `decision.py`、規則集或 `strategy.py` 的行為，亦未修改正式 ledger。fixture 仍使用真 Zipline 訂單、成本與損益事件迴圈；合成資料不代表交易績效。未 push。
+
+### 最終驗收結果
+
+| 實跑指令／檢查 | 結果 |
+|---|---|
+| `$env:PYTHONUTF8='1'; .venv-bt/Scripts/python.exe -m pytest tests/ -q -rs` | **480 passed、7 skipped、147 warnings；119.43 秒**。原 453 項保留，新增 27 項 |
+| UI 目錄 `npm test` | **21 passed**。原 15 項保留，新增 6 項；整合修改後重跑通過 |
+| UI 目錄 `npm run build -- --logLevel warn` | 通過 |
+| UI 目錄 `npm run test:e2e` | **11 passed；1.8 分鐘**。原 9 項保留，新增 2 項 |
+| 共用套件日曆驗收前後雜湊比較 | 相同；不顯示內容 |
+| 策略／規則集／正式 ledger 版控差異 | 無變更 |
+| `git diff --check` | 通過 |
+| 變更檔案的已知環境機密值及私鑰模式掃描 | PASS；僅輸出布林判準 |
+
+既有 7 項外部依賴／授權資料 skip 條件未改，依賴棄用及統計邊界警告未隱藏。全部必要驗收通過，**無回滾項目**。M13 固定契約、M14 修正後端與日曆隔離、M15 修正前端衝突及渲染、M16 補齊雙分頁 e2e 與本紀錄；提交皆使用繁體中文與指定 Codex trailer，不 push。
