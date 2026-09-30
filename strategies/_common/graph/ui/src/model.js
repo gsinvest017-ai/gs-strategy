@@ -94,8 +94,63 @@ export async function api(path, body) {
         },
   );
   const data = await r.json();
-  if (!r.ok) throw new Error(data.message || data.error || `HTTP ${r.status}`);
+  if (!r.ok) {
+    const message = data.message || data.error;
+    throw Object.assign(new Error(
+      typeof message === "string" && /[\u3400-\u9fff]/.test(message)
+        ? message : "操作失敗，請稍後重試",
+    ), { status: r.status });
+  }
   return data;
+}
+export const edgeId = (edge) => "edge-" + JSON.stringify([edge.from, edge.to]);
+export const costText = (cost) =>
+  Object.entries(cost.per_contract_cost || {})
+    .sort(([a], [b]) => {
+      const rank = (symbol) => symbol === "TX" ? 0 : symbol === "MTX" ? 1 : 2;
+      return rank(a) - rank(b) || a.localeCompare(b, "en");
+    })
+    .map(([symbol, amount]) => `${symbol} ${fmt(amount)}`).join("・") +
+  ` 元／口，滑價 ${fmt(cost.spread_points)} 點`;
+export function initialFit() {
+  let fitted = false;
+  return (ready, fit) => {
+    if (!ready || fitted) return;
+    fitted = true;
+    fit();
+  };
+}
+export async function pollJob(id, {
+  get = api, nodes, update = () => {},
+  pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+}) {
+  let previous;
+  while (true) {
+    const job = await get("/jobs/" + id);
+    update(job);
+    const summary = JSON.stringify(Object.entries(job.node_states || {}).sort());
+    if (summary !== previous || job.status !== "running") await nodes();
+    previous = summary;
+    if (job.status !== "running") return job;
+    await pause(300);
+  }
+}
+export async function resumeOrStart({ activeJob, follow, start, session }) {
+  if (activeJob) await follow(activeJob);
+  let retriedFinishedJob = false;
+  while (true) {
+    try {
+      return await start();
+    } catch (error) {
+      if (error.status !== 409) throw error;
+      const current = await session();
+      if (current.active_job) {
+        await follow(current.active_job);
+        retriedFinishedJob = false;
+      } else if (!retriedFinishedJob) retriedFinishedJob = true;
+      else throw error;
+    }
+  }
 }
 // One replaceable payload and one worker: never queue obsolete previews.
 export function latestPreview({

@@ -1,5 +1,69 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { compatible, unavailable, estimateText, latestPreview } from "./model";
+import { edgeId, costText, initialFit, pollJob, resumeOrStart } from "./model";
+
+it("B6 preserves remaining edge identities after deletion", () => {
+  const edges = [
+    { from: ["a", "Bars"], to: ["b", "Bars"] },
+    { from: ["b", "Score"], to: ["c", "Score"] },
+  ];
+  expect(edges.slice(1).map(edgeId)).toEqual([edges.map(edgeId)[1]]);
+  expect(edgeId(edges[0])).not.toBe(edgeId(edges[1]));
+});
+it("B7 displays cost units without raw JSON", () => {
+  expect(costText({ per_contract_cost: { TX: 200, MTX: 100 }, spread_points: 6 }))
+    .toBe("TX 200・MTX 100 元／口，滑價 6 點");
+});
+it("B7 displays TX then MTX regardless of API key order, then sorts other symbols", () => {
+  expect(costText({ per_contract_cost: { TF: 80, MTX: 100, TX: 200, TE: 90 }, spread_points: 6 }))
+    .toBe("TX 200・MTX 100・TE 90・TF 80 元／口，滑價 6 點");
+});
+it("B3 fits once after measurement and ignores later selection or dimensions", () => {
+  const fit = vi.fn(), once = initialFit();
+  once(false, fit);
+  expect(fit).not.toHaveBeenCalled();
+  once(true, fit);
+  once(true, fit);
+  expect(fit).toHaveBeenCalledTimes(1);
+});
+it("B4 polls at 300ms and refreshes nodes only for changed states or completion", async () => {
+  const get = vi.fn()
+    .mockResolvedValueOnce({ status: "running", node_states: { a: "running" } })
+    .mockResolvedValueOnce({ status: "running", node_states: { a: "running" } })
+    .mockResolvedValueOnce({ status: "complete", node_states: { a: "cached" } });
+  const nodes = vi.fn(), pause = vi.fn();
+  await pollJob("job", { get, nodes, pause });
+  expect(get).toHaveBeenCalledTimes(3);
+  expect(nodes).toHaveBeenCalledTimes(2);
+  expect(pause.mock.calls).toEqual([[300], [300]]);
+});
+it("B1 resumes an active job before starting its own preview", async () => {
+  const events = [], job = { id: "existing", preview: true };
+  await resumeOrStart({ activeJob: job,
+    follow: async (j) => events.push(j.id),
+    start: async () => events.push("preview"),
+    session: vi.fn(),
+  });
+  expect(events).toEqual(["existing", "preview"]);
+});
+it("B1 recovers a preview 409 race by following the new active job", async () => {
+  const follow = vi.fn(), start = vi.fn()
+    .mockRejectedValueOnce(Object.assign(new Error("執行中"), { status: 409 }))
+    .mockResolvedValueOnce("done");
+  await resumeOrStart({ start, follow,
+    session: async () => ({ active_job: { id: "raced" } }),
+  });
+  expect(follow).toHaveBeenCalledWith({ id: "raced" });
+  expect(start).toHaveBeenCalledTimes(2);
+});
+it("B1 retries when a racing job finishes before the session response", async () => {
+  const start = vi.fn()
+    .mockRejectedValueOnce(Object.assign(new Error("執行中"), { status: 409 }))
+    .mockResolvedValueOnce("done");
+  expect(await resumeOrStart({ start, follow: vi.fn(),
+    session: async () => ({ active_job: null }),
+  })).toBe("done");
+});
 afterEach(() => vi.useRealTimers());
 describe("typed ports", () => {
   it("only permits equal known types", () => {

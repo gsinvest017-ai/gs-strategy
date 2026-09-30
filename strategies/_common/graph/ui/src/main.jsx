@@ -28,6 +28,11 @@ import {
   latestPreview,
   frame,
   fmt,
+  edgeId,
+  costText,
+  initialFit,
+  pollJob,
+  resumeOrStart,
 } from "./model";
 
 function Plot({ value, large = false, title = "最近區間" }) {
@@ -260,6 +265,8 @@ function Result({ state = {} }) {
         N {o.LedgerN.selection_n} · +{o.LedgerN.session_n}
       </div>
     );
+  if (o.CostModel)
+    return <div className="scalar">{costText(o.CostModel)}</div>;
   if (frame(state.equity || o))
     return (
       <Plot
@@ -486,7 +493,6 @@ function GraphNode({ id, data }) {
   );
 }
 const nodeTypes = { instrument: GraphNode };
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function Drawer({ id, close, revision }) {
   const [data, setData] = useState(null),
     [full, setFull] = useState(null),
@@ -642,6 +648,9 @@ function App() {
     [revision, setRevision] = useState(0),
     [flash, setFlash] = useState(false);
   const flow = useRef(null);
+  const fitInitial = useRef(initialFit());
+  const following = useRef(new Map());
+  const [recovering, setRecovering] = useState(true);
   const submittingRef = useRef(false);
   const previewStart = useRef(null);
   const pendingUpdates = useRef({});
@@ -686,17 +695,20 @@ function App() {
     setRevision((v) => v + 1);
   }
   async function waitJob(id) {
-    let j;
-    do {
-      j = await api("/jobs/" + id);
-      if (active.current?.id === id) {
-        setJob(j);
+    if (following.current.has(id)) return following.current.get(id);
+    const waiting = pollJob(id, {
+      update: (j) => {
+        if (mounted.current && active.current?.id === id) setJob(j);
+      },
+      nodes: async () => {
+        if (!mounted.current || active.current?.id !== id) return;
         const ns = await api("/nodes");
-        setStates(Object.fromEntries(ns.nodes.map((n) => [n.id, n])));
-      }
-      if (j.status === "running") await sleep(100);
-    } while (j.status === "running");
-    return j;
+        if (mounted.current)
+          setStates(Object.fromEntries(ns.nodes.map((n) => [n.id, n])));
+      },
+    }).finally(() => following.current.delete(id));
+    following.current.set(id, waiting);
+    return waiting;
   }
   async function cancelPreview() {
     // A newer edit can arrive before POST /preview has returned its job id.
@@ -712,15 +724,7 @@ function App() {
       }
     }
   }
-  async function launch(preview) {
-    const starting = api(preview ? "/preview" : "/run", {});
-    if (preview) previewStart.current = starting;
-    let j;
-    try {
-      j = await starting;
-    } finally {
-      if (previewStart.current === starting) previewStart.current = null;
-    }
+  async function followJob(j) {
     active.current = j;
     setJob(j);
     const result = await waitJob(j.id);
@@ -732,6 +736,23 @@ function App() {
       await refresh();
     }
     return result;
+  }
+  async function launch(preview) {
+    return resumeOrStart({
+      session: () => api("/session"),
+      follow: followJob,
+      start: async () => {
+        const starting = api(preview ? "/preview" : "/run", {});
+        if (preview) previewStart.current = starting;
+        let j;
+        try {
+          j = await starting;
+        } finally {
+          if (previewStart.current === starting) previewStart.current = null;
+        }
+        return followJob(j);
+      },
+    });
   }
   useEffect(() => {
     mounted.current = true;
@@ -766,16 +787,26 @@ function App() {
         documentUpdate(
           d.graph
             ? d
-            : await api("/graph/load", {
-                path: s.graph_path || "strategies/tsmom_tx_mtx/graph.json",
+            : await resumeOrStart({
+                session: () => api("/session"),
+                follow: followJob,
+                start: async () => {
+                  const current = await api("/graph");
+                  return current.graph ? current : api("/graph/load", {
+                    path: s.graph_path || "strategies/tsmom_tx_mtx/graph.json",
+                  });
+                },
               }),
         );
         const l = await api("/layout");
         setLayout(l.positions);
+        if (s.active_job) await followJob(s.active_job);
         await refresh();
         scheduler.current.start();
       } catch (e) {
         setError(e.message);
+      } finally {
+        setRecovering(false);
       }
     })();
     return () => {
@@ -835,8 +866,8 @@ function App() {
       setError(e.message);
     }
   }
-  const locked = submitting || Boolean(job && !job.preview),
-    busy = locked || previewState !== "idle";
+  const locked = recovering || submitting || Boolean(job && !job.preview),
+    busy = locked || Boolean(job) || previewState !== "idle";
   const autoPositions = useMemo(() => {
     const result = {};
     for (let c = 0; c < 5; c++) {
@@ -890,6 +921,12 @@ function App() {
   useEffect(() => {
     if (!nodes.length || nodes.some((n) => !measured[n.id])) return;
     const timer = setTimeout(() => {
+      fitInitial.current(Boolean(flow.current), fitAll);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [measured, nodes]);
+  function fitAll() {
+      if (!nodes.length) return;
       const right = Math.max(1390, ...nodes.map((n) => n.position.x + 240));
       const bottom =
         Math.max(
@@ -899,12 +936,10 @@ function App() {
         { x: 0, y: 0, width: right, height: bottom },
         { padding: 0.025, duration: 0 },
       );
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [measured, selected]);
+  }
   const edges =
-    doc?.graph?.edges.map((e, i) => ({
-      id: "edge-" + i,
+    doc?.graph?.edges.map((e) => ({
+      id: edgeId(e),
       source: e.from[0],
       sourceHandle: e.from[1],
       target: e.to[0],
@@ -1037,7 +1072,7 @@ function App() {
               : estimateText(estimate)}
           </span>
         </button>
-        {locked && (
+        {job && (
           <button className="cancel" data-testid="cancel" onClick={cancel}>
             取消
           </button>
@@ -1088,8 +1123,6 @@ function App() {
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
-            fitView
-            fitViewOptions={{ padding: 0.035, minZoom: 0.5, maxZoom: 0.88 }}
             minZoom={0.35}
             maxZoom={1.6}
             nodesConnectable={!busy}
@@ -1147,7 +1180,7 @@ function App() {
             onEdgesDelete={(deleted) =>
               editEdges(
                 doc.graph.edges.filter(
-                  (_, i) => !deleted.some((e) => e.id === "edge-" + i),
+                  (edge) => !deleted.some((e) => e.id === edgeId(edge)),
                 ),
               )
             }
@@ -1173,7 +1206,9 @@ function App() {
                 </div>
               </div>
             </ViewportPortal>
-            <Controls showInteractive={false} />
+            <Controls showInteractive={false} showFitView={false}>
+              <button className="react-flow__controls-button" aria-label="全圖" title="全圖" onClick={fitAll}>⊡</button>
+            </Controls>
           </ReactFlow>
         </div>
         {selected && (
@@ -1190,8 +1225,9 @@ function App() {
         </span>
         <span data-testid="preview-state">{previewState}</span>
         <span>
-          {locked
-            ? "◉ 回測執行中"
+          {job
+            ? job.preview ? "◉ 上游預覽中・不計 N" : "◉ 回測執行中"
+            : recovering ? "◉ 接手工作狀態中"
             : previewState === "idle"
               ? "○ 就緒・僅明確執行會產生試驗"
               : "◉ 上游預覽中・不計 N"}
