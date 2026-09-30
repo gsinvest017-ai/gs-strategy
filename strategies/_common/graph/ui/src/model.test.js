@@ -2,6 +2,46 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { compatible, unavailable, estimateText, latestPreview } from "./model";
 import { edgeId, costText, initialFit, pollJob, resumeOrStart } from "./model";
 
+it.each(["graph_revision_conflict", "run_estimate_conflict"])("C1/C3 never retries %s", async (code) => {
+  const error = Object.assign(new Error("圖已變更"), { status: 409, code });
+  const start = vi.fn().mockRejectedValue(error), session = vi.fn(), follow = vi.fn();
+  await expect(resumeOrStart({ start, session, follow })).rejects.toBe(error);
+  expect(start).toHaveBeenCalledTimes(1);
+  expect(session).not.toHaveBeenCalled();
+  expect(follow).not.toHaveBeenCalled();
+});
+
+it("C4 propagates missing inputs through reserved node ids without inherited state", () => {
+  const nodes = ["source", "__proto__", "constructor"].map((id) => ({ id, type: "data.test" }));
+  const edges = [
+    { from: ["source", "Bars"], to: ["__proto__", "Bars"] },
+    { from: ["__proto__", "Bars"], to: ["constructor", "Bars"] },
+  ];
+  const ready = unavailable({ nodes, edges }, { "data.test": { inputs: {} } });
+  expect(Object.keys(ready)).toEqual([]);
+  const missing = unavailable({ nodes, edges }, { "data.test": { inputs: { Bars: "Bars" } } });
+  expect(missing.__proto__).toContain("缺 Bars");
+  expect(missing.constructor).toContain("缺 Bars");
+});
+
+it("C3 clears queued stale edits while recovering a conflict", async () => {
+  vi.useFakeTimers();
+  let reject;
+  const apply = vi.fn(() => new Promise((_, fail) => { reject = fail; }));
+  const preview = vi.fn();
+  const q = latestPreview({ cancel: vi.fn(), apply, preview, onError: () => q.reset() });
+  q.schedule("__proto__", "value", 1);
+  await vi.advanceTimersByTimeAsync(300);
+  expect(Object.hasOwn(apply.mock.calls[0][0], "__proto__")).toBe(true);
+  q.schedule("constructor", "value", 2);
+  reject(Object.assign(new Error("圖已變更"), { status: 409 }));
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(apply).toHaveBeenCalledTimes(1);
+  expect(preview).not.toHaveBeenCalled();
+  expect(q.pending).toBe(false);
+  q.dispose();
+});
+
 it("B6 preserves remaining edge identities after deletion", () => {
   const edges = [
     { from: ["a", "Bars"], to: ["b", "Bars"] },

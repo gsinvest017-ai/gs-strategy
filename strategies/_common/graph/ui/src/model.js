@@ -1,10 +1,12 @@
 export const compatible = (source, target) =>
   Boolean(source && target && source === target);
+export const own = (object, key) =>
+  object != null && Object.hasOwn(object, key) ? object[key] : undefined;
 export function unavailable(graph, types) {
-  const missing = {};
+  const missing = Object.create(null);
   if (!graph) return missing;
   for (const n of graph.nodes) {
-    const required = Object.keys(types[n.type]?.inputs || {}).filter(
+    const required = Object.keys(own(types, n.type)?.inputs || {}).filter(
       (port) => !graph.edges.some((e) => e.to[0] === n.id && e.to[1] === port),
     );
     if (required.length) missing[n.id] = "缺 " + required.join(", ");
@@ -99,7 +101,7 @@ export async function api(path, body) {
     throw Object.assign(new Error(
       typeof message === "string" && /[\u3400-\u9fff]/.test(message)
         ? message : "操作失敗，請稍後重試",
-    ), { status: r.status });
+    ), { status: r.status, code: data.code, revision: data.revision });
   }
   return data;
 }
@@ -142,7 +144,7 @@ export async function resumeOrStart({ activeJob, follow, start, session }) {
     try {
       return await start();
     } catch (error) {
-      if (error.status !== 409) throw error;
+      if (error.status !== 409 || ["graph_revision_conflict", "run_estimate_conflict"].includes(error.code)) throw error;
       const current = await session();
       if (current.active_job) {
         await follow(current.active_job);
@@ -162,7 +164,7 @@ export function latestPreview({
   delay = 300,
 }) {
   let timer,
-    pending = {},
+    pending = Object.create(null),
     busy = false,
     generation = 0,
     disposed = false;
@@ -172,7 +174,7 @@ export function latestPreview({
     busy = true;
     const current = generation;
     const edits = pending;
-    pending = {};
+    pending = Object.create(null);
     onState("running");
     try {
       await cancel();
@@ -180,7 +182,7 @@ export function latestPreview({
       await apply(edits);
       if (current === generation) await preview();
     } catch (e) {
-      onError(e);
+      await onError(e);
     } finally {
       busy = false;
       if (Object.keys(pending).length) {
@@ -202,6 +204,13 @@ export function latestPreview({
       clearTimeout(timer);
       onState("debouncing");
       timer = setTimeout(drain, delay);
+    },
+    reset() {
+      generation++;
+      pending = Object.create(null);
+      clearTimeout(timer);
+      timer = null;
+      if (!busy) onState("idle");
     },
     dispose() {
       disposed = true;

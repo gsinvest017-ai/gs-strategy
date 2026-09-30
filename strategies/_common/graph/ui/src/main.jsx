@@ -22,6 +22,7 @@ import {
   portColor,
   portShape,
   names,
+  own,
   stages,
   column,
   positions,
@@ -393,7 +394,7 @@ const statusLabels = {
   not_ready: "┄ 未就緒",
   error: "× 錯誤",
 };
-function GraphNode({ id, data }) {
+export function GraphNode({ id, data }) {
   const {
     node,
     type,
@@ -414,11 +415,11 @@ function GraphNode({ id, data }) {
       style={{ "--category": color, "--stage": column(node) }}
     >
       <header className="node-title" onClick={() => inspect(id)}>
-        <strong>{names[id] || id}</strong>
+        <strong>{own(names, id) || id}</strong>
         <small>{node.type}</small>
       </header>
       <div className={`status ${status}`}>
-        {statusLabels[status]}
+        {own(statusLabels, status)}
         {status === "not_ready" &&
           `：${state.message || "缺必要輸入，請完成接線"}`}
       </div>
@@ -462,7 +463,7 @@ function GraphNode({ id, data }) {
             id={id}
             name={name}
             schema={schema}
-            value={node.params[name] ?? schema.default}
+            value={own(node.params, name) ?? schema.default}
             change={change}
             disabled={locked}
           />
@@ -493,7 +494,7 @@ function GraphNode({ id, data }) {
   );
 }
 const nodeTypes = { instrument: GraphNode };
-function Drawer({ id, close, revision }) {
+export function Drawer({ id, close, revision }) {
   const [data, setData] = useState(null),
     [full, setFull] = useState(null),
     [offset, setOffset] = useState(0),
@@ -542,7 +543,7 @@ function Drawer({ id, close, revision }) {
       <header>
         <div>
           <small>NODE INSPECTOR</small>
-          <h2>{names[id] || id}</h2>
+          <h2>{own(names, id) || id}</h2>
         </div>
         <button onClick={close} aria-label="關閉檢視">
           ×
@@ -641,6 +642,7 @@ function App() {
     [submitting, setSubmitting] = useState(false),
     [previewState, setPreviewState] = useState("idle"),
     [selected, setSelected] = useState(null),
+    [selectedEdges, setSelectedEdges] = useState(new Set()),
     [dragType, setDragType] = useState(null),
     [connectionError, setConnectionError] = useState(""),
     [sidecar, setSidecar] = useState(""),
@@ -653,7 +655,8 @@ function App() {
   const [recovering, setRecovering] = useState(true);
   const submittingRef = useRef(false);
   const previewStart = useRef(null);
-  const pendingUpdates = useRef({});
+  const pendingUpdates = useRef(Object.create(null));
+  const pendingRevision = useRef(null);
   const active = useRef(null),
     docRef = useRef(null),
     scheduler = useRef(null),
@@ -693,6 +696,22 @@ function App() {
     setEstimate(e);
     documentUpdate(d);
     setRevision((v) => v + 1);
+  }
+  async function handleError(e) {
+    if (e.status === 409 && ["graph_revision_conflict", "run_estimate_conflict"].includes(e.code)) {
+      scheduler.current?.reset();
+      pendingUpdates.current = Object.create(null);
+      pendingRevision.current = null;
+      setEstimate(null);
+      setConnectionError("");
+      setSelectedEdges(new Set());
+      await refresh();
+      setError(e.code === "run_estimate_conflict"
+        ? "執行預判已變更，已重新預判，請確認後再次執行"
+        : "圖已被其他分頁修改，已重新載入");
+      return;
+    }
+    setError(e.message);
   }
   async function waitJob(id) {
     if (following.current.has(id)) return following.current.get(id);
@@ -737,13 +756,13 @@ function App() {
     }
     return result;
   }
-  async function launch(preview) {
+  async function launchPreview() {
     return resumeOrStart({
       session: () => api("/session"),
       follow: followJob,
       start: async () => {
-        const starting = api(preview ? "/preview" : "/run", {});
-        if (preview) previewStart.current = starting;
+        const starting = api("/preview", {});
+        previewStart.current = starting;
         let j;
         try {
           j = await starting;
@@ -760,20 +779,24 @@ function App() {
       cancel: cancelPreview,
       apply: async (edits) => {
         for (const [id, params] of Object.entries(edits)) {
-          const d = await api("/nodes/" + id + "/params", { params });
+          const d = await api("/nodes/" + id + "/params", {
+            params, expected_revision: pendingRevision.current ?? docRef.current.revision,
+          });
+          pendingRevision.current = d.revision;
           for (const [k, v] of Object.entries(params)) {
-            if (pendingUpdates.current[id]?.[k] === v)
+            if (own(pendingUpdates.current[id], k) === v)
               delete pendingUpdates.current[id][k];
           }
           if (!Object.keys(pendingUpdates.current[id] || {}).length)
             delete pendingUpdates.current[id];
           documentUpdate(d);
         }
+        if (!Object.keys(pendingUpdates.current).length) pendingRevision.current = null;
         await refresh();
       },
-      preview: () => launch(true),
+      preview: launchPreview,
       onState: setPreviewState,
-      onError: (e) => setError(e.message),
+      onError: handleError,
     });
     (async () => {
       try {
@@ -794,6 +817,7 @@ function App() {
                   const current = await api("/graph");
                   return current.graph ? current : api("/graph/load", {
                     path: s.graph_path || "strategies/tsmom_tx_mtx/graph.json",
+                    expected_revision: current.revision,
                   });
                 },
               }),
@@ -804,7 +828,7 @@ function App() {
         await refresh();
         scheduler.current.start();
       } catch (e) {
-        setError(e.message);
+        await handleError(e);
       } finally {
         setRecovering(false);
       }
@@ -817,6 +841,7 @@ function App() {
   function change(id, key, value) {
     if (submittingRef.current || (active.current && !active.current.preview))
       return;
+    if (pendingRevision.current === null) pendingRevision.current = docRef.current.revision;
     pendingUpdates.current[id] = {
       ...pendingUpdates.current[id],
       [key]: value,
@@ -849,10 +874,14 @@ function App() {
     setSubmitting(true);
     try {
       setError("");
-      await api("/run-estimate");
-      await launch(false);
+      if (!estimate) return;
+      const j = await api("/run", {
+        expected_backtest_key: estimate.backtest_key,
+        expected_revision: estimate.revision,
+      });
+      await followJob(j);
     } catch (e) {
-      setError(e.message);
+      await handleError(e);
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -869,16 +898,16 @@ function App() {
   const locked = recovering || submitting || Boolean(job && !job.preview),
     busy = locked || Boolean(job) || previewState !== "idle";
   const autoPositions = useMemo(() => {
-    const result = {};
+    const result = Object.create(null);
     for (let c = 0; c < 5; c++) {
       let y = 70;
       for (const n of (doc?.graph?.nodes || [])
         .filter((n) => column(n) === c)
         .sort(
-          (a, b) => (positions[a.id]?.y || 0) - (positions[b.id]?.y || 0),
+          (a, b) => (own(positions, a.id)?.y || 0) - (own(positions, b.id)?.y || 0),
         )) {
         result[n.id] = { x: 24 + c * 274, y };
-        y += (measured[n.id]?.height || 200) + 16;
+        y += (own(measured, n.id)?.height || 200) + 16;
       }
     }
     return result;
@@ -889,16 +918,16 @@ function App() {
       doc?.graph?.nodes.map((n) => ({
         id: n.id,
         type: "instrument",
-        measured: measured[n.id],
-        position: layout[n.id] ||
-          autoPositions[n.id] || { x: 24 + column(n) * 274, y: 75 },
+        measured: own(measured, n.id),
+        position: own(layout, n.id) ||
+          own(autoPositions, n.id) || { x: 24 + column(n) * 274, y: 75 },
         dragHandle: ".node-title",
         data: {
           node: n,
-          type: types[n.type] || { inputs: {}, outputs: {}, params: {} },
-          state: missing[n.id]
-            ? { ...states[n.id], status: "not_ready", message: missing[n.id] }
-            : states[n.id],
+          type: own(types, n.type) || { inputs: {}, outputs: {}, params: {} },
+          state: own(missing, n.id)
+            ? { ...own(states, n.id), status: "not_ready", message: own(missing, n.id) }
+            : own(states, n.id),
           change,
           locked,
           dragType,
@@ -919,7 +948,7 @@ function App() {
     ],
   );
   useEffect(() => {
-    if (!nodes.length || nodes.some((n) => !measured[n.id])) return;
+    if (!nodes.length || nodes.some((n) => !own(measured, n.id))) return;
     const timer = setTimeout(() => {
       fitInitial.current(Boolean(flow.current), fitAll);
     }, 100);
@@ -930,7 +959,7 @@ function App() {
       const right = Math.max(1390, ...nodes.map((n) => n.position.x + 240));
       const bottom =
         Math.max(
-          ...nodes.map((n) => n.position.y + (measured[n.id]?.height || 200)),
+          ...nodes.map((n) => n.position.y + (own(measured, n.id)?.height || 200)),
         ) + 20;
       flow.current?.fitBounds(
         { x: 0, y: 0, width: right, height: bottom },
@@ -944,13 +973,12 @@ function App() {
       sourceHandle: e.from[1],
       target: e.to[0],
       targetHandle: e.to[1],
+      selected: selectedEdges.has(edgeId(e)),
       type: "smoothstep",
-      animated: states[e.to[0]]?.status === "running",
+      animated: own(states, e.to[0])?.status === "running",
       style: {
         stroke: portColor(
-          types[doc.graph.nodes.find((n) => n.id === e.from[0])?.type]?.outputs[
-            e.from[1]
-          ],
+          own(own(types, doc.graph.nodes.find((n) => n.id === e.from[0])?.type)?.outputs, e.from[1]),
         ),
         strokeWidth: 2,
       },
@@ -958,25 +986,27 @@ function App() {
   function valid(c) {
     const s = doc.graph.nodes.find((n) => n.id === c.source),
       t = doc.graph.nodes.find((n) => n.id === c.target),
-      a = types[s?.type]?.outputs[c.sourceHandle],
-      b = types[t?.type]?.inputs[c.targetHandle];
+      a = own(own(types, s?.type)?.outputs, c.sourceHandle),
+      b = own(own(types, t?.type)?.inputs, c.targetHandle);
     if (a && b && !compatible(a, b))
       queueMicrotask(() => setConnectionError(`型別不符：${a} → ${b}`));
     return compatible(a, b);
   }
   async function editEdges(next) {
     if (submittingRef.current || scheduler.current?.pending || active.current) return;
+    const current = docRef.current;
     try {
       await cancelPreview();
       documentUpdate(
         await api("/graph", {
-          graph: { ...docRef.current.graph, edges: next },
+          graph: { ...current.graph, edges: next },
+          expected_revision: current.revision,
         }),
       );
       await refresh();
       scheduler.current.start();
     } catch (e) {
-      setConnectionError(e.message);
+      await handleError(e);
     }
   }
   function connect(c) {
@@ -992,25 +1022,27 @@ function App() {
   async function save() {
     if (submittingRef.current || scheduler.current?.pending || active.current) return;
     try {
-      documentUpdate(await api("/graph/save", {}));
+      documentUpdate(await api("/graph/save", { expected_revision: docRef.current.revision }));
+      await refresh();
     } catch (e) {
-      setError(e.message);
+      await handleError(e);
     }
   }
   async function load() {
     if (submittingRef.current || scheduler.current?.pending || active.current) return;
     submittingRef.current = true;
     setSubmitting(true);
+    const expectedRevision = docRef.current.revision;
     try {
       await cancelPreview();
-      const d = await api("/graph/from-sidecar", { path: sidecar });
+      const d = await api("/graph/from-sidecar", { path: sidecar, expected_revision: expectedRevision });
       documentUpdate(d);
       setWarnings(d.warnings || []);
       setShowLoad(false);
       await refresh();
       scheduler.current.start();
     } catch (e) {
-      setError(e.message);
+      await handleError(e);
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -1129,6 +1161,17 @@ function App() {
             nodesDraggable={!locked}
             nodesDeletable={false}
             deleteKeyCode={["Backspace", "Delete"]}
+            onEdgesChange={(changes) => {
+              const selection = changes.filter((c) => c.type === "select");
+              if (selection.length) setSelectedEdges((previous) => {
+                const next = new Set(previous);
+                for (const change of selection) {
+                  if (change.selected) next.add(change.id);
+                  else next.delete(change.id);
+                }
+                return next;
+              });
+            }}
             onNodesChange={(changes) => {
               const dims = changes.filter((c) => c.type === "dimensions");
               if (dims.length)
@@ -1163,9 +1206,7 @@ function App() {
               setConnectionError("");
               const n = doc.graph.nodes.find((x) => x.id === p.nodeId);
               setDragType(
-                types[n.type][p.handleType === "source" ? "outputs" : "inputs"][
-                  p.handleId
-                ],
+                own(own(types, n.type)?.[p.handleType === "source" ? "outputs" : "inputs"], p.handleId),
               );
             }}
             onConnectEnd={(event) => {
@@ -1237,4 +1278,5 @@ function App() {
     </main>
   );
 }
-createRoot(document.getElementById("root")).render(<App />);
+if (typeof document !== "undefined" && document.getElementById("root"))
+  createRoot(document.getElementById("root")).render(<App />);
