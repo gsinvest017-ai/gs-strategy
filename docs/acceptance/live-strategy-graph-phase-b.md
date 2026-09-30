@@ -72,3 +72,51 @@ Pre-mortem 的三項風險及證據：
 Phase B 範圍內沒有未完成項目。本機是 Windows，已實測 Git Bash 與 PowerShell；沒有原生 Linux 執行環境可供實測。
 
 首次 npm 安裝與瀏覽器安裝需要套件來源；完成 build 後的 UI 執行不需外網。schema 未給 maximum 的數字參數，其滑桿視窗由 minimum／default 推導並可擴張，數字輸入不另加人為上限。完整來源事實、warnings 與 forbids 可在卡片捲動區／檢視抽屜閱讀。
+
+## 對抗式審查與 Phase B 單輪修正（2026-09-30）
+
+起點為 `5c9a995`，分支 `dev/live-strategy-graph-spec`。M9 先固定附錄 B 契約；後端與前端在不重疊檔案集合並行，最後由主 agent 串行整合 e2e 與驗收。未修改 decision.py、規則集、strategy.py；未 push。
+
+### 修正與失敗測試證據
+
+後端新增測試均位於 `tests/test_live_graph_review.py`；前端單元測試位於 `strategies/_common/graph/ui/src/model.test.js`。
+
+| 項目 | 修正 | 測試與實測證據 |
+|---|---|---|
+| A1 | 私有 import namespace 直接編譯原始碼，不沿用 sys.modules 或 pyc；原 strategy 唯一本地 import futures_setup 同樣新鮮載入。執行前後檢查指紋，提交前再檢查快照全部指紋 | `test_a1_fresh_cost_helper_and_fingerprint`：先失敗 `[6,6]`，修後 `[6,12]`；`test_a1_implementation_change_during_execution_cannot_commit`：改檔後拒絕提交，N=0且不寫該快取 |
+| A2 | 配對實際 ingestion 後使用其 isoformat，文件保留原參數、執行副本正規化 | `test_a2_equivalent_ingestions_count_once`：先有3鍵，修後三字串只有1鍵、N=1 |
+| A3 | 最大lag為 min(max(21,floor(10·log10 n)),floor(n/5))；檢查短階、21階及最大階，任一顯著即yes；ACF用同最大階 | `test_a3_monthly_dependence_uses_non_iid_and_full_provenance`：lag-21資料先no，修後yes且非iid；保存 tested_lags、p_values、decision_p_value。保留舊短階p_value並明示p_value_lag |
+| A4 | invalidate保留舊state欄位，僅改過期標記與result_hash | `test_a4_stale_returns_keep_original_graph_hash`：原先缺graph_hash，修後與舊Returns來源一致 |
+| B1 | session.active_job供重新整理接手；完成後才啟動自己的preview，409競態重新讀session；HTTP／job／node／CLI錯誤安全繁中 | `test_b1_b4_active_job_snapshot_and_safe_chinese`、`test_b1_http_and_node_messages_are_safe_chinese`；前端3個B1單測涵蓋接手與409競態；e2e `refresh during active preview adopts the job and recovers automatically` 原版60秒無取消鈕，修後自動恢復且無錯誤橫幅／API錯誤、N=0 |
+| B2 | core.node_cache_key是Engine與estimate唯一鍵公式 | `test_b2_estimate_and_ledger_share_key_function`：監測兩路都呼叫共用函式，估算鍵等於實際ledger的backtest_key |
+| B3 | 初次量測後只自動fit一次，明確「全圖」按鈕才再次fit | `B3 fits once after measurement and ignores later selection or dimensions`；既有sidecar e2e新增點選卡片開抽屜前後viewport不變斷言 |
+| B4 | job附精簡node_states，300ms輪詢；狀態摘要改變或完成才抓nodes；同job共用輪詢Promise | `B4 polls at 300ms and refreshes nodes only for changed states or completion`：3次job、2次nodes、兩次300ms間隔；後端B1/B4測試驗摘要 |
+| B5 | 鎖內深複製圖與取得文件hash，prepare_graph及後續解析移到鎖外 | `test_b5_estimate_releases_lock_and_keeps_snapshot`：先因編輯阻塞失敗，修後可同時編輯且估算仍對應原快照 |
+| B6 | edge id由來源／目標節點與接點組成 | `B6 preserves remaining edge identities after deletion`：刪前邊不改後邊id |
+| B7 | 成本使用既有scalar樣式顯示中文單位，固定TX、MTX優先及其餘symbol順序 | `B7 displays cost units without raw JSON`、`B7 displays TX then MTX regardless of API key order, then sorts other symbols`；reload e2e另斷言實際卡片文字 |
+
+後端首批7個反例先失敗後通過，另補繁中與執行中改檔反例，合計9個新增pytest。前端首批6個反例先失敗，另補409完成競態與反向成本欄位順序，合計8個新增單測。整合首輪原8個e2e均過；新情境接手成功，但成本欄位順序斷言失敗，保留斷言並修正呈現順序後重跑。
+
+### 複核與界線
+
+Pre-mortem：舊程式污染新鍵、鎖外解析混用不同圖、接手工作與preview競態。獨立複核先從私有載入／正規化／圖快照形成判斷，再核對實作。反例檢查追加了執行中改檔拒絕提交、409工作已結束、反向JSON鍵順序。沒有未解決的審查分歧。
+
+既有測試僅依新增session欄位及繁中錯誤契約更新精確期望；統計原LB10數值斷言仍保留。全圖包含性檢查改成先按「全圖」再驗13張卡無重疊，符合B3；另外保留點選卡片不得改viewport的新斷言。未刪除或弱化既有測試，沒有回滾項目。
+
+本次不是新alpha或filter；不改訊號、成交與成本公式。合成fixture驗證工程與R8等價性，不據此宣稱實盤績效。既有外部資料測試跳過條件及pending統計稽核邊界維持。
+
+### 本輪最終驗收
+
+| 實際執行指令 | 最終結果 |
+|---|---|
+| `$env:PYTHONUTF8='1'; .venv-bt/Scripts/python.exe -m pytest tests/ -q -rs` | **453 passed、7 skipped、147 warnings；92.94秒**。含R8真Zipline等價；原444項保留 |
+| UI目錄 `npm test` | **15 passed**；原7項保留，新增8項 |
+| UI目錄 `npm run build -- --logLevel warn` | 成功 |
+| UI目錄 `npm run test:e2e` | **9 passed；1.4分鐘**；原8項保留，新增執行中reload情境，該項24.3秒 |
+| `git diff --check` | 通過 |
+| 原策略／規則／正式ledger差異檢查 | 無變更 |
+| 機密模式掃描 | PASS；僅輸出布林判準 |
+
+pytest警告包含依賴套件棄用、fixture bundle重註冊與零波動統計運算；未隱藏警告，外部依賴及授權資料的7項skip條件未變。完整結果無失敗，沒有回滾項目。所有e2e仍檢查無外部請求及未捕捉瀏覽器錯誤。
+
+里程碑：M9固定契約、M10後端修正、M11前端修正、M12整合e2e與驗收紀錄。各commit皆使用繁體中文與指定Codex trailer；不push。

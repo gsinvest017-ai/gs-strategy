@@ -64,6 +64,26 @@ async function assertOverview(page) {
   })).toEqual({ count: 13, contained: true, overlap: false });
 }
 
+// Reload while the first cold preview is executing against the real fixture.
+test('refresh during active preview adopts the job and recovers automatically', async ({ page }) => {
+  const failures = [];
+  page.on('response', response => {
+    if (response.url().includes('/api/') && response.status() >= 400) failures.push(response.status());
+  });
+  await page.goto('/');
+  await expect.poll(async () => (await api(page, 'nodes/continuous')).status).toBe('running');
+  await page.reload();
+  await expect(page.locator('.error-banner')).toHaveCount(0);
+  await expect(page.getByTestId('cancel')).toBeEnabled();
+  await idle(page);
+  await expect(page.getByTestId('node-continuous')).toHaveAttribute('data-status', /cached|recomputed/);
+  await expect(page.getByTestId('node-momentum')).toHaveAttribute('data-status', /cached|recomputed/);
+  await expect(page.locator('.error-banner')).toHaveCount(0);
+  await expect(page.getByTestId('node-cost')).toContainText('TX 200・MTX 100 元／口，滑價 6 點');
+  expect(failures).toEqual([]);
+  expect((await api(page, 'ledger')).selection_n).toBe(0);
+});
+
 test.describe.serial('Live Strategy Graph fixture acceptance', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -122,6 +142,7 @@ test.describe.serial('Live Strategy Graph fixture acceptance', () => {
     await idle(page);
     await expect.poll(async () => (await api(page, 'nodes/backtest')).status).toBe('cached');
     expect((await api(page, 'ledger')).selection_n).toBe(ledger.selection_n + 1);
+    await page.getByRole('button', { name: '全圖', exact: true }).click();
     await assertOverview(page);
     await page.screenshot({ path: path.join(os.tmpdir(), 'live-strategy-graph-fixture-1280x800.png') });
   });
@@ -190,10 +211,14 @@ test.describe.serial('Live Strategy Graph fixture acceptance', () => {
       .toEqual(completed.graph.nodes.find(n => n.id === 'momentum').params);
     await page.getByTestId('run').click();
     await idle(page);
+    await page.getByRole('button', { name: '全圖', exact: true }).click();
+    const viewport = page.locator('.react-flow__viewport');
+    const transform = await viewport.getAttribute('style');
     await page.getByTestId('node-backtest').locator('.node-title').click();
     const drawer = page.locator('.drawer');
     await expect(drawer).toBeVisible();
     await expect(drawer.locator('tbody tr')).toHaveCount(60);
+    await expect(viewport).toHaveAttribute('style', transform);
     await expect.poll(async () => (await drawer.locator('polyline').first().getAttribute('points')).split(' ').length).toBeGreaterThan(60);
     const chart = await drawer.locator('svg').boundingBox();
     await page.mouse.move(chart.x + chart.width / 2, chart.y + chart.height / 2);

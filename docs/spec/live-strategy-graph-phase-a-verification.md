@@ -139,3 +139,18 @@ Pre-mortem 的三個風險為：快取／去重漏上游或資料版本、Sigma 
 
 20 條清單的本輪相關檢查通過：訊號可得時點／前視（1–5、10–11）、Sigma 定義與缺資料語意（12、15）、測試本身（19）；R8 既有獨立損益對帳覆蓋 6–9。年化、MDD、filter、branch、exit、alpha 評選（13–14、16–18、20）未修改，不把此輪 fixture 結果解讀成策略可交易性認證。
 - `docs/spec/live-strategy-graph.md`
+
+## 對抗式審查 Phase A 修正（2026-09-30）
+
+本輪起點 `5c9a995`，以失敗反例先行修正 A1–A4，並整合 Phase B 的工作接手與共用快取鍵。完整逐條修法、測試名稱與紅綠證據見 `docs/acceptance/live-strategy-graph-phase-b.md` 的「對抗式審查與 Phase B 單輪修正」。
+
+- A1：strategy 與其唯一的本地 import futures_setup 在私有命名空間直接編譯，避免 sys.modules 與 pyc 重用。暫存副本的同程序成本改動實測 spread 6.0→12.0；執行中依賴改動則拒絕提交與該節點快取。
+- A2：配對 ingestion 後 pin 到 ingestion.isoformat()；三種等價字串實測同一backtest_key且selection_n=1。
+- A3：Ljung-Box檢查10、21及依樣本數推導的最大階，ACF使用同一最大階。n=1000重現實測tested_lags=[10,21,30]，p分別約0.3667、2.8265e-46、3.1405e-44；autocorr=yes、n_eff=372、se_correction=newey_west。provenance記錄所有p值與decision_p_value；原短期p_value以p_value_lag明示，既有統計數值測試保留。
+- A4：invalidate保留過期Returns對應的graph_hash，已補pytest。
+
+量化自查：這是基礎設施修正，不是新alpha／filter。Pre-mortem涵蓋指紋與程式不一致、鎖外解析快照混用、重新整理接手競態；反例另覆蓋執行途中改檔與409工作已結束。策略時序、成本公式、PnL與規則判準未改，既有R8 fixture等價及損益對帳通過。獨立複核與主agent未留下未解決分歧。
+
+實際執行 `$env:PYTHONUTF8='1'; .venv-bt/Scripts/python.exe -m pytest tests/ -q -rs`：**453 passed、7 skipped、147 warnings，92.94秒**。原444項通過，新增9項通過；7項外部依賴／授權資料skip條件未變。警告包含依賴套件棄用、fixture bundle重註冊與零波動統計運算，不隱藏警告或改動skip條件。R8 `test_r8_fixture_real_zipline_equivalence` 實際通過。
+
+本輪沒有回滾；decision.py、規則集、strategy.py及正式ledger均無版控差異。差異檢查與機密模式掃描通過（僅記錄布林判準）。未push。
