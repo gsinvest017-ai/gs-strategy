@@ -240,6 +240,17 @@ React Flow 僅採用 Phase B 畫布、互動接點與自訂卡片；所有型別
 
 ## 附錄 B：Phase A 本機 HTTP JSON API
 
+### Phase B 最後一輪修正：預判綁定與文件並行控制
+
+本節取代下列舊表格中未帶前置條件的寫入契約。
+
+- GET `/api/graph` 與所有圖文件回應包含整數 `revision`；尚未載入時亦提供修訂號。每次成功改參數、替換圖、載入、從 sidecar 還原或存檔，修訂號遞增。layout 不改圖修訂號。
+- POST `/api/nodes/<id>/params`、`/api/graph`、`/api/graph/load`、`/api/graph/save`、`/api/graph/from-sidecar` 必須帶 `expected_revision`。檢查與整筆修改共用 service 鎖；缺少或不符合目前修訂號均拒絕，無部分修改或檔案寫入。
+- GET `/api/run-estimate` 新增 `revision`，與回應的圖快照一致。POST `/api/run` 必須帶使用者畫面上預判的 `expected_backtest_key` 及 `expected_revision`。後端在同一把鎖內核對修訂號及解析後的 Backtest 鍵，並以這份已解析快照啟動工作；不可核對後重新解析另一份資料版本。拒絕時不建立工作、不執行節點、不增加 N。
+- 文件衝突回 HTTP 409：`{code:"graph_revision_conflict",error:"圖已被其他分頁修改，請重新載入",revision:<目前修訂號>}`。預判鍵衝突回 HTTP 409：`{code:"run_estimate_conflict",error:"執行預判已變更，請確認最新預判後再次執行",revision:<目前修訂號>}`。缺少前置條件也使用對應衝突格式；既有執行中衝突不變。
+- UI 所有改圖操作附上其本地文件修訂號；衝突時清除待提交的舊編輯、重新讀取最新圖，提示「圖已被其他分頁修改，已重新載入」。run 衝突另更新預判，要求使用者重新按執行；不得自動重試或靜默採用新預判。
+- CLI 與程序內初始化可使用 GraphService 的無 HTTP 前置條件流程；HTTP 寫入端點不可藉由省略欄位繞過並行控制。
+
 ### Phase B 新增契約（既有端點行為維持）
 
 | Method / endpoint | Payload / 回應 |
