@@ -101,6 +101,10 @@ def test_http_endpoints_and_atomic_rejection(tmp_path):
     server=GraphHTTPServer(('127.0.0.1',0),s)
     thread=threading.Thread(target=server.serve_forever,daemon=True); thread.start()
     def call(path,data=None,headers=None):
+        if data is not None:
+            data = {**data, 'expected_revision': s.document()['revision']}
+            if path == '/api/run':
+                data['expected_backtest_key'] = s.run_estimate()['backtest_key']
         req=Request(f'http://127.0.0.1:{server.server_port}'+path,
             data=None if data is None else json.dumps(data).encode(),
             headers=headers or {'Content-Type':'application/json'})

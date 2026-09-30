@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit, unquote
 
 from .core import GraphError
-from .service import json_value, restore_sidecar, user_message
+from .service import GraphConflict, json_value, restore_sidecar, user_message
 
 
 class GraphHTTPServer(ThreadingHTTPServer):
@@ -88,20 +88,22 @@ class Handler(BaseHTTPRequestHandler):
                     return self.reply(404, {'error': 'unknown job'})
                 return self.reply(200, s.job(parts[2]))
             if mutation and parts == ['api','graph','load']:
-                return self.reply(200, s.load(body['path']))
+                return self.reply(200, s.load(body['path'], expected_revision=body.get('expected_revision')))
             if mutation and parts == ['api','graph']:
-                return self.reply(200, s.set_graph(body['graph'], body.get('path')))
+                return self.reply(200, s.set_graph(body['graph'], body.get('path'), expected_revision=body.get('expected_revision')))
             if mutation and parts == ['api','graph','save']:
-                return self.reply(200, s.save(body.get('path')))
+                return self.reply(200, s.save(body.get('path'), expected_revision=body.get('expected_revision')))
             if mutation and parts == ['api','graph','from-sidecar']:
-                doc = json.loads(s.confined(body['path'],sidecar=True).read_text(encoding='utf-8'))
-                restored = restore_sidecar(doc, s.registry)
-                s.set_graph(restored['graph'], body.get('graph_path'))
-                return self.reply(200, {**s.document(), 'recorded_graph_hash':restored['graph_hash'], 'warnings':restored['warnings']})
+                with s.lock:
+                    s.check_revision(body.get('expected_revision'))
+                    doc = json.loads(s.confined(body['path'],sidecar=True).read_text(encoding='utf-8'))
+                    restored = restore_sidecar(doc, s.registry)
+                    document = s.set_graph(restored['graph'], body.get('graph_path'))
+                return self.reply(200, {**document, 'recorded_graph_hash':restored['graph_hash'], 'warnings':restored['warnings']})
             if mutation and len(parts) == 4 and parts[:2] == ['api','nodes'] and parts[3] == 'params':
-                return self.reply(200, s.parameters(parts[2], body['params']))
+                return self.reply(200, s.parameters(parts[2], body['params'], expected_revision=body.get('expected_revision')))
             if mutation and parts in (['api','preview'],['api','run']):
-                return self.reply(202, s.start(preview=parts[-1]=='preview'))
+                return self.reply(202, s.start(preview=True) if parts[-1] == 'preview' else s.start(expected_revision=body.get('expected_revision'), expected_backtest_key=body.get('expected_backtest_key')))
             if mutation and len(parts) == 4 and parts[:2] == ['api','jobs'] and parts[3] == 'cancel':
                 result = s.cancel(parts[2])
                 return self.reply(202 if result['accepted'] else 409, result)
@@ -121,6 +123,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(data)
                     return
             return self.reply(404, {'error': 'unknown endpoint'})
+        except GraphConflict as exc:
+            return self.reply(409, {'code': exc.code, 'error': str(exc), 'revision': exc.revision})
         except GraphError as exc:
             return self.reply(409 if 'active' in str(exc) else 400, {'error': str(exc)})
         except (KeyError, ValueError, TypeError, OSError):

@@ -31,6 +31,8 @@ def user_message(message):
     if 'n_eff' in message:
         return '缺少有效獨立觀測數，請先處理重疊或群聚觀測，再計算有效樣本數'
     translations = {
+        '圖已被其他分頁修改，請重新載入': '圖已被其他分頁修改，請重新載入',
+        '執行預判已變更，請確認最新預判後再次執行': '執行預判已變更，請確認最新預判後再次執行',
         'execution active; cancel or wait before editing': '目前有工作正在執行，請取消或等待完成後再編輯',
         'bundle has no ingestions': '資料集沒有可用的匯入版本',
         'bundle has no ingestions; supply observations': '資料集沒有可用的匯入版本，請補足觀測資料',
@@ -142,12 +144,22 @@ def save_artifact(context, values, path):
     return Path(path)
 
 
+_UNSET = object()
+
+
+class GraphConflict(GraphError):
+    def __init__(self, code, revision):
+        self.code, self.revision = code, revision
+        super().__init__('圖已被其他分頁修改，請重新載入' if code == 'graph_revision_conflict' else '執行預判已變更，請確認最新預判後再次執行')
+
+
 class GraphService:
     def __init__(self, root, *, registry=None, cache_dir=None, ledger_path=None):
         self.root = Path(root).resolve()
         self.registry = registry or default_registry()
         self.engine = Engine(self.registry, cache_dir or self.root / '.cache/live-strategy-graph')
         self.ledger = SelectionLedger(ledger_path or self.root / 'log/trials.jsonl')
+        self.revision = 0
         self.graph = None
         self.path = None
         self.saved_hash = None
@@ -172,10 +184,18 @@ class GraphService:
                 raise GraphError('load a graph first')
             graph = copy.deepcopy(self.graph)
             document_hash = self.engine.identity(graph)[0]
+            revision = self.revision
+        graph = self.prepare(graph)
+        return {'graph_hash': document_hash, 'revision': revision, **self.estimate_prepared(graph)}
+
+    def prepare(self, graph):
         if any(n['type'] == 'data.futures_bars' for n in graph['nodes']):
             with quiet_worker_output():
                 from strategies.tsmom_tx_mtx.graph_nodes import prepare_graph
                 graph = prepare_graph(graph)
+        return graph
+
+    def estimate_prepared(self, graph):
         _, nodes, incoming, order = self.registry.normalize(graph)
         targets = [i for i in order if nodes[i]['type'].startswith('backtest.')]
         if len(targets) != 1:
@@ -198,7 +218,7 @@ class GraphService:
             hashes[i] = core.node_cache_key(kind, node['params'],
                 {p: hashes[s] for p, (s, _) in incoming[i].items()})
         key = hashes[targets[0]]
-        return {'graph_hash': document_hash, 'backtest_key': key,
+        return {'backtest_key': key,
                 **self.ledger.estimate(key)}
 
     def layout(self, positions=None):
@@ -241,12 +261,18 @@ class GraphService:
         if self.active is not None and self.jobs[self.active]['status'] == 'running':
             raise GraphError('execution active; cancel or wait before editing')
 
-    def set_graph(self, graph, path=None, *, saved=False):
+    def check_revision(self, expected_revision):
+        if expected_revision is not _UNSET and (type(expected_revision) is not int or expected_revision != self.revision):
+            raise GraphConflict('graph_revision_conflict', self.revision)
+
+    def set_graph(self, graph, path=None, *, saved=False, expected_revision=_UNSET):
         with self.lock:
+            self.check_revision(expected_revision)
             self.idle()
             graph = self.registry.normalize(graph)[0]
             new_path = self.confined(path) if path is not None else self.path
             self.graph = graph
+            self.revision += 1
             self.path = new_path
             self.engine.states = {n['id']: {'status': 'stale'} for n in graph['nodes']}
             self.engine.values = {}
@@ -255,21 +281,28 @@ class GraphService:
                 self.saved_hash = self.engine.identity(graph)[0]
             return self.document()
 
-    def load(self, relative):
-        path = self.confined(relative)
-        graph = json.loads(path.read_text(encoding='utf-8-sig'))
-        return self.set_graph(graph, relative, saved=True)
+    def load(self, relative, *, expected_revision=_UNSET):
+        with self.lock:
+            self.check_revision(expected_revision)
+            path = self.confined(relative)
+            graph = json.loads(path.read_text(encoding='utf-8-sig'))
+            return self.set_graph(graph, relative, saved=True, expected_revision=expected_revision)
 
     def document(self):
+        with self.lock:
+            return self._document()
+
+    def _document(self):
         if self.graph is None:
-            return {'graph': None, 'dirty': False}
+            return {'graph': None, 'dirty': False, 'revision': self.revision}
         key = self.engine.identity(self.graph)[0]
-        return {'graph': copy.deepcopy(self.graph), 'graph_hash': key,
+        return {'graph': copy.deepcopy(self.graph), 'graph_hash': key, 'revision': self.revision,
                 'path': self.path.relative_to(self.root).as_posix() if self.path else None,
                 'dirty': key != self.saved_hash}
 
-    def save(self, relative=None):
+    def save(self, relative=None, *, expected_revision=_UNSET):
         with self.lock:
+            self.check_revision(expected_revision)
             self.idle()
             if self.graph is None:
                 raise GraphError('load a graph first')
@@ -299,10 +332,12 @@ class GraphService:
                 from strategies._common.validation import report
                 document = json.loads(artifact.read_text(encoding='utf-8'))
                 report.apply_to_manifest(path.parent / 'manifest.yaml', document)
+            self.revision += 1
             return self.document()
 
-    def parameters(self, node_id, params):
+    def parameters(self, node_id, params, *, expected_revision=_UNSET):
         with self.lock:
+            self.check_revision(expected_revision)
             self.idle()
             graph = copy.deepcopy(self.graph)
             if graph is None:
@@ -314,14 +349,23 @@ class GraphService:
             graph = self.registry.normalize(graph)[0]
             self.engine.invalidate(graph, node_id)
             self.graph = graph
+            self.revision += 1
             return self.document()
 
-    def start(self, preview=False):
+    def start(self, preview=False, *, expected_revision=_UNSET, expected_backtest_key=_UNSET):
         with self.lock:
+            self.check_revision(expected_revision)
             self.idle()
             if self.graph is None:
                 raise GraphError('load a graph first')
             graph = copy.deepcopy(self.graph)
+            prepared_run = None
+            if not preview and expected_backtest_key is not _UNSET:
+                if not isinstance(expected_backtest_key, str) or not expected_backtest_key:
+                    raise GraphConflict('run_estimate_conflict', self.revision)
+                prepared_run = self.prepare(graph)
+                if expected_backtest_key != self.estimate_prepared(prepared_run)['backtest_key']:
+                    raise GraphConflict('run_estimate_conflict', self.revision)
             job_id = uuid.uuid4().hex
             job = {'id': job_id, 'status': 'running', 'preview': preview, 'progress': {}}
             document_hash = self.engine.identity(graph)[0]
@@ -339,7 +383,9 @@ class GraphService:
             self._token = ctx.token
             def work():
                 try:
-                    if any(n['type'] == 'data.futures_bars' for n in graph['nodes']):
+                    if prepared_run is not None:
+                        prepared = prepared_run
+                    elif any(n['type'] == 'data.futures_bars' for n in graph['nodes']):
                         from strategies.tsmom_tx_mtx.graph_nodes import prepare_graph
                         prepared = prepare_graph(graph)
                     else:

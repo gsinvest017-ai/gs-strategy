@@ -4,8 +4,8 @@ The TEJ calendar package queries its holiday endpoint on import. Tests supply
 an empty *post-2023* holiday fixture; all test sessions precede 2023 and use the
 package's published static calendar. Zipline assets, writers, readers, event
 loop, commissions, orders, fills, and accounting are all real.
-Run this fixture serially: the vendor's official calendar CSV cache is shared
-within the Python environment and is restored after import.
+The auxiliary vendor calendar is injected in memory; shared package files are
+never modified, including when fixture processes overlap or fail.
 """
 from __future__ import annotations
 
@@ -26,14 +26,40 @@ def import_zipline_offline():
             raise RuntimeError('offline fixture forbids external data access')
         return pd.DataFrame({'zdate': pd.Series([], dtype='datetime64[ns]')})
 
-    # TejToolAPI has an official CSV cache; prime and restore it for import.
-    import importlib.util
-    from pathlib import Path
-    package = Path(importlib.util.find_spec('TejToolAPI').origin).parent
-    cached = package / 'temp' / 'exchange_calendar.csv'
-    cached.parent.mkdir(exist_ok=True)
-    previous = cached.read_bytes() if cached.exists() else None
-    pd.DataFrame({'zdate': pd.date_range('2016-01-01', '2035-01-01', freq='B')}).to_csv(cached, index=False)
+    # TejToolAPI imports this auxiliary calendar during Zipline initialization.
+    # Supply it before package import so no vendor cache reader/writer is run.
+    import sys
+    import types
+    module_name = 'TejToolAPI.exchange_calendar'
+    previous_module = sys.modules.get(module_name)
+    module = types.ModuleType(module_name)
+
+    class ExchangeCalendar:
+        def __init__(self):
+            self.calendar = pd.DataFrame({'zdate': pd.date_range('2016-01-01', '2035-01-01', freq='B')})
+            self.calendar_list = self.calendar['zdate'].tolist()
+
+        def is_session(self, date):
+            return pd.Timestamp(date) in self.calendar_list
+
+        def next_open(self, date):
+            dates = self.calendar['zdate']
+            return dates.iloc[dates.searchsorted(pd.Timestamp(date), side='right')]
+
+        def prev_open(self, date):
+            dates = self.calendar['zdate']
+            index = dates.searchsorted(pd.Timestamp(date), side='left') - 1
+            if index < 0:
+                raise ValueError('fixture calendar range exceeded')
+            return dates.iloc[index]
+
+        def annd_adjusted(self, date, shift_backward=True):
+            if self.is_session(date):
+                return date
+            return self.prev_open(date) if shift_backward else self.next_open(date)
+
+    module.ExchangeCalendar = ExchangeCalendar
+    sys.modules[module_name] = module
     tejapi.fastget = calendar_fixture
     try:
         import zipline
@@ -45,10 +71,10 @@ def import_zipline_offline():
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
-        if previous is not None:
-            cached.write_bytes(previous)
+        if previous_module is not None:
+            sys.modules[module_name] = previous_module
         else:
-            cached.unlink(missing_ok=True)
+            sys.modules.pop(module_name, None)
 
 
 def register_fixture(name='graph_fixture'):

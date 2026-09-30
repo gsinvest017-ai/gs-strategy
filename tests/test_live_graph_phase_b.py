@@ -194,7 +194,7 @@ def test_ui_invalid_edge_still_serves_controlled_load_error(tmp_path, monkeypatc
             with urlopen(base + '/api/graph') as response:
                 assert json.load(response)['graph'] is None
             request = Request(base + '/api/graph/load',
-                              data=json.dumps({'path': graph_path}).encode(),
+                              data=json.dumps({'path': graph_path, 'expected_revision': service.revision}).encode(),
                               headers={'Content-Type': 'application/json'})
             with pytest.raises(HTTPError) as caught:
                 urlopen(request)
