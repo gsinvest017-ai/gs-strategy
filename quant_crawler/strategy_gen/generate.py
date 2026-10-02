@@ -27,8 +27,12 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from quant_crawler.utils.logging import get_logger
+
 from .classify import ClassificationResult, classify_paper
 from .taxonomy import TAG_VOCABULARY, flat_tags
+
+log = get_logger("strategy_gen")
 
 PKG_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = PKG_DIR / "templates"
@@ -289,8 +293,25 @@ def generate_bundle(
     # Idempotency: preserve manually-edited manifest fields when one already
     # exists.
     manifest_path = bundle_dir / "manifest.yaml"
+    existing = None
     if manifest_path.is_file():
-        existing = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+        try:
+            existing = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError as exc:
+            # 既有 manifest 讀不了時**不能**讓整個重生失敗，否則就成了死結：
+            # 一份寫壞的 manifest 會擋住那個唯一能把它修好的動作，於是損壞永久化。
+            # 實際踩過：repec 的 mojibake 讓 14 份 manifest 含 U+0080 控制字元，
+            # YAML 拒收，重生時在這一行炸掉——修復腳本因此一個都修不了。
+            #
+            # 讀不了就當成「沒有既有檔案」整份重寫。這會丟掉手改過的欄位，所以
+            # 一定要出聲；但保留一份無法解析的檔案並不會保住那些手改內容，
+            # 只是把它們鎖在一個沒有東西讀得了的檔案裡。
+            log.warning(
+                "既有 manifest 無法解析，將整份重寫（手改欄位會遺失）：%s — %s",
+                manifest_path, exc,
+            )
+            existing = None
+    if existing is not None:
         new = yaml.safe_load(manifest_yaml) or {}
         # User edits to top-level scalars win; we only refresh
         # generated-at + matched_keywords + paper provenance block.

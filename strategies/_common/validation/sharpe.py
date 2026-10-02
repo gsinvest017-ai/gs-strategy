@@ -64,6 +64,8 @@ def deflated_sharpe_ratio(
 
     ``sr_variance_across_trials`` is Var[SR] across the trials you ran; if you
     don't have it, pass ``None`` and a conservative default of 1/(n-1) is used.
+    Prefer :func:`dsr_sr_variance` to build it: trials with different sample
+    lengths or return types must not be pooled.
     """
     r, sr, skew, kurt, n = _moments(returns)
     if n_trials < 1:
@@ -101,3 +103,69 @@ def annualized_sharpe(returns: Sequence[float], periods_per_year: int = 252) -> 
     r = np.asarray(returns, dtype=float)
     r = r[~np.isnan(r)]
     return float(r.mean() / r.std(ddof=1) * math.sqrt(periods_per_year))
+
+
+def min_track_record_length(
+    returns: Sequence[float],
+    sr_benchmark: float = 0.0,
+    confidence: float = 0.95,
+) -> float:
+    """Minimum number of periods for PSR(``sr_benchmark``) to reach ``confidence``.
+
+    Bailey & López de Prado (2012). Returns ``inf`` when the observed SR does
+    not exceed the benchmark. Same frequency as ``returns``.
+    """
+    _, sr, skew, kurt, _ = _moments(returns)
+    if sr <= sr_benchmark:
+        return float("inf")
+    z = norm.ppf(confidence)
+    return float(1 + (1 - skew * sr + (kurt - 1) / 4 * sr**2) * (z / (sr - sr_benchmark)) ** 2)
+
+
+def dsr_sr_variance(trial_sharpes: Sequence[float], n_obs: int) -> float:
+    """Var[SR] to feed :func:`deflated_sharpe_ratio`.
+
+    Returns ``max(1 / (n_obs - 1), sample variance of trial_sharpes)``.
+
+    * ``trial_sharpes`` must come from trials with the **same sample length and
+      return type** as the candidate (e.g. all monthly long/short spreads over
+      the same months). The sampling variance of an SR estimate is about
+      ``(1 + SR^2 / 2) / (T - 1)``, so a trial with T = 51 is ~3.5x noisier than
+      one with T = 180, and an overlay that is flat most months has SR close to
+      0 with tiny variance; pooling them inflates or deflates V and therefore
+      the benchmark ``SR0 = sqrt(V) * E[max Z]``.
+    * The floor ``1 / (n_obs - 1)`` is the null sampling variance; a handful of
+      highly correlated trials can otherwise report a cross-trial variance
+      below it and make DSR too lenient.
+    """
+    if n_obs < 3:
+        raise ValueError("n_obs must be >= 3")
+    s = np.asarray(trial_sharpes, dtype=float)
+    s = s[np.isfinite(s)]
+    floor = 1.0 / (n_obs - 1)
+    if s.size < 2:
+        return floor
+    return float(max(floor, s.var(ddof=1)))
+
+
+def effective_n_trials(returns_matrix: np.ndarray) -> float:
+    """Effective number of independent trials (participation ratio).
+
+    ``returns_matrix``: shape ``(T, N)``. Uses rows with no missing values and
+    the eigenvalues of the trial-return correlation matrix:
+    ``(sum lambda)^2 / sum lambda^2``, between 1 (identical trials) and N
+    (uncorrelated). Report it next to the nominal N; never use it to *lower*
+    a pre-registered N after seeing results.
+    """
+    X = np.asarray(returns_matrix, dtype=float)
+    if X.ndim != 2 or X.shape[1] < 2:
+        raise ValueError("returns_matrix must have shape (T, N) with N >= 2")
+    X = X[~np.isnan(X).any(axis=1)]
+    if X.shape[0] < 3:
+        raise ValueError("need at least 3 complete rows")
+    with np.errstate(invalid="ignore", divide="ignore"):
+        C = np.corrcoef(X, rowvar=False)
+    C = np.nan_to_num(C, nan=0.0)
+    np.fill_diagonal(C, 1.0)
+    lam = np.clip(np.linalg.eigvalsh(C), 0.0, None)
+    return float(lam.sum() ** 2 / (lam**2).sum())

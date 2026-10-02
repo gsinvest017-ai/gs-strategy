@@ -1,0 +1,27 @@
+# Disposition-stock rebound — legacy runner config (strategies/_common/runner.py)
+# Spec-v1 metadata lives in manifest.yaml; this file is what run_strategy.sh reads.
+#
+# Window is set by DATA availability, not by preference: is_disposition_bool in
+# stock_attrs_status returns exactly zero rows before 2021 (verified), so an
+# earlier start silently yields an empty event set rather than an error.
+
+start: '2021-01-04'
+end:   '2026-08-27'
+capital_base: 10_000_000
+bundle: tquant          # equity bundle — NOT tquant_future
+calendar: TEJ_XTAI
+
+params:
+  strategy_form: event_driven
+  events_csv: assets/events.csv
+
+  hold_sessions: 10      # exit 10 sessions after entry; the study's CAR[1,10]
+  position_pct: 0.04     # per-episode weight
+  max_concurrent: 12     # cap simultaneous positions
+
+  # Optional filters, both default off:
+  #   min_strength         require a minimum pre-event 20-day run-up (ex-ante)
+  #   auction_interval_min 5  = first disposition  (5-minute call auction)
+  #                        20 = repeat disposition (20-minute + pre-payment)
+  min_strength: null
+  auction_interval_min: null

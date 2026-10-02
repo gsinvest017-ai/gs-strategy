@@ -1,0 +1,64 @@
+id: disposition_rebound_tw
+name: Disposition-Stock Rebound (TW equities)
+description: |
+  Buys a Taiwan stock on the session it enters TWSE/TPEx disposition (處置股)
+  and holds ten sessions. This is the inverse of the folk trade, which shorts
+  the name on day one.
+
+  Measured over 2,101 episodes (2021-01 to 2026-08): the short side is not
+  implementable -- 100% of disposition stock-days also carry a day-trade ban
+  and margin short-sell volume collapses to a median of ~5 lots/day -- and the
+  entry-day drop of ~-64 bps against a matched control is smaller than the
+  ~111 bps it costs to round-trip a short. Sessions +1..+10 instead earn a
+  positive abnormal return: ~+340 bps gross hedged, ~+278 bps net unhedged per
+  trade (t=7.5), positive in five of six calendar years (2022 flat).
+
+  Selected jointly against 23 other event-window variants under White's Reality
+  Check, Hansen's SPA and Romano-Wolf StepM; it is one of only three that
+  survive familywise error control.
+
+  Binding limitation is capacity, not statistics: fills occur in a 5- or
+  20-minute call auction on a name whose traded value has collapsed, and the
+  edge disappears near 400 bps of round-trip cost.
+asset_class: equity
+bundle: tquant
+start: '2021-01-04'
+end: '2026-08-27'
+capital_base: 10000000
+params:
+  strategy_form: event_driven
+  events_csv: assets/events.csv
+  hold_sessions: 10
+  position_pct: 0.04
+  max_concurrent: 12
+  min_strength: null
+  auction_interval_min: null
+tags:
+- taiwan
+- event-driven
+- equity
+- single-stock
+- long-only
+- microstructure
+- regulatory
+- needs-review
+requires_tej_key: true
+extra_deps: []
+symbols: []
+spec_version: 1
+source:
+  kind: manual
+  generated_at: '2026-08-28T00:00:00Z'
+  inputs:
+    study: docs/findings-disposition-rebound.md
+    spec: docs/math-spec-pv-technical-analysis.md
+    data:
+      service: http://quantdata.lan/api/v1
+      tables:
+      - stock_attrs_status
+      - tw_stock_trading_attrs_daily
+      - stock_factor_daily
+      - tw_margin_daily
+      coverage_note: >-
+        is_disposition_bool is empty before 2021 in stock_attrs_status, so the
+        study window starts 2021-01-04 by data availability, not by choice.

@@ -17,7 +17,7 @@
 pandas>=2.2,<3.0
 numpy>=2.0,<3.0
 scipy>=1.11          # validation.sharpe (PSR/DSR use scipy.stats.norm)
-statsmodels>=0.14    # live graph Ljung-Box and effective sample size
+statsmodels>=0.14    # validation.tradability / live graph Ljung-Box, n_eff
 pyarrow>=15          # pandas parquet engine; perf frames and the lakehouse
 
 # Config + codegen.

@@ -1,23 +1,32 @@
-"""Causal-graph discovery + confounder selection.
+"""Causal-graph discovery, reported as a diagnostic only.
 
-Wraps ``causal-learn`` (PC algorithm) to propose a DAG from data, then reads
-off the parents of the outcome as the confounder set to control for. Optional
-dependency; if absent, :func:`select_confounders` falls back to "use every
-non-treatment, non-outcome column", which is the safe (over-)conditioning set.
+Wraps ``causal-learn`` (PC algorithm) to propose a DAG from data. Earlier
+versions used it to *narrow* the confounder set to nodes adjacent to both the
+treatment and the outcome. That is removed, for three reasons:
+
+1. PC's conditional-independence tests use i.i.d. p-values. On stock x period
+   panels with 1e5 rows and common shocks, edges appear and disappear with the
+   sample size and the cross-sectional correlation, not with the causal
+   structure.
+2. Dropping a true confounder X re-introduces omitted-variable bias
+   ``plim theta^ - theta = beta_X * Cov(D, X | kept) / Var(D | kept)``, and PC
+   is most likely to drop exactly the weakly-estimated variables.
+3. Inference after data-driven selection is not valid with the unadjusted
+   standard error.
+
+Controls may be added to a pre-registered list, never removed by the data.
 """
 from __future__ import annotations
 
 from typing import Sequence
 
-import numpy as np
 import pandas as pd
 
 
 def discover_dag(panel: pd.DataFrame, columns: Sequence[str], alpha: float = 0.05):
     """Run PC and return (adjacency_matrix, column_order).
 
-    Raises ImportError if causal-learn is not installed — callers should catch
-    and degrade to :func:`select_confounders`'s fallback.
+    Raises ImportError if causal-learn is not installed.
     """
     from causallearn.search.ConstraintBased.PC import pc  # type: ignore
 
@@ -33,22 +42,37 @@ def select_confounders(
     candidates: Sequence[str],
     alpha: float = 0.05,
 ) -> list[str]:
-    """Return confounders to control for: nodes adjacent to *both* treatment
-    and outcome in the discovered DAG. Falls back to all candidates.
+    """Return the confounders to control for: always the full candidate list.
+
+    Kept for backward compatibility; ``panel``, ``treatment``, ``outcome`` and
+    ``alpha`` are ignored. See the module docstring for why the data may not
+    shrink this set. Use :func:`dag_diagnostics` to look at the PC graph.
     """
+    return list(candidates)
+
+
+def dag_diagnostics(
+    panel: pd.DataFrame,
+    treatment: str,
+    outcome: str,
+    candidates: Sequence[str],
+    alpha: float = 0.05,
+) -> dict:
+    """Descriptive PC-graph facts; never used to change the control set."""
     cols = [treatment, outcome, *candidates]
     try:
         adj, order = discover_dag(panel, cols, alpha=alpha)
     except ImportError:
-        return list(candidates)
-
+        return {"available": False}
     ti, oi = order.index(treatment), order.index(outcome)
-    chosen = []
-    for c in candidates:
-        ci = order.index(c)
-        # adjacency (any edge mark) to both treatment and outcome => confounder
-        adj_t = adj[ci][ti] != 0 or adj[ti][ci] != 0
-        adj_o = adj[ci][oi] != 0 or adj[oi][ci] != 0
-        if adj_t and adj_o:
-            chosen.append(c)
-    return chosen or list(candidates)
+
+    def adjacent(a: int, b: int) -> bool:
+        return adj[a][b] != 0 or adj[b][a] != 0
+
+    return {
+        "available": True,
+        "treatment_outcome_adjacent": bool(adjacent(ti, oi)),
+        "adjacent_to_treatment": [c for c in candidates if adjacent(order.index(c), ti)],
+        "adjacent_to_outcome": [c for c in candidates if adjacent(order.index(c), oi)],
+        "note": "PC uses i.i.d. conditional-independence tests; descriptive only on panels",
+    }
