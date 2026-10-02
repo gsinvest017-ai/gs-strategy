@@ -3,10 +3,12 @@ import { createRoot } from "react-dom/client";
 import {
   ReactFlow,
   Background,
+  BaseEdge,
   Controls,
   Handle,
   Position,
   ViewportPortal,
+  getSmoothStepPath,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "@fontsource/ibm-plex-sans/400.css";
@@ -32,6 +34,8 @@ import {
   fmt,
   edgeId,
   costText,
+  edgeLanes,
+  STAGE_WIDTH,
   initialFit,
   pollJob,
   resumeOrStart,
@@ -520,6 +524,19 @@ export function GraphNode({ id, data }) {
   );
 }
 const nodeTypes = { instrument: GraphNode };
+function LaneEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition,
+                    style, data, selected }) {
+  const [path] = getSmoothStepPath({
+    sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition,
+    borderRadius: 8, offset: 12,
+    ...(data?.laneX != null ? { centerX: data.laneX } : {}),
+  });
+  return (
+    <BaseEdge id={id} path={path} interactionWidth={14}
+      className={`lane-edge ${selected ? "selected" : ""}`} style={style} />
+  );
+}
+const edgeTypes = { lane: LaneEdge };
 export function Drawer({ id, close, revision }) {
   const [data, setData] = useState(null),
     [full, setFull] = useState(null),
@@ -933,7 +950,7 @@ function App() {
         .sort(
           (a, b) => (own(positions, a.id)?.y || 0) - (own(positions, b.id)?.y || 0),
         )) {
-        result[n.id] = { x: 24 + c * 274, y };
+        result[n.id] = { x: 24 + c * STAGE_WIDTH, y };
         y += (own(measured, n.id)?.height || 200) + 16;
       }
     }
@@ -947,7 +964,7 @@ function App() {
         type: "instrument",
         measured: own(measured, n.id),
         position: own(layout, n.id) ||
-          own(autoPositions, n.id) || { x: 24 + column(n) * 274, y: 75 },
+          own(autoPositions, n.id) || { x: 24 + column(n) * STAGE_WIDTH, y: 75 },
         dragHandle: ".node-title",
         data: {
           node: n,
@@ -983,7 +1000,7 @@ function App() {
   }, [measured, nodes]);
   function fitAll() {
       if (!nodes.length) return;
-      const right = Math.max(1390, ...nodes.map((n) => n.position.x + 240));
+      const right = Math.max(5 * STAGE_WIDTH + 20, ...nodes.map((n) => n.position.x + 240));
       const bottom =
         Math.max(
           ...nodes.map((n) => n.position.y + (own(measured, n.id)?.height || 200)),
@@ -993,6 +1010,19 @@ function App() {
         { padding: 0.025, duration: 0 },
       );
   }
+  const lane = useMemo(() => {
+    const boxes = Object.create(null);
+    for (const n of nodes) {
+      const ports = Object.keys(own(types, n.data.node.type)?.outputs || {});
+      boxes[n.id] = {
+        x: n.position.x, y: n.position.y,
+        width: own(measured, n.id)?.width || 240,
+        // Output handles sit below the title in declaration order.
+        portY: (port) => 48 + Math.max(0, ports.indexOf(port)) * 20,
+      };
+    }
+    return edgeLanes(doc?.graph?.edges || [], boxes);
+  }, [nodes, measured, types, doc?.graph?.edges]);
   const edges =
     doc?.graph?.edges.map((e) => ({
       id: edgeId(e),
@@ -1001,13 +1031,13 @@ function App() {
       target: e.to[0],
       targetHandle: e.to[1],
       selected: selectedEdges.has(edgeId(e)),
-      type: "smoothstep",
+      type: "lane",
+      data: { laneX: lane(e) },
       animated: own(states, e.to[0])?.status === "running",
       style: {
         stroke: portColor(
           own(own(types, doc.graph.nodes.find((n) => n.id === e.from[0])?.type)?.outputs, e.from[1]),
         ),
-        strokeWidth: 2,
       },
     })) || [];
   function valid(c) {
@@ -1187,6 +1217,7 @@ function App() {
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             minZoom={0.35}
             maxZoom={1.6}
             nodesConnectable={!busy}
@@ -1264,7 +1295,7 @@ function App() {
                 {stages.map((s, i) => (
                   <div
                     className="stage-band"
-                    style={{ left: i * 274, width: 274 }}
+                    style={{ left: i * STAGE_WIDTH, width: STAGE_WIDTH }}
                     key={s}
                   >
                     <span className="stage-label">
@@ -1273,7 +1304,7 @@ function App() {
                     </span>
                   </div>
                 ))}
-                <div className="n-boundary">
+                <div className="n-boundary" style={{ left: 3 * STAGE_WIDTH + 2 }}>
                   <span>上游預覽區・不計 N</span>
                   <span>試驗區・每個新組態 N+1</span>
                 </div>
