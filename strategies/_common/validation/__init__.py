@@ -5,7 +5,7 @@ CPCV splits, Deflated/Probabilistic Sharpe, and PBO. Dependencies are limited
 to numpy/scipy/pandas so this subpackage can later be lifted verbatim into
 ``gs_common.quant.validation`` (see docs/survey-quant-frontier-2026-06.md).
 
-The four legs cover *different* failure modes and none substitutes for another
+Each leg covers a *different* failure mode and none substitutes for another
 (see docs/math-spec-pv-technical-analysis.md §6.4):
 
 ``cpcv``           leakage from serially-overlapping labels
@@ -14,7 +14,18 @@ The four legs cover *different* failure modes and none substitutes for another
 ``reality_check``  data snooping across the M strategies you actually tried
                    (White's Reality Check, Hansen's SPA, Romano-Wolf StepM)
 ``tradability``    whether the instrument carries exploitable serial structure
-                   at all -- the check that belongs *before* the other four
+                   at all -- the check that belongs *before* the others
+``online_fdr``     the multiple-testing correction for the case where variants
+                   arrive one at a time and N is *not* known in advance -- an
+                   offline correction cannot be applied there without using
+                   future information to set past thresholds (ADDIS)
+``decision``       which test the ruleset mandates for a declared set of data
+                   properties, and whether a recorded verdict can be recomputed
+
+``online_fdr`` keeps the numpy/scipy/pandas-only invariant by implementing
+ADDIS here rather than depending on the ``online-fdr`` package; correctness is
+held by a step-by-step cross-check against that package in the test suite,
+which skips when it is not installed.
 """
 from __future__ import annotations
 
@@ -22,6 +33,12 @@ from .cpcv import (
     combinatorial_purged_splits,
     n_cpcv_paths,
     purged_kfold_splits,
+)
+from .online_fdr import (
+    AddisBudget,
+    AddisStep,
+    PValueProvenanceError,
+    budget_from_ledger,
 )
 from .pbo import pbo
 from .reality_check import (
@@ -77,4 +94,9 @@ __all__ = [
     "ljung_box_abs_returns",
     "runs_test",
     "ta_suitability",
+    # online_fdr
+    "AddisBudget",
+    "AddisStep",
+    "budget_from_ledger",
+    "PValueProvenanceError",
 ]

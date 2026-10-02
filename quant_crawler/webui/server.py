@@ -153,6 +153,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/" or path == "/index.html":
                 self._send_static("index.html")
+            elif path == "/stat-tree" or path == "/stat-tree.html":
+                self._send_static("stat-tree.html")
+            elif path == "/api/stat-tree":
+                from quant_crawler.webui import stat_tree
+                self._send_json(stat_tree.payload())
             elif path.startswith("/static/"):
                 self._send_static(path[len("/static/"):])
             elif path == "/api/summary":
