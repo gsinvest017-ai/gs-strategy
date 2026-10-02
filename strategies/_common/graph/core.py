@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from strategies._common.compose.types import compatible
+
 
 class GraphError(ValueError):
     pass
@@ -98,9 +100,16 @@ class Registry:
         self.types = {}
 
     def register(self, node):
+        from strategies._common.compose.types import Ty
         if node.id in self.types:
             raise GraphError(f'duplicate node type {node.id}')
-        if 'Returns' in node.outputs.values() and not node.id.startswith('backtest.'):
+        try:
+            produced = [Ty.parse(t).base for t in node.outputs.values()]
+            for t in node.inputs.values():
+                Ty.parse(t)
+        except ValueError as exc:
+            raise GraphError(f'{node.id}: invalid port type') from exc
+        if 'Returns' in produced and not node.id.startswith('backtest.'):
             raise GraphError('Returns can only be produced by backtest.*')
         self.types[node.id] = node
         return node
@@ -140,7 +149,7 @@ class Registry:
                 src, out = edge['from']
                 dst, inp = edge['to']
                 a, b = self.types[by_id[src]['type']], self.types[by_id[dst]['type']]
-                valid = a.outputs[out] == b.inputs[inp] and inp not in incoming[dst]
+                valid = compatible(a.outputs[out], b.inputs[inp]) and inp not in incoming[dst]
             except (KeyError, ValueError, TypeError):
                 valid = False
             if not valid:
