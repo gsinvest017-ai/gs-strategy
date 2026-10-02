@@ -17,6 +17,7 @@ import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/noto-sans-tc/400.css";
 import "./style.css";
 import { Replay } from "./Replay";
+import { StrategyMenu, Results } from "./Pool";
 import {
   api,
   compatible,
@@ -691,6 +692,7 @@ function App() {
     [sidecar, setSidecar] = useState(""),
     [showLoad, setShowLoad] = useState(false),
     [showReplay, setShowReplay] = useState(false),
+    [showResults, setShowResults] = useState(false),
     [revision, setRevision] = useState(0),
     [flash, setFlash] = useState(false);
   const flow = useRef(null);
@@ -1085,6 +1087,31 @@ function App() {
       await handleError(e);
     }
   }
+  async function selectStrategy(id) {
+    if (!id || id === docRef.current?.graph?.strategy) return;
+    if (submittingRef.current || scheduler.current?.pending || active.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      await cancelPreview();
+      const d = await api("/strategies/select", { id, expected_revision: docRef.current.revision });
+      documentUpdate(d);
+      setSelected(null);
+      setShowReplay(false);
+      setWarnings([]);
+      const l = await api("/layout");
+      setLayout(l.positions);
+      setMeasured({});
+      fitInitial.current = initialFit();
+      await refresh();
+      scheduler.current.start();
+    } catch (e) {
+      await handleError(e);
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  }
   async function load() {
     if (submittingRef.current || scheduler.current?.pending || active.current) return;
     submittingRef.current = true;
@@ -1112,6 +1139,7 @@ function App() {
           <span className="brand-mark">▥</span>
           <b>{doc?.graph?.strategy || "Live Strategy Graph"}</b>
         </div>
+        <StrategyMenu current={doc?.graph?.strategy} disabled={busy} onSelect={selectStrategy} />
         <span
           className="hash mono"
           data-testid="graph-hash"
@@ -1129,6 +1157,9 @@ function App() {
         </button>
         <button disabled={busy} onClick={() => setShowLoad((v) => !v)}>
           從產出載入
+        </button>
+        <button data-testid="results" onClick={() => setShowResults(true)}>
+          結果
         </button>
         {doc?.graph?.nodes?.some((n) => n.type === "agent.llm_view") && (
           <button data-testid="replay" onClick={() => setShowReplay(true)}>
@@ -1324,6 +1355,9 @@ function App() {
         )}
       </div>
       {showReplay && <Replay close={() => setShowReplay(false)} revision={revision} />}
+      {showResults && (
+        <Results strategy={doc?.graph?.strategy} close={() => setShowResults(false)} revision={revision} />
+      )}
       <footer>
         <span>
           LIVE STRATEGY GRAPH <b>研究量測台</b>

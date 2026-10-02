@@ -75,6 +75,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, {'node_types': s.registry.describe()})
             if not mutation and parts == ['api','graph']:
                 return self.reply(200, s.document())
+            if not mutation and parts == ['api','strategies']:
+                return self.reply(200, s.strategies(refresh=query.get('refresh', ['0'])[0] == '1'))
+            if mutation and parts == ['api','strategies','select']:
+                return self.reply(200, s.select_strategy(str(body['id']), expected_revision=body.get('expected_revision')))
+            if not mutation and parts == ['api','results']:
+                strategy = query.get('strategy', [None])[0]
+                limit = min(500, max(1, int(query.get('limit', ['50'])[0])))
+                return self.reply(200, s.results(strategy, limit))
+            if not mutation and len(parts) == 3 and parts[:2] == ['api','results']:
+                return self.reply(200, s.result(parts[2]))
             if not mutation and parts == ['api','replay']:
                 return self.reply(200, s.replay())
             if not mutation and parts == ['api','ledger']:

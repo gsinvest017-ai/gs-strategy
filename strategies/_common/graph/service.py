@@ -91,11 +91,16 @@ def _user_message_one(message):
         'LLM API key unavailable; set the configured environment variable or key file': '找不到 LLM API 金鑰，請設定環境變數或金鑰檔',
         'pin data_version with prepare_graph before execution': '資料版本尚未釘選，請重新執行預判',
         'pin model_spec with prepare_graph before execution': '模型設定尚未釘選，請重新執行預判',
+        'pin bundle_version with prepare_graph before execution': '策略版本尚未釘選，請重新執行預判',
     })
     llm_failure = re.fullmatch(r'LLM request failed \((HTTP \d{3}|[A-Za-z]+Error|[A-Za-z]+)\)', message)
     if llm_failure:
         return f'LLM 服務呼叫失敗（{llm_failure[1]}），請確認模型服務與網路'
-    chinese = {'QUANTDATA 在指定區間沒有資料', 'QUANTDATA 資料內容與釘選的版本不同，請重新執行預判',
+    chinese = {'找不到 gs-zipline-tej 策略池（設定 GS_ZIPLINE_TEJ_ROOT）', '策略池程序逾時', '策略池程序執行失敗',
+               '策略池中沒有這個策略', '找不到策略原始碼', '策略原始碼已變更，請重新執行預判',
+               'gs-zipline-tej 回測失敗，請在該 repo 的 dashboard 檢視錯誤', '此策略 id 無法開啟',
+               '測試資料模式只能檢視目前的圖，切換策略請用真實模式啟動',
+               'QUANTDATA 在指定區間沒有資料', 'QUANTDATA 資料內容與釘選的版本不同，請重新執行預判',
                '找不到論文資料庫 papers.db', 'gs-rag 未安裝，無法使用 gs_rag 後端',
                '模型登錄表中此模型的設定已變更，請重新執行預判', 'Signals 與 PriceBars 的資料來源必須相同',
                'thresholds 必須是 0 到 1 之間的數字清單', '乾淨樣本不足以切出任何 walk-forward 區段'}
@@ -110,9 +115,11 @@ def default_registry():
     from strategies.tsmom_tx_mtx.graph_nodes import register_nodes as strategy_nodes
     from strategies.llm_view_tx.graph_nodes import register_nodes as llm_nodes
     from .stat_nodes import register_nodes as stat_nodes
+    from .pool_nodes import register_nodes as pool_nodes
     registry = Registry()
     strategy_nodes(registry)
     llm_nodes(registry)
+    pool_nodes(registry)
     stat_nodes(registry)
     return registry
 
@@ -125,6 +132,9 @@ def prepare_any(graph):
         graph = prepare_graph(graph)
     if types & {'data.quantdata_futures', 'agent.llm_view', 'pit.memorization_probe'}:
         from strategies.llm_view_tx.graph_nodes import prepare_graph
+        graph = prepare_graph(graph)
+    if 'data.pool_strategy' in types:
+        from .pool_nodes import prepare_graph
         graph = prepare_graph(graph)
     return graph
 
@@ -234,6 +244,9 @@ class GraphService:
         self.fixture = False
 
     def session(self):
+        return {**self._session(), 'strategy': (self.graph or {}).get('strategy')}
+
+    def _session(self):
         with self.lock:
             active_job = self.job(self.active) if self.active and self.jobs[self.active]['status'] == 'running' else None
         result = {'fixture': self.fixture, 'active_job': active_job,
@@ -255,6 +268,39 @@ class GraphService:
     def prepare(self, graph):
         with quiet_worker_output():
             return prepare_any(graph)
+
+    def strategies(self, refresh=False):
+        from strategies._common import pool
+        listing = pool.pool(refresh=refresh)
+        current = (self.graph or {}).get('strategy')
+        return {**listing, 'current': current, 'fixture': bool(getattr(self, 'fixture', False))}
+
+    def select_strategy(self, strategy_id, *, expected_revision=_UNSET):
+        """Open a pool strategy: its own graph when it ships one, else a coarse graph."""
+        from strategies._common import pool
+        if getattr(self, 'fixture', False):
+            raise GraphError('測試資料模式只能檢視目前的圖，切換策略請用真實模式啟動')
+        meta = pool.entry(strategy_id)
+        if not meta.get('selectable'):
+            raise GraphError('此策略 id 無法開啟')
+        relative = meta.get('graph_path')
+        if not relative:
+            relative = f'strategies/_pool/{strategy_id}/graph.json'
+            target = self.confined(relative)
+            if not target.exists():
+                write_json(target, pool.coarse_graph(meta))
+        return self.load(relative, expected_revision=expected_revision)
+
+    def results(self, strategy=None, limit=50):
+        from strategies._common import results
+        return {'runs': results.runs(results.default_path(self.root), strategy, limit)}
+
+    def result(self, run_id):
+        from strategies._common import results
+        detail = results.run_detail(results.default_path(self.root), run_id)
+        if detail is None:
+            raise GraphError('unknown job')
+        return json_value(detail, limit=100000)
 
     def replay(self):
         from strategies._common.compose import replay
@@ -448,6 +494,21 @@ class GraphService:
             self.jobs[job_id] = job
             self.active = job_id
             self._token = ctx.token
+            n_before = None if preview else self.ledger.summary()['selection_n']
+            def record():
+                if preview:
+                    return
+                try:
+                    from strategies._common import results
+                    n_after = self.ledger.summary()['selection_n']
+                    results.record(results.default_path(self.root), run_id=job_id, status=job['status'],
+                                   message=user_message(job['message']) if job.get('message') else None,
+                                   context=ctx, values=dict(self.engine.values),
+                                   states=dict(self.engine.states), selection_n=n_after,
+                                   new_trial=n_after > n_before)
+                except Exception:
+                    # The store is a convenience; it must never fail or alter the job.
+                    job['result_store'] = 'unavailable'
             def work():
                 try:
                     if prepared_run is not None:
@@ -475,6 +536,7 @@ class GraphService:
                 except Exception:
                     job['status'] = 'error'
                     job['message'] = 'execution failed; no external error text exposed'
+                record()
             def quiet_work():
                 # Third-party console output is confidential and never persisted.
                 with quiet_worker_output():
