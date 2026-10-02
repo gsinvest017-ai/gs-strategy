@@ -154,7 +154,8 @@ def test_cli_types_starts_without_bundle_or_key():
     import subprocess
     import sys
     result = subprocess.run([sys.executable,'-m','strategies._common.graph','types'],capture_output=True,text=True,check=True)
-    assert len(json.loads(result.stdout))==13
+    ids={t['id'] for t in json.loads(result.stdout)}
+    assert {'data.futures_bars','data.continuous','feature.signed_momentum','feature.ewma_vol','signal.direction','sizing.vol_target','sizing.gross_cap','cost.futures','backtest.zipline','ledger.selection_n','validation.report','stat.facts','stat.resolve'} <= ids and len(ids)==19
 
 def test_invalid_save_path_does_not_replace_current_graph(tmp_path):
     s=make_service(tmp_path)
@@ -189,7 +190,8 @@ def test_cli_server_defaults_loopback_and_serves_json(tmp_path):
         assert urlsplit(address).hostname=='127.0.0.1'
         with urlopen(address+'/api/node-types',timeout=10) as response:
             assert response.status==200
-            assert len(json.load(response)['node_types'])==13
+            ids={t['id'] for t in json.load(response)['node_types']}
+            assert {'data.futures_bars','data.continuous','feature.signed_momentum','feature.ewma_vol','signal.direction','sizing.vol_target','sizing.gross_cap','cost.futures','backtest.zipline','ledger.selection_n','validation.report','stat.facts','stat.resolve'} <= ids and len(ids)==19
         assert not (tmp_path/'log/trials.jsonl').exists()
     finally:
         process.terminate()
