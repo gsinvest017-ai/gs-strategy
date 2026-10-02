@@ -79,6 +79,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, s.strategies(refresh=query.get('refresh', ['0'])[0] == '1'))
             if mutation and parts == ['api','strategies','select']:
                 return self.reply(200, s.select_strategy(str(body['id']), expected_revision=body.get('expected_revision')))
+            if not mutation and parts == ['api','experiments']:
+                strategy = query.get('strategy', [None])[0]
+                limit = min(500, max(1, int(query.get('limit', ['50'])[0])))
+                return self.reply(200, s.experiments(strategy, limit))
+            if not mutation and len(parts) == 3 and parts[:2] == ['api','experiments']:
+                return self.reply(200, s.experiment(unquote(parts[2])))
             if not mutation and parts == ['api','results']:
                 strategy = query.get('strategy', [None])[0]
                 limit = min(500, max(1, int(query.get('limit', ['50'])[0])))
