@@ -22,8 +22,6 @@ from pathlib import Path
 import re
 import tempfile
 import time
-import urllib.error
-import urllib.request
 from urllib.parse import urlsplit
 
 from strategies._common.graph.core import GraphError, canonical
@@ -111,8 +109,7 @@ class FixtureProvider:
 
 class OpenAICompatibleProvider:
     def __init__(self, spec, document):
-        # pit.registry() already rejects non-HTTP(S) base URLs; re-check at the call
-        # site so no file:// or custom scheme can ever reach urllib.
+        # pit.registry() already rejects non-HTTP(S) base URLs; re-check here too.
         if urlsplit(spec['base_url']).scheme not in ('http', 'https'):
             raise GraphError('model base_url must be http(s)')
         self.base_url = spec['base_url'].rstrip('/')
@@ -120,24 +117,25 @@ class OpenAICompatibleProvider:
         self._document = document
 
     def complete(self, messages, *, temperature, max_tokens):
-        body = json.dumps({'model': self.model, 'messages': messages, 'temperature': temperature,
-                           'max_tokens': max_tokens}).encode()
-        request = urllib.request.Request(self.base_url + '/chat/completions', data=body, headers={
-            'Authorization': 'Bearer ' + _api_key(self._document), 'Content-Type': 'application/json',
-            'User-Agent': USER_AGENT})
+        # requests has no file:// adapter, so only the validated http(s) URL is reachable.
+        import requests
+        body = {'model': self.model, 'messages': messages, 'temperature': temperature,
+                'max_tokens': max_tokens}
+        headers = {'Authorization': 'Bearer ' + _api_key(self._document), 'User-Agent': USER_AGENT}
         last = None
         for attempt in range(3):
             try:
-                # Scheme is restricted to http(s) in __init__ and in pit.registry().
-                with urllib.request.urlopen(request, timeout=180) as response:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-                    payload = json.load(response)
-                message = payload['choices'][0]['message']
-                return {**normalize_message(message), 'usage': payload.get('usage') or {}}
-            except urllib.error.HTTPError as exc:
-                last = f'HTTP {exc.code}'
-                if exc.code < 500 and exc.code != 429:
-                    break
-            except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError) as exc:
+                response = requests.post(self.base_url + '/chat/completions', json=body, headers=headers,
+                                         timeout=180)
+                if response.status_code >= 400:
+                    last = f'HTTP {response.status_code}'
+                    if response.status_code < 500 and response.status_code != 429:
+                        break
+                else:
+                    payload = response.json()
+                    message = payload['choices'][0]['message']
+                    return {**normalize_message(message), 'usage': payload.get('usage') or {}}
+            except (requests.RequestException, KeyError, ValueError) as exc:
                 last = type(exc).__name__
             time.sleep(2 * (attempt + 1))
         raise GraphError(f'LLM request failed ({last})')
