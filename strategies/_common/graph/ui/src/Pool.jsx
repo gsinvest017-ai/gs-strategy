@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api, fmt } from "./model";
 
 const ORIGIN = {
+  "llm-generated": "論文自動生成（未審）",
   "gs-strategy": "gs-strategy",
   "gs-strategy-graph": "gs-strategy（組合圖）",
   external: "外部匯入",
@@ -18,7 +19,10 @@ export function StrategyMenu({ current, disabled, onSelect }) {
       .catch((e) => setError(e.message));
   useEffect(() => { load(); }, []);
   const groups = {};
-  for (const s of pool?.strategies || []) (groups[s.origin] ||= []).push(s);
+  for (const s of pool?.strategies || []) {
+    const key = (s.tags || []).includes("llm-generated") ? "llm-generated" : s.origin;
+    (groups[key] ||= []).push(s);
+  }
   const fixture = pool?.fixture;
   return (
     <span className="strategy-menu">
@@ -102,6 +106,28 @@ function Dist({ label, d, pct: asPct }) {
 
 function ExperimentDetail({ e }) {
   const s = e.summary || {};
+  if (e.kind === "codegen") {
+    return (
+      <section className="results-detail">
+        <h3>論文自動生成策略・{s.papers} 篇・入池 {(s.admitted || []).length}・模型 {s.model}</h3>
+        <p className="muted">{s.gates}；入池的策略標為「未審」，回測時才計入 N。</p>
+        <table className="replay-table">
+          <thead><tr><th>論文</th><th>到達關卡</th><th>策略 id</th><th>交易／減碼</th><th>原因</th></tr></thead>
+          <tbody>
+            {e.top_trials.map((t) => (
+              <tr key={t.trial_id}>
+                <td title={t.trial_id}>{t.metrics?.title}</td>
+                <td className={t.stage === "admitted" ? "ok" : "bad"}>{t.stage === "admitted" ? "入池" : t.stage}</td>
+                <td className="mono">{t.metrics?.strategy_id || "—"}</td>
+                <td>{t.metrics?.trades ?? "—"}／{t.metrics?.reductions ?? "—"}</td>
+                <td>{t.metrics?.reason || ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    );
+  }
   if (e.kind === "monte_carlo") {
     return (
       <section className="results-detail">
@@ -168,12 +194,14 @@ function Experiments({ strategy, all, revision }) {
             {rows.map((r) => (
               <tr key={r.experiment_id} className={detail?.experiment_id === r.experiment_id ? "active" : ""} onClick={() => open(r.experiment_id)}>
                 <td className="mono">{r.created_at.slice(0, 19).replace("T", " ")}</td>
-                <td>{r.kind === "monte_carlo" ? "蒙地卡羅" : "MINT 錦標賽"}</td>
+                <td>{{ monte_carlo: "蒙地卡羅", mint_tournament: "MINT 錦標賽", codegen: "論文生成" }[r.kind] || r.kind}</td>
                 <td>{r.strategy || r.source?.split("/").slice(-2).join("/")}</td>
                 <td>{r.n_trials}</td>
                 <td className="mono">{r.kind === "monte_carlo"
                   ? `Sharpe 中位 ${fmt(r.headline.sharpe_p50)}（${fmt(r.headline.sharpe_p05)}～${fmt(r.headline.sharpe_p95)}），P(SR≤0)=${fmt(r.headline.prob_sharpe_le_0)}`
-                  : `N(DSR)=${r.headline.n_for_dsr}，最佳 t=${fmt(r.headline.best_score)}，PBO=${fmt(r.headline.pbo)}`}</td>
+                  : r.kind === "codegen"
+                    ? `論文 ${r.headline.papers}，入池 ${r.headline.admitted}`
+                    : `N(DSR)=${r.headline.n_for_dsr}，最佳 t=${fmt(r.headline.best_score)}，PBO=${fmt(r.headline.pbo)}`}</td>
               </tr>
             ))}
           </tbody>

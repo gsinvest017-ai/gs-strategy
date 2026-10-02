@@ -92,7 +92,9 @@ def bt_python():
 
 def _env():
     env = dict(os.environ)
-    dirs = [str(REPO / 'strategies')] + [d for d in env.get('DASHBOARD_STRATEGY_DIRS', '').split(':') if d]
+    # LLM-generated bundles that passed the codegen gates live one level down.
+    dirs = [str(REPO / 'strategies'), str(REPO / 'strategies' / '_llm_generated')] + \
+        [d for d in env.get('DASHBOARD_STRATEGY_DIRS', '').split(':') if d]
     env['DASHBOARD_STRATEGY_DIRS'] = ':'.join(dict.fromkeys(dirs))
     env.setdefault('GS_STRATEGY_ROOT', str(REPO / 'strategies'))
     # Built-in examples run through the zipline CLI of the backtest interpreter.
