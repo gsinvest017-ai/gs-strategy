@@ -111,6 +111,14 @@ describe("typed ports", () => {
     expect(compatible("Sigma", "Score")).toBe(false);
     expect(compatible(undefined, undefined)).toBe(false);
   });
+  it("mirrors the Python parametric rule", () => {
+    expect(compatible("Signals[llm]", "Signals")).toBe(true);
+    expect(compatible("Signals[llm]", "Signals[llm]")).toBe(true);
+    expect(compatible("Signals[llm]", "Signals[*]")).toBe(true);
+    expect(compatible("Signals[rule]", "Signals[llm]")).toBe(false);
+    expect(compatible("Signals", "Signals[llm]")).toBe(false);
+    expect(compatible("Signals[]", "Signals")).toBe(false);
+  });
 });
 it("missing Sigma marks sizing and its downstream unavailable", () => {
   const graph = {

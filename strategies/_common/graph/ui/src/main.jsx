@@ -14,6 +14,7 @@ import "@fontsource/ibm-plex-sans/600.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/noto-sans-tc/400.css";
 import "./style.css";
+import { Replay } from "./Replay";
 import {
   api,
   compatible,
@@ -257,6 +258,31 @@ function Result({ state = {} }) {
             <del key={i}>{fmt(x)}</del>
           ))}
         </div>
+      </div>
+    );
+  }
+  if (o.Docs) {
+    const days = Object.entries(o.Docs.values || {});
+    const latest = days[days.length - 1];
+    return (
+      <div className="scalar summary-card">
+        {days.length} 個決策日・排除無可信日期 {fmt(o.Docs.excluded_unknown_time)} 篇
+        <small>
+          最新（{latest?.[0] || "—"}）：
+          {(latest?.[1] || []).map((d) => d.title).join("；") || "無"}
+        </small>
+      </div>
+    );
+  }
+  if (o.ProbeReport) {
+    const p = o.ProbeReport;
+    return (
+      <div className={`scalar summary-card ${p.leak_suspected ? "bad" : "ok"}`}>
+        {p.leak_suspected ? "疑似記住歷史價格" : "未見記憶跡象"}
+        <small>
+          事前誤差中位數 {fmt(p.pre_cutoff?.median_abs_pct_error)}%（{p.pre_cutoff?.answered}/{p.pre_cutoff?.n}）・
+          事後 {fmt(p.post_cutoff?.median_abs_pct_error)}%（{p.post_cutoff?.answered}/{p.post_cutoff?.n}）
+        </small>
       </div>
     );
   }
@@ -647,6 +673,7 @@ function App() {
     [connectionError, setConnectionError] = useState(""),
     [sidecar, setSidecar] = useState(""),
     [showLoad, setShowLoad] = useState(false),
+    [showReplay, setShowReplay] = useState(false),
     [revision, setRevision] = useState(0),
     [flash, setFlash] = useState(false);
   const flow = useRef(null);
@@ -1073,6 +1100,11 @@ function App() {
         <button disabled={busy} onClick={() => setShowLoad((v) => !v)}>
           從產出載入
         </button>
+        {doc?.graph?.nodes?.some((n) => n.type === "agent.llm_view") && (
+          <button data-testid="replay" onClick={() => setShowReplay(true)}>
+            回放
+          </button>
+        )}
         {session.fixture && (
           <span className="fixture" data-testid="fixture-banner">
             FIXTURE 資料・獨立 ledger
@@ -1260,6 +1292,7 @@ function App() {
           />
         )}
       </div>
+      {showReplay && <Replay close={() => setShowReplay(false)} revision={revision} />}
       <footer>
         <span>
           LIVE STRATEGY GRAPH <b>研究量測台</b>
