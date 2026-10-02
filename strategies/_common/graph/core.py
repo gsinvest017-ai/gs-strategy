@@ -260,7 +260,11 @@ class Engine:
             unavailable = [p for p, (s, _) in incoming[i].items() if s not in current]
             if missing or unavailable:
                 causes = [self.states.get(s, {}).get('message', '') for s, _ in incoming[i].values() if s not in current]
-                self.states[i] = {'status': 'not_ready', 'message': 'missing inputs: ' + ', '.join(sorted(missing | set(unavailable))) + '; '.join(causes)}
+                causes = list(dict.fromkeys(c for c in causes if c))
+                message = 'missing inputs: ' + ', '.join(sorted(missing | set(unavailable)))
+                if causes:
+                    message += ' | upstream: ' + ' / '.join(causes)
+                self.states[i] = {'status': 'not_ready', 'message': message}
                 continue
             key = node_cache_key(kind, n['params'],
                 {p: self.hashes[s] for p, (s, _) in incoming[i].items()},

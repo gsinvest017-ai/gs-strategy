@@ -106,6 +106,9 @@ def test_insufficient_clean_sample_fails_closed(tmp_path):
     job = run(svc)
     assert job['status'] == 'error'
     assert '乾淨樣本外天數不足' in job['message']
+    # Downstream nodes name the missing port and the upstream cause, all in Chinese.
+    assert '缺少輸入：Returns（上游：模型知識截止後的乾淨樣本外天數不足' in job['message']
+    assert 'missing' not in job['message'] and '操作失敗' not in job['message']
     assert svc.ledger.summary()['selection_n'] == 0
 
 

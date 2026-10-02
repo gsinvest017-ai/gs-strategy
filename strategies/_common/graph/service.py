@@ -28,21 +28,27 @@ def user_message(message):
     Job messages join several node messages with '; ', and a not-ready node
     appends its upstream cause; each part is translated on its own.
     """
-    whole = _user_message_one(message)
+    whole = _missing_message(str(message)) or _user_message_one(message)
     if whole != GENERIC_MESSAGE or '; ' not in str(message):
         return whole
     parts = []
     for part in str(message).split('; '):
-        missing = re.fullmatch(r'missing inputs: ((?:[A-Za-z][A-Za-z0-9_]*(?:, )?)+)(.*)', part, re.S)
-        if missing:
-            text = '缺少輸入：' + missing[1]
-            if missing[2]:
-                text += '（上游：' + _user_message_one(missing[2]) + '）'
-        else:
-            text = _user_message_one(part)
+        text = _missing_message(part) or _user_message_one(part)
         if text not in parts:
             parts.append(text)
     return '；'.join(parts)
+
+
+def _missing_message(part):
+    missing = re.fullmatch(r'missing inputs: ([A-Za-z][A-Za-z0-9_]*(?:, [A-Za-z][A-Za-z0-9_]*)*)(?: \| upstream: (.*))?',
+                           part, re.S)
+    if not missing:
+        return None
+    text = '缺少輸入：' + missing[1]
+    if missing[2]:
+        causes = [_missing_message(c) or _user_message_one(c) for c in missing[2].split(' / ')]
+        text += '（上游：' + '／'.join(dict.fromkeys(causes)) + '）'
+    return text
 
 
 def _user_message_one(message):
