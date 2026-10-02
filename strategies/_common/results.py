@@ -134,7 +134,7 @@ def runs(path, strategy=None, limit=50):
         if strategy:
             sql += ' WHERE strategy = ?'
             args.append(strategy)
-        sql += ' ORDER BY recorded_at DESC LIMIT ?'
+        sql += ' ORDER BY rowid DESC LIMIT ?'
         args.append(int(limit))
         return [dict(r) for r in conn.execute(sql, args)]
 
