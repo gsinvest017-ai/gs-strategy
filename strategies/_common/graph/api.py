@@ -75,6 +75,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, {'node_types': s.registry.describe()})
             if not mutation and parts == ['api','graph']:
                 return self.reply(200, s.document())
+            if not mutation and parts == ['api','replay']:
+                return self.reply(200, s.replay())
             if not mutation and parts == ['api','ledger']:
                 return self.reply(200, s.ledger.summary())
             if not mutation and parts == ['api','nodes']:

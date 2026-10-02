@@ -1,0 +1,46 @@
+# 可熱插拔的模型登錄表（LLM 節點與記憶探測節點共用）。
+#
+# 換模型 = 在這裡加一筆，畫面上的 model 下拉選單就會出現；圖、節點、接線都不用改。
+#
+# cutoff 是「知識截止日的上界」——系統只把 cutoff + buffer 之後的決策日當作乾淨樣本，
+# 之前的日期一律視為已被訓練資料污染（文獻：Lopez-Lira et al. 2025，cutoff 之前
+# 無法區分預測能力與記憶）。不知道真實 cutoff 時，用「確定晚於 cutoff 的日期」
+# （發布日、部署日）當上界：只會讓乾淨樣本變少，不會讓污染資料混進績效。
+#
+# 改某一筆的內容會讓用到該模型的回測組態變成新的試驗（N+1）；新增其他模型不影響既有組態。
+
+api_key_env: GS_LLM_API_KEY
+api_key_files:
+  - ~/.secrets/genesis-deck-kevin.key
+  - /mnt/c/Users/User/.secrets/genesis-deck-kevin.key
+
+models:
+  fixture-momentum:
+    provider: fixture
+    fixture_mode: momentum
+    cutoff: '2024-06-28'
+    cutoff_basis: 示範用假 cutoff（合成資料、確定性假模型，用來展示污染區間的遮蔽）
+    note: 依提示中的 20 日動能給方向，離線測試與 UI 示範用
+
+  fixture-contrarian:
+    provider: fixture
+    fixture_mode: contrarian
+    cutoff: '2023-12-29'
+    cutoff_basis: 示範用假 cutoff
+    note: 與 fixture-momentum 方向相反，用來離線示範模型熱抽換
+
+  qwen3-235b-2507:
+    provider: openai
+    base_url: https://llm.zeroclaw.com.tw/v1
+    api_model: nvidia/Qwen3-235B-A22B-Instruct-2507-NVFP4
+    cutoff: '2025-07-31'
+    cutoff_basis: 發布日上界（Qwen3-235B-A22B-Instruct-2507 於 2025-07 發布）
+    concurrency: 3
+
+  qwen3.8-27b:
+    provider: openai
+    base_url: https://llm.zeroclaw.com.tw/v1
+    api_model: qwen3.8-27b
+    cutoff: '2026-10-01'
+    cutoff_basis: 部署日上界（2026-10-01 上線 Genesis Deck）；真實 cutoff 未查證
+    concurrency: 3

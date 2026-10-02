@@ -1,5 +1,21 @@
-export const compatible = (source, target) =>
-  Boolean(source && target && source === target);
+// Mirrors strategies/_common/compose/types.py (Python stays authoritative):
+// "Base[args]" feeds an input "Base", the same "Base[args]", or "Base[*]".
+const TYPE = /^([A-Za-z][A-Za-z0-9_]*)(?:\[([A-Za-z0-9_*.,\- ]*)\])?$/;
+export const parseType = (t) => {
+  const m = TYPE.exec(String(t ?? "").trim());
+  if (!m) return null;
+  if (m[2] === undefined) return { base: m[1], args: [] };
+  const args = m[2].split(",").map((a) => a.trim());
+  return args.some((a) => !a) ? null : { base: m[1], args };
+};
+export const baseType = (t) => parseType(t)?.base ?? t;
+export const compatible = (source, target) => {
+  const out = parseType(source), inp = parseType(target);
+  if (!out || !inp || out.base !== inp.base) return false;
+  if (!inp.args.length) return true;
+  return inp.args.length === out.args.length &&
+    inp.args.every((want, i) => want === "*" || want === out.args[i]);
+};
 export const own = (object, key) =>
   object != null && Object.hasOwn(object, key) ? object[key] : undefined;
 export function unavailable(graph, types) {
@@ -29,18 +45,20 @@ export const estimateText = (e) =>
     : e.already_recorded
       ? "執行・快取重播，N 不變"
       : `執行・N ${e.selection_n}→${e.next_selection_n}`;
-export const portColor = (t) =>
-  ["Bars", "ContinuousBars"].includes(t)
+export const portColor = (type) => {
+  const t = baseType(type);
+  return ["Bars", "ContinuousBars", "PriceBars", "MarketView", "Docs"].includes(t)
     ? "var(--port-bars)"
-    : ["Score", "Sigma", "Direction", "RawWeights", "Weights"].includes(t)
+    : ["Score", "Sigma", "Direction", "RawWeights", "Weights", "Signals"].includes(t)
       ? "var(--port-signal)"
-      : ["Returns", "Positions"].includes(t)
+      : ["Returns", "Positions", "WalkForward"].includes(t)
         ? "var(--port-performance)"
         : "var(--muted)";
-export const portShape = (t) =>
-  ["CostModel"].includes(t)
+};
+export const portShape = (type) =>
+  ["CostModel"].includes(baseType(type))
     ? "square"
-    : ["LedgerN", "Report", "Facts", "Prescription"].includes(t)
+    : ["LedgerN", "Report", "Facts", "Prescription", "ProbeReport"].includes(baseType(type))
       ? "diamond"
       : "circle";
 export const names = {
@@ -57,14 +75,19 @@ export const names = {
   report: "績效檢定",
   facts: "統計事實",
   resolve: "統計處方",
+  data: "QUANTDATA 期貨",
+  view: "市場特徵快照",
+  docs: "研究檢索（RAG）",
+  agent: "LLM 判斷",
+  probe: "記憶探測",
 };
 export const stages = ["資料", "特徵", "訊號與部位", "回測", "驗證與檢定"];
 export const column = (n) =>
   n.type.startsWith("data.")
     ? 0
-    : n.type.startsWith("feature.")
+    : /^(feature|rag)\./.test(n.type)
       ? 1
-      : /^(signal|sizing|cost)\./.test(n.type)
+      : /^(signal|sizing|cost|agent)\./.test(n.type)
         ? 2
         : /^(backtest|ledger)\./.test(n.type)
           ? 3

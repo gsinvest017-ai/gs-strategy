@@ -885,3 +885,69 @@ pre {
 .node-card[data-testid="node-facts"] .param input[type="number"] {
   width: 36px;
 }
+
+/* ---- walk-forward replay ------------------------------------------------ */
+.replay-overlay {
+  position: fixed;
+  inset: 44px 16px 28px 16px;
+  z-index: 40;
+  overflow: auto;
+  padding: 12px 16px 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 40px color-mix(in srgb, var(--bg) 80%, transparent);
+}
+.replay-overlay > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.replay-overlay h2 { margin: 2px 0 8px; font-size: 15px; }
+.replay-overlay h3 { margin: 12px 0 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.replay-overlay small { color: var(--muted); letter-spacing: .08em; }
+.replay-meta, .replay-legend, .replay-controls { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+.replay-meta { padding: 6px 0 8px; border-bottom: 1px solid var(--border); }
+.replay-meta b { color: var(--text); }
+.replay-meta .probe.ok { color: var(--green); }
+.replay-meta .probe.bad { color: var(--red); }
+.replay-legend { margin: 8px 0 2px; color: var(--muted); }
+.replay-legend .lg::before { content: ""; display: inline-block; width: 18px; height: 3px; margin-right: 6px; vertical-align: middle; }
+.replay-legend .equity::before { background: var(--accent); }
+.replay-legend .benchmark::before { background: var(--muted); }
+.replay-legend .dirty::before { height: 10px; background: repeating-linear-gradient(45deg, var(--amber) 0 2px, transparent 2px 5px); }
+.replay-legend .fold::before { width: 1px; height: 12px; border-left: 1px dashed var(--muted); }
+.replay-chart { width: 100%; height: auto; display: block; cursor: crosshair; background: var(--bg); border-radius: 6px; }
+.replay-chart .line { fill: none; stroke-width: 1.4; }
+.replay-chart .price { stroke: var(--text); opacity: .75; }
+.replay-chart .equity { stroke: var(--accent); stroke-width: 1.8; }
+.replay-chart .benchmark { stroke: var(--muted); stroke-dasharray: 4 3; }
+.replay-chart .dirty-hatch { stroke: var(--amber); stroke-width: 1.2; opacity: .35; }
+.replay-chart .dirty-zone { opacity: .9; }
+.replay-chart .zone-label { fill: var(--amber); font-size: 10px; }
+.replay-chart .axis-label { fill: var(--muted); font-size: 9px; }
+.replay-chart .fold-line { stroke: var(--muted); stroke-dasharray: 2 3; opacity: .6; }
+.replay-chart .cursor { stroke: var(--accent); stroke-width: 1.2; }
+.replay-chart .zero { stroke: var(--border); }
+.replay-chart .pos.long { fill: var(--green); opacity: .7; }
+.replay-chart .pos.short { fill: var(--red); opacity: .7; }
+.replay-controls { margin: 8px 0; }
+.replay-controls input[type="range"] { flex: 1; min-width: 200px; }
+.replay-card { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.3fr); gap: 16px; }
+@media (max-width: 860px) { .replay-card { grid-template-columns: 1fr; } }
+.replay-card .decision b { font-size: 14px; }
+.replay-card .rationale { color: var(--muted); margin: 2px 0 0; }
+.replay-card .muted, .replay-empty { color: var(--muted); }
+.replay-card .docs { margin: 0; padding-left: 16px; }
+.replay-card .docs li { margin: 2px 0; }
+.replay-overlay .badge { margin-left: 8px; padding: 1px 6px; border-radius: 4px; font-style: normal; font-size: 10px; background: var(--panel-2); color: var(--muted); }
+.replay-overlay .badge.dirty { background: color-mix(in srgb, var(--amber) 20%, var(--panel)); color: var(--amber); }
+.replay-overlay .cot { white-space: pre-wrap; max-height: 300px; overflow: auto; padding: 8px; margin: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; line-height: 1.5; }
+.replay-table { border-collapse: collapse; width: 100%; }
+.replay-table th, .replay-table td { padding: 2px 8px 2px 0; text-align: left; border-bottom: 1px solid var(--border); font-weight: 400; }
+.replay-table th { color: var(--muted); }
+.replay-overlay details { margin-top: 8px; }
+.replay-overlay summary { cursor: pointer; color: var(--muted); }
+.summary-card small { display: block; margin-top: 4px; color: var(--muted); white-space: normal; }
+.summary-card.ok { color: var(--green); }
+.summary-card.bad { color: var(--red); }

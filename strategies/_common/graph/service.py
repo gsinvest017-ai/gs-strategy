@@ -19,8 +19,39 @@ from .output_guard import quiet_worker_output
 from strategies._common.validation.decision import UnderdeterminedError
 
 
+GENERIC_MESSAGE = '操作失敗，請檢查設定後重試'
+
+
 def user_message(message):
-    """Translate controlled categories without echoing input or external text."""
+    """Translate controlled categories without echoing input or external text.
+
+    Job messages join several node messages with '; ', and a not-ready node
+    appends its upstream cause; each part is translated on its own.
+    """
+    whole = _missing_message(str(message)) or _user_message_one(message)
+    if whole != GENERIC_MESSAGE or '; ' not in str(message):
+        return whole
+    parts = []
+    for part in str(message).split('; '):
+        text = _missing_message(part) or _user_message_one(part)
+        if text not in parts:
+            parts.append(text)
+    return '；'.join(parts)
+
+
+def _missing_message(part):
+    missing = re.fullmatch(r'missing inputs: ([A-Za-z][A-Za-z0-9_]*(?:, [A-Za-z][A-Za-z0-9_]*)*)(?: \| upstream: (.*))?',
+                           part, re.S)
+    if not missing:
+        return None
+    text = '缺少輸入：' + missing[1]
+    if missing[2]:
+        causes = [_missing_message(c) or _user_message_one(c) for c in missing[2].split(' / ')]
+        text += '（上游：' + '／'.join(dict.fromkeys(causes)) + '）'
+    return text
+
+
+def _user_message_one(message):
     message = str(message)
     edge = re.fullmatch(r'invalid edge at index (\d+)(?:: incompatible or unknown ports)?', message)
     if edge:
@@ -51,18 +82,51 @@ def user_message(message):
         'graph contains a cycle': '策略圖含有循環接線',
         'implementation changed during execution; retry': '執行期間程式碼已變更，請重新執行',
     }
+    # Controlled point-in-time / data-identity messages are authored in Chinese
+    # with only counts interpolated; they never carry external text.
+    if re.fullmatch(r'模型知識截止後的乾淨樣本外天數不足（\d+ < \d+）', message):
+        return message
+    translations.update({
+        'unknown model': '模型登錄表中沒有這個模型',
+        'LLM API key unavailable; set the configured environment variable or key file': '找不到 LLM API 金鑰，請設定環境變數或金鑰檔',
+        'pin data_version with prepare_graph before execution': '資料版本尚未釘選，請重新執行預判',
+        'pin model_spec with prepare_graph before execution': '模型設定尚未釘選，請重新執行預判',
+    })
+    llm_failure = re.fullmatch(r'LLM request failed \((HTTP \d{3}|[A-Za-z]+Error|[A-Za-z]+)\)', message)
+    if llm_failure:
+        return f'LLM 服務呼叫失敗（{llm_failure[1]}），請確認模型服務與網路'
+    chinese = {'QUANTDATA 在指定區間沒有資料', 'QUANTDATA 資料內容與釘選的版本不同，請重新執行預判',
+               '找不到論文資料庫 papers.db', 'gs-rag 未安裝，無法使用 gs_rag 後端',
+               '模型登錄表中此模型的設定已變更，請重新執行預判', 'Signals 與 PriceBars 的資料來源必須相同',
+               'thresholds 必須是 0 到 1 之間的數字清單', '乾淨樣本不足以切出任何 walk-forward 區段'}
+    if message in chinese:
+        return message
     if message in translations.values():
         return message
-    return translations.get(message, '操作失敗，請檢查設定後重試')
+    return translations.get(message, GENERIC_MESSAGE)
 
 
 def default_registry():
     from strategies.tsmom_tx_mtx.graph_nodes import register_nodes as strategy_nodes
+    from strategies.llm_view_tx.graph_nodes import register_nodes as llm_nodes
     from .stat_nodes import register_nodes as stat_nodes
     registry = Registry()
     strategy_nodes(registry)
+    llm_nodes(registry)
     stat_nodes(registry)
     return registry
+
+
+def prepare_any(graph):
+    """Pin every data/model source the graph uses before identity is computed."""
+    types = {n['type'] for n in graph['nodes']}
+    if 'data.futures_bars' in types:
+        from strategies.tsmom_tx_mtx.graph_nodes import prepare_graph
+        graph = prepare_graph(graph)
+    if types & {'data.quantdata_futures', 'agent.llm_view', 'pit.memorization_probe'}:
+        from strategies.llm_view_tx.graph_nodes import prepare_graph
+        graph = prepare_graph(graph)
+    return graph
 
 
 def json_value(value, limit=60, offset=0):
@@ -189,11 +253,14 @@ class GraphService:
         return {'graph_hash': document_hash, 'revision': revision, **self.estimate_prepared(graph)}
 
     def prepare(self, graph):
-        if any(n['type'] == 'data.futures_bars' for n in graph['nodes']):
-            with quiet_worker_output():
-                from strategies.tsmom_tx_mtx.graph_nodes import prepare_graph
-                graph = prepare_graph(graph)
-        return graph
+        with quiet_worker_output():
+            return prepare_any(graph)
+
+    def replay(self):
+        from strategies._common.compose import replay
+        with self.lock:
+            values = dict(self.engine.values)
+        return json_value(replay.build(values), limit=100000)
 
     def estimate_prepared(self, graph):
         _, nodes, incoming, order = self.registry.normalize(graph)
@@ -385,11 +452,8 @@ class GraphService:
                 try:
                     if prepared_run is not None:
                         prepared = prepared_run
-                    elif any(n['type'] == 'data.futures_bars' for n in graph['nodes']):
-                        from strategies.tsmom_tx_mtx.graph_nodes import prepare_graph
-                        prepared = prepare_graph(graph)
                     else:
-                        prepared = graph
+                        prepared = prepare_any(graph)
                     values = self.engine.run(prepared, preview=preview, context=ctx)
                     inspected = {n['id'] for n in prepared['nodes'] if not preview or not n['type'].startswith(('backtest.', 'ledger.', 'validation.', 'stat.'))}
                     errors = [state for node_id, state in self.engine.states.items() if node_id in inspected and state['status'] in ('error','not_ready')]

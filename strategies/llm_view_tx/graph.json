@@ -1,0 +1,233 @@
+{
+  "edges": [
+    {
+      "from": [
+        "agent",
+        "Signals"
+      ],
+      "to": [
+        "backtest",
+        "Signals"
+      ]
+    },
+    {
+      "from": [
+        "backtest",
+        "Returns"
+      ],
+      "to": [
+        "facts",
+        "Returns"
+      ]
+    },
+    {
+      "from": [
+        "backtest",
+        "Returns"
+      ],
+      "to": [
+        "report",
+        "Returns"
+      ]
+    },
+    {
+      "from": [
+        "data",
+        "PriceBars"
+      ],
+      "to": [
+        "backtest",
+        "PriceBars"
+      ]
+    },
+    {
+      "from": [
+        "data",
+        "PriceBars"
+      ],
+      "to": [
+        "probe",
+        "PriceBars"
+      ]
+    },
+    {
+      "from": [
+        "data",
+        "PriceBars"
+      ],
+      "to": [
+        "view",
+        "PriceBars"
+      ]
+    },
+    {
+      "from": [
+        "docs",
+        "Docs"
+      ],
+      "to": [
+        "agent",
+        "Docs"
+      ]
+    },
+    {
+      "from": [
+        "facts",
+        "Facts"
+      ],
+      "to": [
+        "resolve",
+        "Facts"
+      ]
+    },
+    {
+      "from": [
+        "ledger",
+        "LedgerN"
+      ],
+      "to": [
+        "report",
+        "LedgerN"
+      ]
+    },
+    {
+      "from": [
+        "ledger",
+        "LedgerN"
+      ],
+      "to": [
+        "resolve",
+        "LedgerN"
+      ]
+    },
+    {
+      "from": [
+        "view",
+        "MarketView"
+      ],
+      "to": [
+        "agent",
+        "MarketView"
+      ]
+    },
+    {
+      "from": [
+        "view",
+        "MarketView"
+      ],
+      "to": [
+        "docs",
+        "MarketView"
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "agent",
+      "params": {
+        "anonymize": true,
+        "buffer_days": 5,
+        "include_contaminated": false,
+        "max_tokens": 2048,
+        "model": "qwen3-235b-2507",
+        "model_spec": "auto",
+        "temperature": 0.0
+      },
+      "type": "agent.llm_view"
+    },
+    {
+      "id": "backtest",
+      "params": {
+        "capital_base": 10000000,
+        "embargo_days": 1,
+        "exposure": 1.0,
+        "fee_per_contract": 250,
+        "min_clean_oos_days": 60,
+        "point_value": 200,
+        "scheme": "anchored",
+        "slippage_points": 2,
+        "test_days": 21,
+        "thresholds": [
+          0.0,
+          0.6,
+          0.75
+        ],
+        "train_days": 60
+      },
+      "type": "backtest.walk_forward"
+    },
+    {
+      "id": "data",
+      "params": {
+        "data_version": "auto",
+        "end": "2026-10-01",
+        "root": "TX",
+        "source": "quantdata",
+        "start": "2024-01-02"
+      },
+      "type": "data.quantdata_futures"
+    },
+    {
+      "id": "docs",
+      "params": {
+        "backend": "papers",
+        "db_path": "data/papers.db",
+        "lag_days": 1,
+        "query": "index futures momentum volatility trend reversal",
+        "snippet_chars": 240,
+        "top_k": 3
+      },
+      "type": "rag.research_context"
+    },
+    {
+      "id": "facts",
+      "params": {
+        "design": "one_sample",
+        "estimand": "sharpe",
+        "family": "open_mining",
+        "holding_periods": 1,
+        "overlap": "none",
+        "purpose": "selection"
+      },
+      "type": "stat.facts"
+    },
+    {
+      "id": "ledger",
+      "params": {},
+      "type": "ledger.selection_n"
+    },
+    {
+      "id": "probe",
+      "params": {
+        "max_tokens": 1024,
+        "model": "qwen3-235b-2507",
+        "model_spec": "auto",
+        "n_dates": 8,
+        "seed": 7
+      },
+      "type": "pit.memorization_probe"
+    },
+    {
+      "id": "report",
+      "params": {},
+      "type": "validation.report"
+    },
+    {
+      "id": "resolve",
+      "params": {
+        "ruleset_version": "1.1"
+      },
+      "type": "stat.resolve"
+    },
+    {
+      "id": "view",
+      "params": {
+        "cadence": "weekly",
+        "warmup_days": 61
+      },
+      "type": "feature.market_view"
+    }
+  ],
+  "schema": "live-strategy-graph/1",
+  "strategy": "llm_view_tx"
+}

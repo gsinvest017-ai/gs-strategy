@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from strategies._common.compose.types import compatible
+
 
 class GraphError(ValueError):
     pass
@@ -98,9 +100,16 @@ class Registry:
         self.types = {}
 
     def register(self, node):
+        from strategies._common.compose.types import Ty
         if node.id in self.types:
             raise GraphError(f'duplicate node type {node.id}')
-        if 'Returns' in node.outputs.values() and not node.id.startswith('backtest.'):
+        try:
+            produced = [Ty.parse(t).base for t in node.outputs.values()]
+            for t in node.inputs.values():
+                Ty.parse(t)
+        except ValueError as exc:
+            raise GraphError(f'{node.id}: invalid port type') from exc
+        if 'Returns' in produced and not node.id.startswith('backtest.'):
             raise GraphError('Returns can only be produced by backtest.*')
         self.types[node.id] = node
         return node
@@ -140,7 +149,7 @@ class Registry:
                 src, out = edge['from']
                 dst, inp = edge['to']
                 a, b = self.types[by_id[src]['type']], self.types[by_id[dst]['type']]
-                valid = a.outputs[out] == b.inputs[inp] and inp not in incoming[dst]
+                valid = compatible(a.outputs[out], b.inputs[inp]) and inp not in incoming[dst]
             except (KeyError, ValueError, TypeError):
                 valid = False
             if not valid:
@@ -251,7 +260,11 @@ class Engine:
             unavailable = [p for p, (s, _) in incoming[i].items() if s not in current]
             if missing or unavailable:
                 causes = [self.states.get(s, {}).get('message', '') for s, _ in incoming[i].values() if s not in current]
-                self.states[i] = {'status': 'not_ready', 'message': 'missing inputs: ' + ', '.join(sorted(missing | set(unavailable))) + '; '.join(causes)}
+                causes = list(dict.fromkeys(c for c in causes if c))
+                message = 'missing inputs: ' + ', '.join(sorted(missing | set(unavailable)))
+                if causes:
+                    message += ' | upstream: ' + ' / '.join(causes)
+                self.states[i] = {'status': 'not_ready', 'message': message}
                 continue
             key = node_cache_key(kind, n['params'],
                 {p: self.hashes[s] for p, (s, _) in incoming[i].items()},

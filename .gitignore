@@ -27,6 +27,7 @@ pytest-report.xml
 
 # Local graph cache and generated artifacts
 .cache/live-strategy-graph/
+.cache/llm-calls/
 .graph-runs/
 strategies/_common/graph/ui/dist/
 strategies/_common/graph/ui/coverage/
