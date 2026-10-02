@@ -25,6 +25,7 @@ which skips when it is not installed.
 from __future__ import annotations
 
 from .cpcv import (
+    block_sharpes,
     combinatorial_purged_splits,
     n_cpcv_paths,
     purged_kfold_splits,
@@ -39,6 +40,9 @@ from .pbo import pbo
 from .sharpe import (
     annualized_sharpe,
     deflated_sharpe_ratio,
+    dsr_sr_variance,
+    effective_n_trials,
+    min_track_record_length,
     probabilistic_sharpe_ratio,
 )
 
@@ -47,12 +51,16 @@ __all__ = [
     "purged_kfold_splits",
     "combinatorial_purged_splits",
     "n_cpcv_paths",
+    "block_sharpes",
     # pbo
     "pbo",
     # sharpe
     "annualized_sharpe",
     "probabilistic_sharpe_ratio",
     "deflated_sharpe_ratio",
+    "min_track_record_length",
+    "dsr_sr_variance",
+    "effective_n_trials",
     # online_fdr
     "AddisBudget",
     "AddisStep",

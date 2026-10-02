@@ -3,9 +3,17 @@
 López de Prado's purged + embargoed CV for time-series backtests, pure
 numpy/pandas. Replaces the closed-source ``mlfinlab`` CPCV. Consumes only an
 index of observation times; knows nothing about zipline.
+
+When CPCV is *not* evidence: a strategy with no parameters fitted on the
+training groups never uses them, so a "test path" Sharpe is just the Sharpe of
+the k test groups. The C(N, k) splits share groups -- each group sits in
+C(N-1, k-1) of them -- so the median over splits is close to the full-sample
+Sharpe and the spread across splits understates sampling error. For such
+strategies report :func:`block_sharpes` (non-overlapping blocks) instead.
 """
 from __future__ import annotations
 
+import math
 from itertools import combinations
 from typing import Iterator, Sequence
 
@@ -50,7 +58,8 @@ def combinatorial_purged_splits(
 
     Produces ``C(n_groups, n_test_groups)`` train/test paths, the basis for a
     distribution of OOS Sharpes (feed into PBO / DSR) rather than a single
-    point estimate.
+    point estimate. Only meaningful when something is *fitted or selected* on
+    the training indices; see the module docstring.
     """
     if n_test_groups >= n_groups:
         raise ValueError("n_test_groups must be < n_groups")
@@ -71,3 +80,27 @@ def n_cpcv_paths(n_groups: int, n_test_groups: int) -> int:
     from math import comb
 
     return comb(n_groups, n_test_groups)
+
+
+def block_sharpes(
+    returns: Sequence[float],
+    n_blocks: int = 6,
+    periods_per_year: int | None = None,
+) -> list[float]:
+    """Sharpe ratio of each contiguous, non-overlapping block of ``returns``.
+
+    Use this instead of CPCV test-path Sharpes for parameter-free strategies.
+    A block with fewer than two observations or zero variance yields NaN.
+    Pass ``periods_per_year`` to annualise.
+    """
+    r = np.asarray(returns, dtype=float)
+    r = r[~np.isnan(r)]
+    out: list[float] = []
+    for blk in np.array_split(np.arange(r.size), n_blocks):
+        x = r[blk]
+        sd = float(x.std(ddof=1)) if x.size > 1 else 0.0
+        s = float(x.mean() / sd) if sd > 0 else float("nan")
+        if periods_per_year and math.isfinite(s):
+            s *= math.sqrt(periods_per_year)
+        out.append(s)
+    return out

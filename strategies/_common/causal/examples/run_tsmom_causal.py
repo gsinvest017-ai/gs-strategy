@@ -36,9 +36,11 @@ def main() -> None:
 
     # Pooled across TX & MTX: does the 12-1 momentum factor *causally* predict
     # next-month return once vol / reversal / cross-root momentum are controlled?
+    # Rows of different roots share months: cluster inference by period.
+    time_col = next((c for c in ("date", "month", "trading_date") if c in panel.columns), None)
     v = causal.causal_factor_verdict(
         panel, factor="mom", forward_return="fwd_ret",
-        candidate_confounders=CONFOUNDERS,
+        candidate_confounders=CONFOUNDERS, time_col=time_col,
     )
     print(causal.format_verdict(v))
 
