@@ -19,7 +19,7 @@
 pandas>=2.2,<3.0
 numpy>=2.0,<3.0
 scipy>=1.11          # validation.sharpe (PSR/DSR use scipy.stats.norm)
-pyarrow>=15          # pandas parquet engine; perf frames and the lakehouse
+pyarrow>=25.0.1          # pandas parquet engine; perf frames and the lakehouse
 
 # Config + codegen.
 pyyaml>=6.0
