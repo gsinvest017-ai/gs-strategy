@@ -138,6 +138,7 @@ class Prescription:
     bootstrap: dict | None
     threshold: str
     multiplicity_method: str
+    online_fdr_required: bool
     n_trials_used: int
     delta_n: int
     may_be_selected: bool
@@ -332,8 +333,21 @@ def resolve(facts: Facts, version: str = DEFAULT_RULESET_VERSION) -> Prescriptio
         threshold_text = f"{threshold_text}  =>  p < {0.05 / n_trials:.5g}"
     if thr.get("cite"):
         cites.append(str(thr["cite"]))
+    online_fdr_required = "online_fdr" in (thr.get("also_required") or ())
     if thr.get("also_required"):
         notes.append(f"另須執行：{', '.join(thr['also_required'])}")
+    if online_fdr_required:
+        # open_mining 的 |t|>=3 是一個固定門檻，但連續挖掘的母體是**線上**成長的
+        # ——固定門檻無法表達「你已經燒掉多少搜尋預算」。所以這一支還要走 ADDIS：
+        # 實際門檻取兩者中較嚴的那個。
+        notes.append(
+            "連續挖掘型還須跑線上 FDR：把每個 selection trial 的 p 值依時序投進 "
+            "validation.online_fdr.AddisBudget（或 budget_from_ledger 重播 ledger），"
+            "實際門檻取 |t|>=3 與該次 alpha_t 中較嚴者。alpha_t 衰減到你設的 floor "
+            "以下即為搜尋預算耗盡，應停機而非繼續加變體。"
+            "p 值的定義必須在 pre-registration 裡凍結——把 anytime-valid 直接套在 "
+            "Sharpe 或策略搜尋上的論文查無，這是自己接線不是照抄。"
+        )
 
     # --- N 記帳：purpose 決定進不進母體 ------------------------------------
     acct = mult["n_accounting"][facts.purpose]
@@ -368,6 +382,7 @@ def resolve(facts: Facts, version: str = DEFAULT_RULESET_VERSION) -> Prescriptio
         bootstrap=rs["bootstrap_spec"] if _uses_bootstrap(base) else None,
         threshold=threshold_text,
         multiplicity_method=thr["id"],
+        online_fdr_required=online_fdr_required,
         n_trials_used=n_trials,
         delta_n=int(acct["delta_n"]),
         may_be_selected=bool(acct["may_be_selected"]),

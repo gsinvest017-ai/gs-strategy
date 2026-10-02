@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>檢定決策樹 — gs-strategy</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/gs-theme.css" />
+  <style>
+    /* 這一頁的專屬樣式；配色一律走 gs-theme.css 的 token，不寫死顏色。 */
+
+    /* style.css 把 main 設成兩欄 grid（給管理面板的卡片牆用）。這一頁是線性
+       閱讀的長文，繼承那個 grid 會把段落切成左右兩欄、中間留一大塊空白。
+       用 main.st-wrap 提高 specificity 蓋掉它，而不是去改 style.css——那支是
+       管理面板在用的，動它會波及另一頁。 */
+    main.st-wrap {
+      display: block;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 22px 80px;
+    }
+    .st-lede { color: var(--fg-1); max-width: 66ch; line-height: 1.7; }
+    .st-lede b { color: var(--fg-0); }
+
+    .st-sec { margin-top: 44px; }
+    .st-sec > h2 {
+      font-size: 20px; margin: 0 0 4px; display: flex; align-items: baseline; gap: 12px;
+    }
+    .st-sec > h2 .n {
+      font-family: var(--font-mono, monospace); font-size: 12px;
+      color: var(--copper); font-weight: 500;
+    }
+    .st-sec > .why {
+      color: var(--fg-2); font-size: 13.5px; margin: 0 0 16px; max-width: 70ch; line-height: 1.6;
+    }
+
+    .st-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+    .st-card {
+      background: var(--bg-card); border: 1px solid var(--line);
+      border-radius: 9px; padding: 16px 17px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .st-card .big {
+      font-family: var(--font-mono, monospace); font-size: 30px; font-weight: 700;
+      line-height: 1.05; color: var(--gold); font-variant-numeric: tabular-nums;
+    }
+    .st-card .big.mut  { color: var(--fg-1); }
+    .st-card .big.warn { color: var(--warn); }
+    .st-card .cap { font-size: 13px; color: var(--fg-1); }
+    .st-card .sub { font-size: 11.5px; color: var(--fg-2); font-family: var(--font-mono, monospace); }
+
+    .st-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 9px; background: var(--bg-card); }
+    table.st { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 520px; }
+    table.st th, table.st td { padding: 9px 15px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+    table.st thead th {
+      font-family: var(--font-mono, monospace); font-size: 10.5px; letter-spacing: .09em;
+      text-transform: uppercase; color: var(--fg-2); background: var(--bg-2);
+      border-bottom: 1px solid var(--line-hi); white-space: nowrap; font-weight: 500;
+    }
+    table.st tbody tr:last-child td { border-bottom: none; }
+    table.st tbody tr:hover { background: var(--bg-card-hover); }
+    table.st td.num { font-family: var(--font-mono, monospace); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    table.st code { font-family: var(--font-mono, monospace); font-size: .9em; color: var(--champagne); }
+
+    .pill {
+      display: inline-block; font-family: var(--font-mono, monospace); font-size: 10.5px;
+      padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line-hi);
+      background: var(--bg-2); color: var(--fg-2); white-space: nowrap;
+    }
+    .pill.ok   { color: var(--ok);   border-color: rgba(123,191,106,.4); }
+    .pill.bad  { color: var(--bad);  border-color: rgba(224,86,107,.4); }
+    .pill.warn { color: var(--warn); border-color: rgba(245,165,36,.4); }
+
+    .st-note {
+      border-left: 2px solid var(--copper); background: var(--bg-card);
+      padding: 14px 18px; border-radius: 0 8px 8px 0; margin-top: 14px;
+      color: var(--fg-1); font-size: 13.5px; line-height: 1.65; max-width: 74ch;
+    }
+    .st-note.gold { border-left-color: var(--gold); }
+    .st-note b { color: var(--fg-0); }
+
+    .st-unavail {
+      border: 1px dashed var(--line-hi); border-radius: 9px; padding: 14px 18px;
+      color: var(--fg-2); font-size: 13.5px; line-height: 1.6; background: var(--bg-1);
+    }
+    .st-unavail b { color: var(--warn); }
+
+    #fdr-curve { width: 100%; height: auto; display: block; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>檢定決策樹</h1>
+      <p class="sub">規則集、母體、稽核狀態 — 讀的是現在的檔案，不是快照</p>
+    </div>
+    <div class="meta">
+      <a href="/" style="font-size:13px">← 管理面板</a>
+      <span id="loaded-at">載入中…</span>
+      <button id="refresh-btn" title="重新整理">↻ 重新整理</button>
+    </div>
+  </header>
+
+  <main class="st-wrap">
+    <p class="st-lede">
+      檢定不是被選出來的，是由宣告的資料性質推導出來的。研究者宣告事實，規則集回傳處方——
+      於是「先看到結果再挑一個讓它顯著的檢定」在機制上做不到。
+      <b>這一頁的數字全部即時讀自 repo</b>：規則集 YAML、<code>log/trials.jsonl</code>、
+      <code>experiments/preregistration/</code>。規章本文在
+      <code>docs/spec/statistical-decision-tree.md</code>。
+    </p>
+
+    <section class="st-sec">
+      <h2><span class="n">01</span>現在的母體</h2>
+      <p class="why">
+        DSR 的 deflation benchmark 隨母體 N 上升，而且這個門檻是全域的——它套在
+        repo 裡每一支現有與未來的策略上。所以「多跑一個候選」的代價在這裡是一個數字，不是一句話。
+      </p>
+      <div id="pop-cards" class="st-cards"></div>
+      <div id="pop-note"></div>
+    </section>
+
+    <section class="st-sec">
+      <h2><span class="n">02</span>分診結果</h2>
+      <p class="why">
+        <code>excluded:</code> 不是 <code>rejected</code>。「這從來不是一個候選」與
+        「這被測過而且輸了」是兩件事，混在一起會憑空生出一個沒做過的研究結論。
+      </p>
+      <div class="st-scroll"><table class="st" id="disp-table"></table></div>
+    </section>
+
+    <section class="st-sec">
+      <h2><span class="n">03</span>可回溯稽核</h2>
+      <p class="why">
+        把每筆記錄的 <code>decision_path</code> 餵回 resolver 重算，比對記載。抓的是
+        事後換檢定、N 記帳造假、規則集版本對不上這三類。N 逐筆重算，不信任報告上的數字。
+      </p>
+      <div id="audit-box"></div>
+    </section>
+
+    <section class="st-sec">
+      <h2><span class="n">04</span>事前登記</h2>
+      <p class="why">
+        統計檢定的效力建立在「假說先於資料」之上。沒有事前登記不是無效，是降級：
+        一律標「探索性發現」、門檻升到 |t| ≥ 3，且需以新資料重新驗證才能升回正式假說。
+      </p>
+      <div id="prereg-box"></div>
+    </section>
+
+    <section class="st-sec">
+      <h2><span class="n">05</span>線上 FDR 預算（ADDIS）</h2>
+      <p class="why">
+        Bonferroni 那類修正假設試驗數事先已知；auto-research loop 不是那樣。ADDIS 每次
+        檢定算出的 alpha_t 會隨無效變體累積而衰減——衰減到你設的 floor 以下，就是搜尋
+        預算耗盡、該停機而不是繼續加變體。
+      </p>
+      <div id="fdr-box"></div>
+    </section>
+
+    <section class="st-sec">
+      <h2><span class="n">06</span>規則集</h2>
+      <p class="why">
+        五個槽位各由一個獨立事實決定後合成，所以「換一個檢定」必然對應「改一個宣告的事實」，
+        而事實可以被第三者重算。以下直接渲染自規則集 YAML。
+      </p>
+      <div id="ruleset-box"></div>
+    </section>
+  </main>
+
+  <script>
+  const $ = (id) => document.getElementById(id);
+
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
+    (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  const fmt = (v, digits = 3) =>
+    (v === null || v === undefined) ? "—" : Number(v).toFixed(digits);
+
+  // 不可用時明說原因，不填零：把「還沒有」顯示成 0，會讓一個從未跑過分診的
+  // repo 看起來像一個分診完發現沒東西的 repo。
+  function unavailable(block) {
+    return `<div class="st-unavail"><b>尚不可用</b> — ${esc(block.reason)}</div>`;
+  }
+
+  function renderPopulation(led) {
+    if (!led.available) { $("pop-cards").innerHTML = unavailable(led); return; }
+    const b = led.deflation_benchmark || {};
+    const cards = [
+      ["mut", led.n_trials, "ledger 上的 trial", esc(led.path)],
+      ["", led.n_selection, "計入母體的 selection", "只有這些會推高 DSR 門檻"],
+      ["mut", led.n_no_statistical_claim, "不做統計宣稱的記錄", "機械分診，ΔN = 0"],
+      [b.current === null ? "mut" : "", b.current === null ? "—" : fmt(b.current),
+       "DSR deflation benchmark", "真實 Sharpe = 0 時的 E[max SR]"],
+    ];
+    $("pop-cards").innerHTML = cards.map(([cls, big, cap, sub]) => `
+      <div class="st-card">
+        <span class="big ${cls}">${esc(big)}</span>
+        <span class="cap">${esc(cap)}</span>
+        <span class="sub">${esc(sub)}</span>
+      </div>`).join("");
+
+    let note = "";
+    if (b.current === null) {
+      note = `<div class="st-note gold">目前 <b>還沒有任何 selection trial</b>
+        （N = ${esc(b.n_selection)}），所以 deflation benchmark 沒有定義——它需要
+        至少兩次試驗才有意義。這不是「門檻很低」，是「還沒有東西進入母體」。</div>`;
+    } else if (b.if_frontier_all_run !== null && b.if_frontier_all_run !== undefined) {
+      const pct = ((b.if_frontier_all_run / b.current - 1) * 100).toFixed(1);
+      note = `<div class="st-note gold">若把前沿上剩下的候選<b>全部</b>當 selection 跑，
+        母體會從 ${esc(b.n_selection)} 變成 ${esc(b.hypothetical_n)}，門檻從
+        ${fmt(b.current)} 升到 ${fmt(b.if_frontier_all_run)}（<b>+${esc(pct)}%</b>）——
+        而那個門檻會套在 repo 裡每一支既有與未來的策略上。</div>`;
+    } else {
+      note = `<div class="st-note">前沿已清空：<code>_generated</code> 底下沒有
+        任何候選是 ledger 沒指到的。</div>`;
+    }
+    $("pop-note").innerHTML = note;
+  }
+
+  function renderDispositions(led) {
+    const t = $("disp-table");
+    if (!led.available) { t.outerHTML = unavailable(led); return; }
+    const rows = Object.entries(led.dispositions || {});
+    const total = rows.reduce((a, [, n]) => a + n, 0) || 1;
+    t.innerHTML = `
+      <thead><tr><th>disposition</th><th>意義</th><th>筆數</th><th>佔比</th></tr></thead>
+      <tbody>${rows.map(([k, n]) => {
+        const kind = k.startsWith("excluded")
+          ? '<span class="pill">排除：從來不是候選</span>'
+          : k === "rejected" ? '<span class="pill bad">證偽：測過而且輸了</span>'
+          : k === "候選" ? '<span class="pill ok">待進入 L1 假說萃取</span>'
+          : k === "informational" ? '<span class="pill">資訊性，不下判決</span>'
+          : '<span class="pill">—</span>';
+        return `<tr><td><code>${esc(k)}</code></td><td>${kind}</td>
+          <td class="num">${esc(n)}</td>
+          <td class="num">${(n / total * 100).toFixed(1)}%</td></tr>`;
+      }).join("")}</tbody>`;
+  }
+
+  function renderAudit(a) {
+    if (!a.available) { $("audit-box").innerHTML = unavailable(a); return; }
+    const badge = a.auditable
+      ? '<span class="pill ok">全部可回溯</span>'
+      : `<span class="pill bad">${esc(a.n_problems)} 筆對不上</span>`;
+    let html = `<div class="st-cards">
+      <div class="st-card"><span class="big ${a.auditable ? "" : "warn"}">${esc(a.n_records)}</span>
+        <span class="cap">稽核過的記錄</span><span class="sub">${badge}</span></div>
+      <div class="st-card"><span class="big mut">${esc(a.n_selection_recomputed)}</span>
+        <span class="cap">重算出的 N</span><span class="sub">逐筆重算，不信任報告</span></div>
+    </div>`;
+    if (a.problems && a.problems.length) {
+      html += `<div class="st-note"><b>對不上的記錄</b><ul>${
+        a.problems.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></div>`;
+    }
+    $("audit-box").innerHTML = html;
+  }
+
+  function renderPrereg(p) {
+    if (!p.available) { $("prereg-box").innerHTML = unavailable(p); return; }
+    let html = `<div class="st-cards">
+      <div class="st-card"><span class="big ${p.n ? "" : "warn"}">${esc(p.n)}</span>
+        <span class="cap">登記檔</span><span class="sub">${esc(p.path)}</span></div>
+      <div class="st-card"><span class="big mut">${esc(p.n_ok)}</span>
+        <span class="cap">通過驗證</span><span class="sub">推導得出檢定處方</span></div>
+    </div>`;
+    if (p.note) html += `<div class="st-note gold">${esc(p.note)}</div>`;
+    if (p.entries && p.entries.length) {
+      html += `<div class="st-scroll" style="margin-top:14px"><table class="st">
+        <thead><tr><th>檔案</th><th>狀態</th><th>問題</th></tr></thead><tbody>${
+        p.entries.map((e) => `<tr><td><code>${esc(e.name)}</code></td>
+          <td>${e.ok ? '<span class="pill ok">通過</span>'
+                     : '<span class="pill bad">未通過</span>'}</td>
+          <td>${e.problems.map(esc).join("<br>") || "—"}</td></tr>`).join("")}
+        </tbody></table></div>`;
+    }
+    $("prereg-box").innerHTML = html;
+  }
+
+  function renderFdr(f) {
+    if (!f.available) { $("fdr-box").innerHTML = unavailable(f); return; }
+    let html = `<div class="st-cards">
+      <div class="st-card"><span class="big">${esc(f.n_tested)}</span>
+        <span class="cap">花掉預算的檢定</span><span class="sub">被 discard 的不算</span></div>
+      <div class="st-card"><span class="big mut">${esc(f.n_discarded)}</span>
+        <span class="cap">被 discard</span><span class="sub">p &gt; tau，明顯的 null</span></div>
+      <div class="st-card"><span class="big mut">${esc(f.n_rejected)}</span>
+        <span class="cap">拒絕虛無</span><span class="sub">—</span></div>
+      <div class="st-card"><span class="big">${fmt(f.next_alpha, 5)}</span>
+        <span class="cap">下一次的 alpha_t</span><span class="sub">你還剩幾次機會</span></div>
+    </div>`;
+    if (!f.curve || f.curve.length < 2) {
+      html += `<div class="st-note">還沒有足夠的點可以畫消耗曲線
+        （需要至少兩次沒被 discard 的檢定）。</div>`;
+    } else {
+      const W = 900, H = 200, PAD = 34;
+      const xs = f.curve.map((d) => d[0]), ys = f.curve.map((d) => d[1]);
+      const xmax = Math.max(...xs), ymax = Math.max(...ys) || 1;
+      const px = (x) => PAD + (x / xmax) * (W - PAD * 2);
+      const py = (y) => H - PAD - (y / ymax) * (H - PAD * 2);
+      const pts = f.curve.map((d) => `${px(d[0]).toFixed(1)},${py(d[1]).toFixed(1)}`).join(" ");
+      html += `<figure style="margin:16px 0 0">
+        <svg id="fdr-curve" viewBox="0 0 ${W} ${H}" role="img"
+             aria-label="alpha_t 隨檢定次數衰減的曲線">
+          <line x1="${PAD}" y1="${H - PAD}" x2="${W - PAD}" y2="${H - PAD}"
+                stroke="var(--line-hi)" stroke-width="1"/>
+          <line x1="${PAD}" y1="${PAD}" x2="${PAD}" y2="${H - PAD}"
+                stroke="var(--line-hi)" stroke-width="1"/>
+          <polyline points="${pts}" fill="none" stroke="var(--gold)" stroke-width="1.8"/>
+          <text x="${PAD}" y="${PAD - 12}" fill="var(--fg-2)" font-size="11">alpha_t</text>
+          <text x="${W - PAD}" y="${H - PAD + 18}" fill="var(--fg-2)"
+                font-size="11" text-anchor="end">第 n 次檢定</text>
+        </svg>
+        <figcaption style="color:var(--fg-2);font-size:12.5px;margin-top:8px">
+          曲線單調衰減就是「搜尋預算正在被燒掉」。衰減到你設的 floor 以下即應停機。
+        </figcaption></figure>`;
+    }
+    $("fdr-box").innerHTML = html;
+  }
+
+  function renderRuleset(r) {
+    if (!r.available) { $("ruleset-box").innerHTML = unavailable(r); return; }
+    const df = r.derived_from || {};
+    let html = `<div class="st-cards">
+      <div class="st-card"><span class="big">${esc(r.version)}</span>
+        <span class="cap">規則集版本</span><span class="sub">${esc(r.path)}</span></div>
+      <div class="st-card"><span class="big mut">${esc(r.n_base_rules)}</span>
+        <span class="cap">檢定家族</span><span class="sub">estimand × design</span></div>
+      <div class="st-card"><span class="big mut">${esc(r.n_thresholds)}</span>
+        <span class="cap">門檻規則</span><span class="sub">family × n_trials</span></div>
+      <div class="st-card"><span class="big mut">${esc(r.n_gates)}</span>
+        <span class="cap">最小樣本閘門</span><span class="sub">estimand × n_eff</span></div>
+    </div>
+    <div class="st-note">依據：${esc(df.title || "—")} ${esc(df.version || "")}
+      （${esc(df.dated || "")}）</div>`;
+
+    html += `<h3 style="margin:26px 0 8px;font-size:15px;color:var(--champagne)">
+      槽位一：估計量 × 設計 → 檢定家族</h3>
+      <div class="st-scroll"><table class="st">
+      <thead><tr><th>規則</th><th>主檢定</th><th>無母數並列</th><th>備註</th></tr></thead>
+      <tbody>${r.base.map((b) => `<tr>
+        <td><code>${esc(b.id)}</code></td>
+        <td>${esc(b.parametric || "—")}</td>
+        <td>${b.nonparametric ? esc(b.nonparametric)
+             : `<span class="pill">無並列版本</span>`}</td>
+        <td>${b.impl_status ? `<span class="pill warn">${esc(b.impl_status.trim().slice(0, 60))}…</span>`
+             : (b.absent_because ? esc(b.absent_because.trim().slice(0, 70)) : "—")}</td>
+      </tr>`).join("")}</tbody></table></div>`;
+
+    html += `<h3 style="margin:26px 0 8px;font-size:15px;color:var(--champagne)">
+      槽位二：重疊 × 自相關 → 標準誤</h3>
+      <div class="st-scroll"><table class="st">
+      <thead><tr><th>規則</th><th>條件</th><th>修正</th><th>lag</th></tr></thead>
+      <tbody>${r.se_policy.map((s) => `<tr>
+        <td><code>${esc(s.id)}</code></td>
+        <td><code>${esc(JSON.stringify(s.when))}</code></td>
+        <td>${s.correction === "REFUSE"
+             ? '<span class="pill bad">拒答</span>' : esc(s.correction)}</td>
+        <td><code>${esc(s.lag_rule || "—")}</code></td>
+      </tr>`).join("")}</tbody></table></div>`;
+
+    html += `<h3 style="margin:26px 0 8px;font-size:15px;color:var(--champagne)">
+      槽位四：這是第幾次檢定 → 門檻</h3>
+      <div class="st-scroll"><table class="st">
+      <thead><tr><th>規則</th><th>條件</th><th>門檻</th><th>出處</th></tr></thead>
+      <tbody>${r.thresholds.map((t) => `<tr>
+        <td><code>${esc(t.id)}</code></td>
+        <td><code>${esc(JSON.stringify(t.when))}</code></td>
+        <td><code>${esc(t.rule)}</code></td>
+        <td>${esc(t.cite || "—")}</td>
+      </tr>`).join("")}</tbody></table></div>`;
+
+    const acc = r.n_accounting || {};
+    html += `<h3 style="margin:26px 0 8px;font-size:15px;color:var(--champagne)">
+      N 記帳：purpose 三分法</h3>
+      <div class="st-scroll"><table class="st">
+      <thead><tr><th>purpose</th><th>ΔN</th><th>可被選用</th><th>判決上限</th></tr></thead>
+      <tbody>${Object.entries(acc).filter(([k]) => k !== "rules").map(([k, v]) => `<tr>
+        <td><code>${esc(k)}</code></td>
+        <td class="num">${esc(v.delta_n)}</td>
+        <td>${v.may_be_selected ? '<span class="pill ok">✓</span>'
+                                : '<span class="pill">✕</span>'}</td>
+        <td>${esc(v.max_verdict)}</td>
+      </tr>`).join("")}</tbody></table></div>`;
+
+    $("ruleset-box").innerHTML = html;
+  }
+
+  async function load() {
+    $("loaded-at").textContent = "載入中…";
+    try {
+      const r = await fetch("/api/stat-tree");
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      renderPopulation(d.ledger);
+      renderDispositions(d.ledger);
+      renderAudit(d.audit);
+      renderPrereg(d.preregistration);
+      renderFdr(d.online_fdr);
+      renderRuleset(d.ruleset);
+      $("loaded-at").textContent = new Date().toLocaleTimeString("zh-TW");
+    } catch (e) {
+      $("loaded-at").textContent = "載入失敗";
+      $("pop-cards").innerHTML =
+        `<div class="st-unavail"><b>讀不到 /api/stat-tree</b> — ${esc(e.message)}</div>`;
+    }
+  }
+
+  $("refresh-btn").addEventListener("click", load);
+  load();
+  </script>
+</body>
+</html>

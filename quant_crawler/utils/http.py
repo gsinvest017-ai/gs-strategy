@@ -20,6 +20,44 @@ from quant_crawler.utils.logging import get_logger
 
 log = get_logger("http")
 
+#: 伺服器沒宣告 charset 時 requests 會退回的編碼。
+#:
+#: 這是 RFC 2616 對 ``text/*`` 的預設，requests 至今仍遵守它。問題是現代網站
+#: 幾乎都送 UTF-8，卻常常忘了在 Content-Type 裡宣告——於是 ``resp.text`` 把
+#: UTF-8 位元組當成 latin-1 解碼，`–`（E2 80 93）就變成 `â\x80\x93`。存成
+#: UTF-8 之後，U+0080 這個控制字元就進了資料庫與 YAML，而 YAML 拒收控制字元。
+#:
+#: 實測 ``nep.repec.org`` 正是這一型：Content-Type 是裸的 ``text/html``，
+#: 但 HTML body 自己宣告 ``charset=utf-8``。
+_REQUESTS_CHARSET_FALLBACK = "ISO-8859-1"
+
+
+def _fix_charset_fallback(resp: Response) -> None:
+    """伺服器沒宣告 charset 時，改用內容推斷的編碼而不是 latin-1。
+
+    只在**兩個條件同時成立**時介入：``resp.encoding`` 正好是 requests 的
+    fallback 值，而且 Content-Type 標頭裡真的找不到 ``charset=``。伺服器明確
+    宣告 latin-1 時不動它——那是一個宣告，不是猜測，覆蓋它會把正確解碼的
+    西歐語系內容弄壞。
+
+    修在這一層而不是各個 crawler 裡，是因為六個 crawler（aqr / arxiv / fed /
+    nber / repec / wiley）全都吃 ``resp.text``，逐一修等於留六個可以再犯的地方。
+    """
+    # 用 getattr 而不是直接取屬性：測試用的 MagicMock(spec=Response) 沒有
+    # `encoding`（它是 __init__ 裡設的實例屬性，不在 class 的 spec 裡）。
+    # 拿不到就代表這不是一個正常的 requests.Response，沒有東西可修。
+    encoding = getattr(resp, "encoding", None)
+    if encoding != _REQUESTS_CHARSET_FALLBACK:
+        return
+    headers = getattr(resp, "headers", None) or {}
+    if "charset=" in str(headers.get("content-type", "")).lower():
+        return                      # 伺服器明確宣告了，那是宣告不是猜測
+    guess = getattr(resp, "apparent_encoding", None)
+    if not guess or guess == encoding:
+        return
+    log.debug("no charset on %s; %s -> %s", getattr(resp, "url", "?"), encoding, guess)
+    resp.encoding = guess
+
 
 class RateLimitedSession:
     """Minimum-delay-per-host wrapper around requests.Session."""
@@ -85,6 +123,7 @@ class RateLimitedSession:
                 time.sleep(retry_after)
                 attempt += 1
                 continue
+            _fix_charset_fallback(resp)
             return resp
 
     def _retry_after(self, resp: Response) -> float:
