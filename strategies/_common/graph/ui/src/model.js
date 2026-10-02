@@ -55,6 +55,7 @@ export const TYPE_COLORS = {
   Returns: "#d95926", Positions: "#e8a33d", WalkForward: "#f06292",
   LedgerN: "#9aa7b8", Report: "#f2cc60", Facts: "#7aa2f7",
   Prescription: "#c792ea", ProbeReport: "#ff6b6b",
+  StrategyBundle: "#3987e5", StrategySpec: "#b084f5", RunInfo: "#9aa7b8",
 };
 export const portColor = (type) => TYPE_COLORS[baseType(type)] || "var(--muted)";
 
@@ -109,6 +110,8 @@ export const names = {
   docs: "研究檢索（RAG）",
   agent: "LLM 判斷",
   probe: "記憶探測",
+  bundle: "策略池 bundle",
+  spec: "策略宣告",
 };
 // Column pitch: card width (~240px) plus a gap wide enough for routed wire lanes.
 export const STAGE_WIDTH = 320;

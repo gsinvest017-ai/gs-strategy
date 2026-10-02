@@ -28,6 +28,9 @@ pytest-report.xml
 # Local graph cache and generated artifacts
 .cache/live-strategy-graph/
 .cache/llm-calls/
+# Coarse graphs generated for pool strategies, and the backtest result store
+strategies/_pool/
+data/backtests.sqlite*
 .graph-runs/
 strategies/_common/graph/ui/dist/
 strategies/_common/graph/ui/coverage/
