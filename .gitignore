@@ -25,6 +25,17 @@ data/cache/
 # pytest CI artifacts
 pytest-report.xml
 
+# Local graph cache and generated artifacts
+.cache/live-strategy-graph/
+.graph-runs/
+strategies/_common/graph/ui/dist/
+strategies/_common/graph/ui/coverage/
+test-results/
+playwright-report/
+# 此檔為 console 輸出、含機密、不入版控
+log/codex-*
+log/*.lock
+
 # 產生的策略骨架：由 papers.db 經 quant_crawler.strategy_gen 重生，不進版控。
 # （2026-09-01：一次 `git add strategies/` 曾把 1436 個檔掃進 commit，
 #   而它們在別的分支不存在，切分支時被 git 刪掉，harness 就讀不到候選了。）

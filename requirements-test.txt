@@ -1,10 +1,8 @@
 # Everything `pytest tests/` needs, and nothing heavier.
 #
-# Deliberately excludes zipline-tej (see requirements-bt.txt). Importing
-# zipline resolves the TEJ trading calendar over the network at module-import
-# time, so it cannot run without a licensed TEJAPI_KEY. The handful of tests
-# that genuinely need a real bundle are marked `@requires_tej` in
-# tests/conftest.py and skip themselves when the key is absent.
+# Install together with requirements-bt.txt for the complete suite, including
+# the real Zipline synthetic futures graph equivalence test. Production-data
+# tests still require licensed calendar access and an ingested bundle.
 #
 # Also excludes gs_rag: it is an out-of-band shared library, not a PyPI
 # package. tests/test_gsrag_adapter.py skips itself when it is missing.
@@ -19,7 +17,7 @@
 pandas>=2.2,<3.0
 numpy>=2.0,<3.0
 scipy>=1.11          # validation.sharpe (PSR/DSR use scipy.stats.norm)
-statsmodels>=0.14     # validation.tradability (Ljung-Box)
+statsmodels>=0.14    # validation.tradability / live graph Ljung-Box, n_eff
 pyarrow>=15          # pandas parquet engine; perf frames and the lakehouse
 
 # Config + codegen.

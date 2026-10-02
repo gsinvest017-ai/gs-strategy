@@ -26,8 +26,12 @@ else
     "${PY_BIN}" -m venv "${VENV_DIR}"
 fi
 
-"${VENV_DIR}/bin/pip" install --upgrade pip >/dev/null
-"${VENV_DIR}/bin/pip" install -r "${ROOT_DIR}/requirements-bt.txt"
+VENV_PY="${VENV_DIR}/bin/python"
+if [[ -f "${VENV_DIR}/Scripts/python.exe" ]]; then
+    VENV_PY="${VENV_DIR}/Scripts/python.exe"
+fi
+"${VENV_PY}" -m pip install --upgrade pip >/dev/null
+"${VENV_PY}" -m pip install -r "${ROOT_DIR}/requirements-bt.txt"
 
 echo "[setup-bt] done. Verify with:"
-echo "  ${VENV_DIR}/bin/python -c 'import zipline; print(zipline.__version__)'"
+echo "  ${VENV_PY} -c 'import zipline; print(zipline.__version__)'"
