@@ -328,3 +328,30 @@ GS_TEST_REAL_BUNDLE=1 PYTHONUTF8=1 .venv-bt/Scripts/python.exe -m pytest tests/t
 ```
 
 離線 fixture 只替代日曆的遠端輸入，不替代 orders、成交、成本或損益事件迴圈。fixture 匯入期間會暫存並還原日曆套件的快取，請勿在同一虛擬環境並行執行 fixture 測試。
+
+### 組合式研究 workflow：QUANTDATA + RAG → 可熱抽換 LLM → walk-forward 回放
+
+在 Live Strategy Graph 上加了參數化接點型別、`>>`／`@` 組合 DSL，以及第一張 LLM 策略圖 `strategies/llm_view_tx`。
+完整規格見 [`docs/spec/compositional-research-workflow.md`](docs/spec/compositional-research-workflow.md)。
+
+```bash
+# 離線示範：合成行情、內建研究摘要、確定性假模型，使用獨立的 ledger
+bash run.sh graph-ui --fixture --graph strategies/llm_view_tx/graph.json
+
+# 真實資料：QUANTDATA REST + data/papers.db + Genesis Deck（只放行公司出口 IP）
+GS_LLM_API_KEY=... bash run.sh graph-run --graph strategies/llm_view_tx/graph.json
+bash run.sh graph-ui --graph strategies/llm_view_tx/graph.json
+
+# graph.json 由組合式產生；改節點後重產，CI 以測試確認兩者一致
+python -m strategies.llm_view_tx.compose_graph
+```
+
+- **換模型**：改 `LLM 判斷` 節點的 `model` 下拉選單即可。要加新模型，在 `strategies/_common/compose/models.yaml` 加一筆，並寫明知識截止日上界 `cutoff`。
+- **防 look-ahead**：
+  - `cutoff + buffer` 之前的決策日不呼叫模型、不計績效；
+  - 乾淨樣本外天數不足時回測直接失敗；
+  - RAG 只取決策日前已公開的文件；
+  - prompt 預設匿名（不放日期與標的名稱）；
+  - `記憶探測` 節點檢查模型是否記得歷史價格。
+- **回放**：頂列的「回放」按鈕，可以逐個決策日查看模型看到的特徵與研究、CoT、決策、OOS 損益、污染區間與 fold 切點。
+- **N 記帳**：整個巢狀 walk-forward 算一次 selection trial。換模型、改門檻網格就是新試驗；只改下游統計宣告則不增加 N。
