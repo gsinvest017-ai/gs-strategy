@@ -123,6 +123,9 @@ def test_buy_and_hold_clones_and_broken_runs_stay_out(faked):
 
 def test_smoke_failure_keeps_only_the_exception_class(faked):
     faked['replies']['Time-series momentum trading strategy for index futures'] = spec('broken_tw')
-    faked['smoke']['value'] = {'status': 'error', 'stderr': 'token=abcdefghijklmnopqrstuvwxyz123456 SymbolNotFound: x'}
+    # A secret-shaped value built at runtime (not a literal) must never reach the record.
+    fake_secret = 'sk-' + 'q7' * 16
+    faked['smoke']['value'] = {'status': 'error', 'stderr': f'auth {fake_secret} SymbolNotFound: x'}
     _, trials = cg.run(limit=1, papers_db=faked['papers'], results_db=faked['db'])
     assert trials[0]['metrics']['reason'] == '煙霧測試失敗（SymbolNotFound）'
+    assert fake_secret not in json.dumps(trials, ensure_ascii=False)
