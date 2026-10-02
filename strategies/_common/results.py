@@ -149,7 +149,7 @@ def runs(path, strategy=None, limit=50):
         if strategy:
             sql += ' WHERE strategy = ?'
             args.append(strategy)
-        sql += ' ORDER BY recorded_at DESC LIMIT ?'
+        sql += ' ORDER BY rowid DESC LIMIT ?'
         args.append(int(limit))
         return [dict(r) for r in conn.execute(sql, args)]
 
@@ -209,7 +209,7 @@ def experiments(path, strategy=None, limit=50):
         if strategy:
             sql += ' WHERE strategy = ? OR strategy IS NULL'
             args.append(strategy)
-        sql += ' ORDER BY created_at DESC LIMIT ?'
+        sql += ' ORDER BY rowid DESC LIMIT ?'
         args.append(int(limit))
         out = []
         for r in conn.execute(sql, args):
@@ -224,6 +224,8 @@ def _headline(kind, s):
     if kind == 'monte_carlo':
         return {'sharpe_p50': s.get('sharpe', {}).get('p50'), 'sharpe_p05': s.get('sharpe', {}).get('p05'),
                 'sharpe_p95': s.get('sharpe', {}).get('p95'), 'prob_sharpe_le_0': s.get('prob_sharpe_le_0')}
+    if kind == 'codegen':
+        return {'papers': s.get('papers'), 'admitted': len(s.get('admitted') or [])}
     if kind == 'mint_tournament':
         return {'n_for_dsr': s.get('n_for_dsr'), 'best_score': (s.get('best_trial') or {}).get('score_oos_net_t'),
                 'positive_share': (s.get('score_oos_net_t') or {}).get('positive_share'), 'pbo': s.get('pbo')}

@@ -1,6 +1,6 @@
 # 策略池切換與回測結果庫（三期計畫・第一期）
 
-> 狀態：第一期、第二期已實作（2026-10-02）
+> 狀態：三期皆已實作（2026-10-02）
 > 相關：[`live-strategy-graph.md`](live-strategy-graph.md)、[`compositional-research-workflow.md`](compositional-research-workflow.md)
 
 ## 三期範圍
@@ -9,7 +9,7 @@
 |---|---|---|
 | 一 | dashboard 策略下拉選單（策略池＝gs-zipline-tej 註冊表）＋ 每次回測自動存入結果庫 | **本文件** |
 | 二 | 蒙地卡羅與多次試驗驗證：每次試驗都存，另存彙總績效分布；接入因子池與 MINT trial ledger | **已實作（見下）** |
-| 三 | 量化論文爬蟲排程 → LLM 依論文原文產生策略程式碼 → 通過驗證門檻才放進策略池 | 待做 |
+| 三 | 量化論文爬蟲排程 → LLM 依論文原文產生策略程式碼 → 通過驗證門檻才放進策略池 | **已實作（見下）** |
 
 ## 介面原則
 
@@ -75,3 +75,30 @@ data.pool_strategy ──StrategyBundle──► feature.strategy_spec ──Str
 - **粗圖會依最新範本重新產生**，同時保留使用者存過的參數，所以舊策略也會出現新節點。
 - **UI**：「結果」面板新增「實驗」分頁（蒙地卡羅分布表＋扇形圖、MINT 彙總＋前 50 名 trial）；蒙地卡羅節點卡片顯示 Sharpe 分布摘要。
 - **刻意不做**：重複參數試驗，也就是自動跑參數網格。依 `live-strategy-graph.md` §5，那屬於 diagnostic 模式，會改變 N 的記帳規則，必須連同 `stat-ruleset-1.2` 一起修訂，不能只在程式裡實作。
+
+## 第三期：論文 → LLM 寫策略 → 門檻 → 策略池
+
+`python -m quant_crawler.strategy_gen.llm_codegen --limit 3 [--model qwen3-235b-2507] [--dry-run]`
+
+每天排程跑一次，是 `scripts/daily_refresh.sh` 的 step 5。這一步失敗也不會讓整個 daily_refresh 失敗；可以用 `CODEGEN_LIMIT`、`CODEGEN_MODEL` 調整篇數和模型。
+
+1. **選論文**：從 papers.db 挑出有明確策略線索的論文（`classify_kind` 的 strategy_score 必須大於 0）。已經嘗試過的論文，不論成敗都不再重試，嘗試紀錄存在結果庫的 codegen 實驗裡。
+2. **取原文**：用 RAG 取出與交易規則最相關的段落；沒有全文索引時只用摘要。
+3. **產生策略**：交給 `models.yaml` 中的模型，產出符合 strategy-import-spec 的 `strategy.py` 與參數，並附上「論文規則對應到台股的方式」與參數理由。提示裡會列出本機 bundle 實際有的標的，透過 gs-zipline-tej 的公開函式 `list_bundle_symbols` 取得。
+4. **三道門檻**：
+   - **G0 靜態檢查**：
+     - 只能 import zipline.api／numpy／pandas／math；
+     - 不能使用 open、eval、exec、存取雙底線屬性等；
+     - 使用的標的必須存在於本機 bundle；
+     - 必須通過 gs-zipline-tej 自己的 `validate_strategy_py`。
+   - **G1 煙霧測試**：在 2023-01～06 用 gs-zipline-tej runner 跑真實 Zipline，必須能跑完。失敗時只記錄例外類別名稱，因為 stderr 可能含有金鑰。
+   - **G2 交易行為**：至少要有 2 筆交易，而且至少減碼一次，排除買進持有的翻版。這一關只看下單行為、不看報酬，所以屬於初篩，ΔN = 0。
+5. **入池**：通過的策略放到 `strategies/_llm_generated/<id>/`（不進版控）。manifest 會帶上 `llm-generated`、`unreviewed` 標籤，以及論文來源、模型、各門檻結果；README 寫明對應方式與參數理由。策略池會自動掃到，dashboard 選單會把它們分到「論文自動生成（未審）」。之後在 dashboard 按「執行」，才會計入一次 selection trial。
+6. **紀錄**：每一批都寫成結果庫的 `codegen` 實驗，每篇論文記成一個 trial，內容包括到達哪一道門檻、原因、交易數與減碼數。可以在「結果 → 實驗」查看。
+
+**實測（2026-10-02，qwen3-235b-2507）**：
+
+- 第一輪：3 篇全部卡在 G1，原因是模型選了本機 bundle 沒有的 0050。之後在提示裡列出可用標的，並在 G0 加上標的檢查。
+- 第二輪：3 篇中有 2 篇入池（交易 2／106 筆，減碼 1／50 次）；1 篇仍然寫了 0050，在 G0 被擋下。
+
+**注意**：模型產生的策略只是論文規則的**近似實作**。例如有一篇的描述提到 LightGBM，但程式碼裡不可能用到它。所以入池的策略一律標為「未審」，需要人工審閱後才能當作研究結論。
