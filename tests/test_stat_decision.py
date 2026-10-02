@@ -105,6 +105,27 @@ def test_unregistered_finding_is_downgraded_not_voided():
     assert any("探索性" in n for n in p.notes)
 
 
+def test_open_mining_demands_online_fdr_not_just_a_fixed_threshold():
+    """|t|>=3 是固定門檻，表達不了「你已經燒掉多少搜尋預算」。
+
+    連續挖掘的母體是線上成長的，所以這一支必須同時走 ADDIS。這個旗標存在的
+    意義是讓呼叫端**沒辦法只看門檻就交差**——處方裡會明講還要跑什麼。
+    """
+    p = resolve(_facts(family="open_mining"))
+    assert p.threshold == "|t| >= 3"
+    assert p.online_fdr_required is True
+    assert any("AddisBudget" in n or "線上 FDR" in n for n in p.notes)
+    assert any("pre-registration" in n for n in p.notes)
+
+
+def test_bounded_families_do_not_demand_online_fdr():
+    """N 事先已知時離線修正就夠了；不該無差別要求線上程序。"""
+    assert resolve(_facts(family="single_preregistered")).online_fdr_required is False
+    assert resolve(
+        _facts(family="bounded_multiple", n_trials=9)
+    ).online_fdr_required is False
+
+
 def test_best_of_m_routes_to_dsr_not_bonferroni():
     """從 M 個跑完的策略挑最好的那個，工具是 DSR/SPA，不是 Bonferroni。
 

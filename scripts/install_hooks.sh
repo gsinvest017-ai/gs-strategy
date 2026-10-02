@@ -13,7 +13,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GIT_HOOKS_DIR="${ROOT_DIR}/.git/hooks"
 SRC_HOOKS_DIR="${ROOT_DIR}/scripts/hooks"
-HOOKS=(commit-msg)
+HOOKS=(commit-msg pre-commit)
 
 log() { printf "[install_hooks] %s\n" "$*"; }
 
@@ -35,7 +35,9 @@ case "${action}" in
             log "已安裝 ${hook} → symlink to scripts/hooks/${hook}"
         done
         log "完成。下次 git commit 會自動執行 hook（lint 模式預設不擋）。"
-        log "要轉成阻擋模式：把 ${SRC_HOOKS_DIR}/commit-msg 內 STRICT=0 改 1。"
+        log "commit-msg 是 lint 模式（STRICT=0，不擋）；"
+        log "pre-commit 預設就阻擋（STRICT=1）——它守的是 pre-registration"
+        log "不可改寫與 log/trials.jsonl 只准追加，那兩件事一旦寫進歷史就難察覺。"
         ;;
     --uninstall|uninstall)
         for hook in "${HOOKS[@]}"; do
