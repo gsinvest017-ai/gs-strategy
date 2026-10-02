@@ -1,0 +1,34 @@
+.claude/settings.local.json
+*.log
+__pycache__/
+node_modules/
+.venv/
+.venv-bt/
+
+# secrets (TEJAPI_KEY, etc.) — never commit
+.env
+.env.*
+!.env.example
+*.pyc
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# crawler outputs
+data/papers.db
+data/papers.db-journal
+data/pdfs/
+data/raw/
+data/cache/
+.claude/local/
+
+# pytest CI artifacts
+pytest-report.xml
+
+# 產生的策略骨架：由 papers.db 經 quant_crawler.strategy_gen 重生，不進版控。
+# （2026-09-01：一次 `git add strategies/` 曾把 1436 個檔掃進 commit，
+#   而它們在別的分支不存在，切分支時被 git 刪掉，harness 就讀不到候選了。）
+strategies/_generated/
+
+# quantdata query cache (content-addressed, regenerable)
+data/qd_cache/
