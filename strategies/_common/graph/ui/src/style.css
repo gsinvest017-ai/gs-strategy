@@ -974,3 +974,6 @@ pre {
 .react-flow__edge .lane-edge { stroke-width: 2; stroke-opacity: .5; transition: stroke-opacity .12s, stroke-width .12s; }
 .react-flow__edge:hover .lane-edge, .react-flow__edge.selected .lane-edge { stroke-opacity: 1; stroke-width: 3; }
 .react-flow__edge.animated .lane-edge { stroke-opacity: .9; }
+.replay-overlay > header { gap: 12px; }
+.replay-overlay .replay-title { flex: 1; }
+.replay-back { flex: none; align-self: center; }

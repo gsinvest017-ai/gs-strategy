@@ -218,6 +218,11 @@ export function Replay({ close, revision }) {
     }), 900);
     return () => clearInterval(t);
   }, [playing, decisions.length]);
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [close]);
   const card = decisions[at];
   const byDate = useMemo(() => new Map(decisions.map((d, i) => [d.date, i])), [decisions]);
   const pickDay = (date) => {
@@ -228,7 +233,8 @@ export function Replay({ close, revision }) {
   return (
     <div className="replay-overlay" role="dialog" aria-label="walk-forward 回放">
       <header>
-        <div>
+        <button className="replay-back" onClick={close} data-testid="replay-back">← 返回策略圖</button>
+        <div className="replay-title">
           <small>WALK-FORWARD REPLAY</small>
           <h2>回放：資料 → 推論 → 決策 → 損益</h2>
         </div>
