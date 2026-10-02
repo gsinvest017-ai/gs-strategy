@@ -10,7 +10,10 @@ keyed by the same ``backtest_key``:
                model/engine, headline metrics, the node states;
 * ``returns``  the daily return series, once per ``backtest_key``
                (re-running a cached configuration adds a run, not new rows);
-* ``details``  JSON blobs per ``backtest_key`` (folds, run info, report).
+* ``details``  JSON blobs per ``backtest_key`` (folds, run info, report);
+* ``experiments`` / ``trials``  multi-trial evidence: Monte Carlo paths of
+               a run (one trial per path) and imported tournament ledgers
+               (gs-MINT), each with its aggregated summary.
 
 Stdlib SQLite in WAL mode: no new dependency, safe for the graph server's
 single writer plus readers; DuckDB can ``ATTACH`` the file for analysis.
@@ -39,6 +42,15 @@ CREATE TABLE IF NOT EXISTS returns (
 );
 CREATE TABLE IF NOT EXISTS details (
   backtest_key TEXT NOT NULL, kind TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY (backtest_key, kind)
+);
+CREATE TABLE IF NOT EXISTS experiments (
+  experiment_id TEXT PRIMARY KEY, kind TEXT NOT NULL, strategy TEXT, source TEXT, backtest_key TEXT,
+  created_at TEXT NOT NULL, n_trials INTEGER NOT NULL, config TEXT, summary TEXT
+);
+CREATE INDEX IF NOT EXISTS experiments_strategy ON experiments(strategy, created_at);
+CREATE TABLE IF NOT EXISTS trials (
+  experiment_id TEXT NOT NULL, trial_id TEXT NOT NULL, stage TEXT, score REAL, metrics TEXT,
+  PRIMARY KEY (experiment_id, trial_id)
 );
 """
 
@@ -114,6 +126,9 @@ def record(path, *, run_id, status, message, context, values, states, selection_
             series = returns if isinstance(returns, pd.Series) else returns.iloc[:, 0]
             conn.executemany('INSERT OR IGNORE INTO returns VALUES (?,?,?)',
                              [(key, pd.Timestamp(d).date().isoformat(), _num(v)) for d, v in series.items()])
+        monte = _find(values, 'MonteCarlo')
+        if key and isinstance(monte, dict) and status == 'complete':
+            _store_monte_carlo(conn, key, graph.get('strategy'), monte)
         if key:
             for kind, port in (('walk_forward', 'WalkForward'), ('run_info', 'RunInfo'), ('report', 'Report')):
                 body = _find(values, port)
@@ -156,4 +171,74 @@ def run_detail(path, run_id):
         out['equity'] = equity
         out['details'] = {r['kind']: json.loads(r['body']) for r in
                           conn.execute('SELECT kind, body FROM details WHERE backtest_key = ?', (key,))}
+        return out
+
+
+def _store_monte_carlo(conn, key, strategy, monte):
+    experiment_id = f"mc:{key[:16]}:{monte['n_paths']}:{monte['mean_block']:g}:{monte['seed']}"
+    summary = {k: v for k, v in monte.items() if not str(k).startswith('_')}
+    trials = [{'trial_id': f'path_{i:05d}', 'stage': 'bootstrap', 'score': row[0],
+               'metrics': {'sharpe': row[0], 'max_drawdown': row[1], 'cagr': row[2]}}
+              for i, row in enumerate(monte.get('_paths') or [])]
+    _write_experiment(conn, experiment_id=experiment_id, kind='monte_carlo', strategy=strategy,
+                      source='validation.monte_carlo', config={k: monte[k] for k in ('method', 'n_paths', 'mean_block', 'seed')},
+                      summary=summary, trials=trials, backtest_key=key)
+
+
+def _write_experiment(conn, *, experiment_id, kind, strategy, source, config, summary, trials, backtest_key):
+    conn.execute('INSERT OR REPLACE INTO experiments VALUES (?,?,?,?,?,?,?,?,?)', (
+        experiment_id, kind, strategy, source, backtest_key, datetime.now(timezone.utc).isoformat(), len(trials),
+        json.dumps(config, ensure_ascii=False, default=str), json.dumps(summary, ensure_ascii=False, default=str)))
+    conn.execute('DELETE FROM trials WHERE experiment_id = ?', (experiment_id,))
+    conn.executemany('INSERT INTO trials VALUES (?,?,?,?,?)', [
+        (experiment_id, str(t['trial_id']), t.get('stage'), _num(t.get('score')),
+         json.dumps(t.get('metrics') or {}, ensure_ascii=False, default=str)) for t in trials])
+
+
+def record_experiment(path, **kwargs):
+    with closing(connect(path)) as conn, conn:
+        _write_experiment(conn, **kwargs)
+
+
+def experiments(path, strategy=None, limit=50):
+    if not Path(path).is_file():
+        return []
+    with closing(connect(path)) as conn:
+        sql = 'SELECT experiment_id, kind, strategy, source, backtest_key, created_at, n_trials, summary FROM experiments'
+        args = []
+        if strategy:
+            sql += ' WHERE strategy = ? OR strategy IS NULL'
+            args.append(strategy)
+        sql += ' ORDER BY created_at DESC LIMIT ?'
+        args.append(int(limit))
+        out = []
+        for r in conn.execute(sql, args):
+            row = dict(r)
+            summary = json.loads(row.pop('summary') or '{}')
+            row['headline'] = _headline(row['kind'], summary)
+            out.append(row)
+        return out
+
+
+def _headline(kind, s):
+    if kind == 'monte_carlo':
+        return {'sharpe_p50': s.get('sharpe', {}).get('p50'), 'sharpe_p05': s.get('sharpe', {}).get('p05'),
+                'sharpe_p95': s.get('sharpe', {}).get('p95'), 'prob_sharpe_le_0': s.get('prob_sharpe_le_0')}
+    if kind == 'mint_tournament':
+        return {'n_for_dsr': s.get('n_for_dsr'), 'best_score': (s.get('best_trial') or {}).get('score_oos_net_t'),
+                'positive_share': (s.get('score_oos_net_t') or {}).get('positive_share'), 'pbo': s.get('pbo')}
+    return {}
+
+
+def experiment_detail(path, experiment_id, top=50):
+    with closing(connect(path)) as conn:
+        row = conn.execute('SELECT * FROM experiments WHERE experiment_id = ?', (experiment_id,)).fetchone()
+        if row is None:
+            return None
+        out = dict(row)
+        out['config'] = json.loads(out['config'] or '{}')
+        out['summary'] = json.loads(out['summary'] or '{}')
+        out['top_trials'] = [{**dict(t), 'metrics': json.loads(t['metrics'] or '{}')} for t in conn.execute(
+            'SELECT trial_id, stage, score, metrics FROM trials WHERE experiment_id = ? '
+            'ORDER BY score DESC LIMIT ?', (experiment_id, int(top)))]
         return out

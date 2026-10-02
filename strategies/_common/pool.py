@@ -43,13 +43,24 @@ def row(s, pool):
     d = s.to_dict()
     keep = ("id", "name", "description", "asset_class", "bundle", "start", "end", "capital_base",
             "tags", "requires_tej_key", "is_external", "bundle_dir", "origin", "pool", "path",
-            "calendar", "provenance", "validation", "params", "symbols")
+            "calendar", "provenance", "validation", "params", "symbols", "qualified")
     return {k: d.get(k) for k in keep}
 out = {"strategies": [row(s, "strategy") for s in registry.list_strategies()],
        "factors": [row(s, "factor") for s in registry.list_factors()],
        "errors": [e if isinstance(e, dict) else getattr(e, "to_dict", lambda: str(e))()
                   for e in registry.list_import_errors()]}
 sys.stdout.write("\n__POOL__" + json.dumps(out, default=str))
+'''
+
+_FACTOR_SCRIPT = r'''
+import json, sys
+from dashboard.strategies import registry
+from dashboard.runner import run_factor_backtest
+registry.refresh()
+args = json.loads(sys.argv[1])
+result = run_factor_backtest(args["factor_id"], args["filter_config"], start=args["start"], end=args["end"],
+                             capital_base=args["capital_base"], timeout=args["timeout"])
+sys.stdout.write("\n__RESULT__" + json.dumps(result.to_dict(), default=str))
 '''
 
 _RUN_SCRIPT = r'''
@@ -150,14 +161,17 @@ def pool(refresh=False):
                 entries.append({'id': sid, 'name': sid, 'description': '', 'origin': 'gs-strategy-graph',
                                 'pool': 'strategy', 'asset_class': 'future', 'graph': 'composed',
                                 'graph_path': info['graph_path'], 'selectable': True, 'tags': []})
-        value = {'strategies': entries, 'factors': raw['factors'], 'import_errors': len(raw['errors']),
+        factors = [{**f, 'graph': 'coarse', 'graph_path': None, 'selectable': bool(_ID.match(f['id']))}
+                   for f in raw['factors']]
+        value = {'strategies': entries, 'factors': factors, 'import_errors': len(raw['errors']),
                  'pool_error': error, 'zipline_root': zipline_root().name}
         _CACHE.update(at=time.time(), value=value)
         return value
 
 
 def entry(strategy_id):
-    for s in pool()['strategies']:
+    listing = pool()
+    for s in listing['strategies'] + listing['factors']:
         if s['id'] == strategy_id:
             return s
     raise GraphError('策略池中沒有這個策略')
@@ -181,9 +195,22 @@ def bundle_version(meta):
     return digest.hexdigest()[:16]
 
 
+def default_filter(meta):
+    """Factor-pool filter: the qualified config when the factor has one, else a top-N long book."""
+    qualified = (meta.get('qualified') or {}).get('filter_config') if isinstance(meta.get('qualified'), dict) else None
+    if isinstance(qualified, dict):
+        return {k: qualified[k] for k in ('mode', 'direction', 'n', 'weighting', 'rebalance') if k in qualified}
+    inputs = ((meta.get('provenance') or {}).get('inputs') or {})
+    return {'mode': 'long_only_topn', 'direction': 'low' if inputs.get('direction') == 'short' else 'high',
+            'n': 20, 'weighting': 'equal', 'rebalance': 'monthly'}
+
+
 def coarse_graph(meta):
     """bundle -> declared spec -> Zipline (gs-zipline-tej runner) -> statistics."""
     sid = meta['id']
+    factor = meta.get('pool') == 'factor'
+    backtest = ({'id': 'backtest', 'type': 'backtest.pool_factor', 'params': default_filter(meta)} if factor
+                else {'id': 'backtest', 'type': 'backtest.pool_zipline', 'params': {}})
     return {
         'schema': 'live-strategy-graph/1', 'strategy': sid,
         'nodes': [
@@ -191,8 +218,9 @@ def coarse_graph(meta):
              'params': {'strategy_id': sid, 'start': str(meta.get('start') or ''), 'end': str(meta.get('end') or ''),
                         'capital_base': float(meta.get('capital_base') or 1_000_000), 'bundle_version': 'auto'}},
             {'id': 'spec', 'type': 'feature.strategy_spec', 'params': {}},
-            {'id': 'backtest', 'type': 'backtest.pool_zipline', 'params': {}},
+            backtest,
             {'id': 'ledger', 'type': 'ledger.selection_n', 'params': {}},
+            {'id': 'montecarlo', 'type': 'validation.monte_carlo', 'params': {}},
             {'id': 'report', 'type': 'validation.report', 'params': {}},
             {'id': 'facts', 'type': 'stat.facts', 'params': {}},
             {'id': 'resolve', 'type': 'stat.resolve', 'params': {}},
@@ -206,6 +234,7 @@ def coarse_graph(meta):
             {'from': ['ledger', 'LedgerN'], 'to': ['report', 'LedgerN']},
             {'from': ['ledger', 'LedgerN'], 'to': ['resolve', 'LedgerN']},
             {'from': ['facts', 'Facts'], 'to': ['resolve', 'Facts']},
+            {'from': ['backtest', 'Returns'], 'to': ['montecarlo', 'Returns']},
         ],
     }
 
@@ -215,3 +244,10 @@ def run_backtest(strategy_id, *, start, end, capital_base, timeout=900):
     args = json.dumps({'strategy_id': strategy_id, 'start': start or None, 'end': end or None,
                        'capital_base': capital_base, 'timeout': timeout})
     return _call(_RUN_SCRIPT, '__RESULT__', args, timeout=timeout + 60)
+
+
+def run_factor_backtest(factor_id, filter_config, *, start, end, capital_base, timeout=900):
+    """Backtest a Factor Pool bundle as a stock-selection filter via gs-zipline-tej."""
+    args = json.dumps({'factor_id': factor_id, 'filter_config': filter_config, 'start': start or None,
+                       'end': end or None, 'capital_base': capital_base, 'timeout': timeout})
+    return _call(_FACTOR_SCRIPT, '__RESULT__', args, timeout=timeout + 60)

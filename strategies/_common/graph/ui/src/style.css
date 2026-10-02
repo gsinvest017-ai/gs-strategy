@@ -992,3 +992,12 @@ pre {
 .results-equity { width: 100%; height: 120px; background: var(--bg); border-radius: 6px; }
 .results-equity path { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .results-equity text { fill: var(--muted); font-size: 10px; }
+
+.results-tabs { flex: none; display: flex; gap: 4px; margin: 6px 0 8px; border-bottom: 1px solid var(--border); }
+.results-tabs button { border: none; border-bottom: 2px solid transparent; background: none; color: var(--muted); padding: 4px 10px; border-radius: 0; }
+.results-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+.results-fan { width: 100%; height: 160px; background: var(--bg); border-radius: 6px; }
+.results-fan .band.outer { fill: var(--accent); opacity: .15; }
+.results-fan .band.inner { fill: var(--accent); opacity: .3; }
+.results-fan .median { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.results-fan text { fill: var(--muted); font-size: 10px; }

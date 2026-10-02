@@ -55,7 +55,7 @@ export const TYPE_COLORS = {
   Returns: "#d95926", Positions: "#e8a33d", WalkForward: "#f06292",
   LedgerN: "#9aa7b8", Report: "#f2cc60", Facts: "#7aa2f7",
   Prescription: "#c792ea", ProbeReport: "#ff6b6b",
-  StrategyBundle: "#3987e5", StrategySpec: "#b084f5", RunInfo: "#9aa7b8",
+  StrategyBundle: "#3987e5", StrategySpec: "#b084f5", RunInfo: "#9aa7b8", MonteCarlo: "#ffb86c",
 };
 export const portColor = (type) => TYPE_COLORS[baseType(type)] || "var(--muted)";
 
@@ -88,7 +88,7 @@ export function edgeLanes(edges, boxes) {
 export const portShape = (type) =>
   ["CostModel"].includes(baseType(type))
     ? "square"
-    : ["LedgerN", "Report", "Facts", "Prescription", "ProbeReport"].includes(baseType(type))
+    : ["LedgerN", "Report", "Facts", "Prescription", "ProbeReport", "MonteCarlo"].includes(baseType(type))
       ? "diamond"
       : "circle";
 export const names = {
@@ -112,6 +112,7 @@ export const names = {
   probe: "記憶探測",
   bundle: "策略池 bundle",
   spec: "策略宣告",
+  montecarlo: "蒙地卡羅重抽",
 };
 // Column pitch: card width (~240px) plus a gap wide enough for routed wire lanes.
 export const STAGE_WIDTH = 320;

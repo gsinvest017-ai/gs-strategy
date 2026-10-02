@@ -116,11 +116,13 @@ def default_registry():
     from strategies.llm_view_tx.graph_nodes import register_nodes as llm_nodes
     from .stat_nodes import register_nodes as stat_nodes
     from .pool_nodes import register_nodes as pool_nodes
+    from .mc_nodes import register_nodes as mc_nodes
     registry = Registry()
     strategy_nodes(registry)
     llm_nodes(registry)
     pool_nodes(registry)
     stat_nodes(registry)
+    mc_nodes(registry)
     return registry
 
 
@@ -156,7 +158,8 @@ def json_value(value, limit=60, offset=0):
         if 'values' in value and isinstance(value['values'], (pd.Series, pd.DataFrame)):
             return {'values': json_value(value['values'], limit, offset),
                     'source': json_value(value.get('source', {}), limit, offset)}
-        return {str(k): json_value(v, limit, offset) for k,v in value.items() if k != 'histories'}
+        return {str(k): json_value(v, limit, offset) for k,v in value.items()
+                if k != 'histories' and not str(k).startswith('_')}
     if isinstance(value, (list, tuple, np.ndarray)):
         return [json_value(v, limit, offset) for v in value]
     if isinstance(value, np.generic):
@@ -287,9 +290,31 @@ class GraphService:
         if not relative:
             relative = f'strategies/_pool/{strategy_id}/graph.json'
             target = self.confined(relative)
-            if not target.exists():
-                write_json(target, pool.coarse_graph(meta))
+            # Regenerate from the current template so new nodes appear, keeping
+            # parameters the user saved on nodes that still exist.
+            graph = pool.coarse_graph(meta)
+            if target.exists():
+                try:
+                    saved = {(n['id'], n['type']): n.get('params', {})
+                             for n in json.loads(target.read_text(encoding='utf-8')).get('nodes', [])}
+                except (OSError, ValueError, KeyError, TypeError):
+                    saved = {}
+                for node in graph['nodes']:
+                    kept = {k: v for k, v in saved.get((node['id'], node['type']), {}).items() if k != 'bundle_version'}
+                    node['params'] = {**node['params'], **kept}
+            write_json(target, graph)
         return self.load(relative, expected_revision=expected_revision)
+
+    def experiments(self, strategy=None, limit=50):
+        from strategies._common import results
+        return {'experiments': results.experiments(results.default_path(self.root), strategy, limit)}
+
+    def experiment(self, experiment_id):
+        from strategies._common import results
+        detail = results.experiment_detail(results.default_path(self.root), experiment_id)
+        if detail is None:
+            raise GraphError('unknown job')
+        return json_value(detail, limit=100000)
 
     def results(self, strategy=None, limit=50):
         from strategies._common import results

@@ -1,6 +1,6 @@
 # 策略池切換與回測結果庫（三期計畫・第一期）
 
-> 狀態：第一期已實作（2026-10-02）
+> 狀態：第一期、第二期已實作（2026-10-02）
 > 相關：[`live-strategy-graph.md`](live-strategy-graph.md)、[`compositional-research-workflow.md`](compositional-research-workflow.md)
 
 ## 三期範圍
@@ -8,7 +8,7 @@
 | 期 | 內容 | 狀態 |
 |---|---|---|
 | 一 | dashboard 策略下拉選單（策略池＝gs-zipline-tej 註冊表）＋ 每次回測自動存入結果庫 | **本文件** |
-| 二 | 蒙地卡羅與多次試驗驗證：每次試驗都存，另存彙總績效分布；接入因子池與 MINT trial ledger | 待做 |
+| 二 | 蒙地卡羅與多次試驗驗證：每次試驗都存，另存彙總績效分布；接入因子池與 MINT trial ledger | **已實作（見下）** |
 | 三 | 量化論文爬蟲排程 → LLM 依論文原文產生策略程式碼 → 通過驗證門檻才放進策略池 | 待做 |
 
 ## 介面原則
@@ -50,3 +50,28 @@ data.pool_strategy ──StrategyBundle──► feature.strategy_spec ──Str
 
 - 策略池讀到 19 支策略與 4 個因子，沒有匯入錯誤。
 - 在 UI 切換到 `buy_and_hold_tw` 後按執行：真實 Zipline 回測 226 天，Sharpe 0.67；自動寫入結果庫並記為新試驗 +1。
+
+## 第二期：蒙地卡羅與多次試驗
+
+- **`validation.monte_carlo` 節點**（屬於驗證區，在回測之後執行）：
+  - 對回測報酬做 stationary block bootstrap（Politis–Romano 1994），沿用 `validation.reality_check` 既有的重抽索引。
+  - 預設 2000 條路徑、平均區塊長度 10，可以調整。
+  - 輸出 Sharpe／MDD／CAGR 的 5–95% 分位、P(Sharpe ≤ 0)、P(期末虧損)，以及權益扇形圖。
+  - 它只重抽同一條報酬序列，**不會產生新的績效資訊，所以不增加 N**。新增這個節點不會改變 backtest_key，既有組態會直接快取重播。
+  - `llm_view_tx`（由組合式產生）與所有粗圖都已經接上這個節點。
+- **結果庫新增 `experiments`／`trials` 兩張表**：
+  - 每條蒙地卡羅路徑是一個 trial，存它的 sharpe／mdd／cagr；彙總結果存在 `experiments.summary`。
+  - 同一個回測用不同的路徑數、區塊長度或 seed，算不同的實驗。
+- **gs-MINT 錦標賽**：`python -m strategies._common.mint_ledger import <trial_ledger.jsonl>`
+  - 只依 gs-MINT `docs/contracts/trial-ledger-fields.md` 讀取，不 import 也不修改 gs-MINT。
+  - 只把 `event_type == trial` 當成交易 trial；`criteria_change_trial` 計入 DSR 試驗數（`n_for_dsr`）。
+  - deep trial 的 id 裡有冒號，讀取時保留原樣。
+  - 本機有 `returns_path` 對應的月報酬檔時，重建 month × trial 矩陣並計算 PBO；沒有就明示無法計算。
+  - 匯入是冪等的：同一個 run 重新匯入會覆寫。
+  - 用 gs-MINT 官方範例 ledger 實測：5 個 trial ＋ 1 次準則變更，n_for_dsr = 6，冠軍為 `…coarse_006:D10:VW`。
+- **因子池**：可以從選單選取，開啟的粗圖以 `backtest.pool_factor` 呼叫 gs-zipline-tej 的 `run_factor_backtest`，把因子當選股濾網回測。
+  - 濾網參數（mode／direction／n／weighting／rebalance）是節點參數；改參數就是新的試驗。
+  - 實測 `forge_mom6_top200_w`：481 天，Sharpe 1.43。
+- **粗圖會依最新範本重新產生**，同時保留使用者存過的參數，所以舊策略也會出現新節點。
+- **UI**：「結果」面板新增「實驗」分頁（蒙地卡羅分布表＋扇形圖、MINT 彙總＋前 50 名 trial）；蒙地卡羅節點卡片顯示 Sharpe 分布摘要。
+- **刻意不做**：重複參數試驗，也就是自動跑參數網格。依 `live-strategy-graph.md` §5，那屬於 diagnostic 模式，會改變 N 的記帳規則，必須連同 `stat-ruleset-1.2` 一起修訂，不能只在程式裡實作。

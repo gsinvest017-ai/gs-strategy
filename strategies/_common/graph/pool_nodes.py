@@ -47,6 +47,19 @@ def pool_zipline(inputs, p, ctx):
     ctx.progress({'phase': 'backtest', 'completed': 0, 'total': 1})
     result = pool.run_backtest(window['strategy_id'], start=window['start'], end=window['end'],
                                capital_base=window['capital_base'])
+    return _outputs(result, ctx)
+
+
+def pool_factor(inputs, p, ctx):
+    """A Factor Pool bundle used as a stock-selection filter (gs-zipline-tej factor harness)."""
+    window = inputs['StrategyBundle']['window']
+    ctx.progress({'phase': 'backtest', 'completed': 0, 'total': 1})
+    result = pool.run_factor_backtest(window['strategy_id'], dict(p), start=window['start'], end=window['end'],
+                                      capital_base=window['capital_base'])
+    return _outputs(result, ctx)
+
+
+def _outputs(result, ctx):
     ctx.check_cancelled()
     if result.get('status') != 'ok' or not result.get('parquet_path'):
         raise GraphError('gs-zipline-tej 回測失敗，請在該 repo 的 dashboard 檢視錯誤')
@@ -89,3 +102,13 @@ def register_nodes(registry):
         'backtest.pool_zipline', {'StrategyBundle': 'StrategyBundle', 'StrategySpec': 'StrategySpec'},
         {'Returns': 'Returns', 'Positions': 'Positions', 'RunInfo': 'RunInfo'}, {},
         pool_zipline, dependencies=deps))
+    # Filter fields mirror gs-zipline-tej dashboard/factor_filter.py (validated there).
+    registry.register(NodeType(
+        'backtest.pool_factor', {'StrategyBundle': 'StrategyBundle', 'StrategySpec': 'StrategySpec'},
+        {'Returns': 'Returns', 'Positions': 'Positions', 'RunInfo': 'RunInfo'},
+        {'mode': param('string', 'long_only_topn', enum=['long_only_topn', 'long_short', 'threshold']),
+         'direction': param('string', 'high', enum=['high', 'low']),
+         'n': param('integer', 20, minimum=1, maximum=500),
+         'weighting': param('string', 'equal', enum=['equal', 'factor_proportional']),
+         'rebalance': param('string', 'monthly', enum=['daily', 'weekly', 'monthly'])},
+        pool_factor, dependencies=deps))

@@ -291,6 +291,17 @@ function Result({ state = {} }) {
       </div>
     );
   }
+  if (o.MonteCarlo) {
+    const m = o.MonteCarlo;
+    return (
+      <div className="scalar summary-card">
+        Sharpe 中位 {fmt(m.sharpe?.p50)}（5–95%：{fmt(m.sharpe?.p05)}～{fmt(m.sharpe?.p95)}）
+        <small>
+          {m.n_paths} 條路徑・P(Sharpe≤0) {fmt(m.prob_sharpe_le_0)}・MDD 中位 {fmt(m.max_drawdown?.p50)}・不增加 N
+        </small>
+      </div>
+    );
+  }
   if (o.LedgerN)
     return (
       <div className="ledger-result mono">
