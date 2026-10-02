@@ -31,6 +31,16 @@ def test_document_knowledge_time_fails_closed():
     assert not pit.visible(None, '2030-01-01')
 
 
+def test_registry_rejects_non_http_base_urls(tmp_path):
+    registry = tmp_path / 'models.yaml'
+    registry.write_text("models:\n  evil:\n    provider: openai\n    base_url: file:///etc\n"
+                        "    cutoff: '2025-01-31'\n", encoding='utf-8')
+    with pytest.raises(GraphError, match='http'):
+        pit.registry(registry)
+    with pytest.raises(GraphError, match='http'):
+        llm.OpenAICompatibleProvider({'base_url': 'file:///etc/passwd'}, {})
+
+
 def test_registry_entries_are_pinned_individually():
     names = pit.model_names()
     assert {'fixture-momentum', 'fixture-contrarian', 'qwen3-235b-2507', 'qwen3.8-27b'} <= set(names)

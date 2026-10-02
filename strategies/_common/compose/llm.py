@@ -24,6 +24,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 
 from strategies._common.graph.core import GraphError, canonical
 from . import pit
@@ -110,6 +111,10 @@ class FixtureProvider:
 
 class OpenAICompatibleProvider:
     def __init__(self, spec, document):
+        # pit.registry() already rejects non-HTTP(S) base URLs; re-check at the call
+        # site so no file:// or custom scheme can ever reach urllib.
+        if urlsplit(spec['base_url']).scheme not in ('http', 'https'):
+            raise GraphError('model base_url must be http(s)')
         self.base_url = spec['base_url'].rstrip('/')
         self.model = spec.get('api_model', '')
         self._document = document
@@ -123,7 +128,8 @@ class OpenAICompatibleProvider:
         last = None
         for attempt in range(3):
             try:
-                with urllib.request.urlopen(request, timeout=180) as response:
+                # Scheme is restricted to http(s) in __init__ and in pit.registry().
+                with urllib.request.urlopen(request, timeout=180) as response:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
                     payload = json.load(response)
                 message = payload['choices'][0]['message']
                 return {**normalize_message(message), 'usage': payload.get('usage') or {}}

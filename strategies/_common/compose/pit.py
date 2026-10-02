@@ -17,6 +17,7 @@ from __future__ import annotations
 from email.utils import parsedate_to_datetime
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pandas as pd
 import yaml
@@ -34,6 +35,8 @@ def _load(path, mtime):
     for name, spec in models.items():
         if spec.get('provider') not in ('fixture', 'openai'):
             raise GraphError(f'model {name}: unsupported provider')
+        if spec['provider'] == 'openai' and urlsplit(str(spec.get('base_url', ''))).scheme not in ('http', 'https'):
+            raise GraphError(f'model {name}: base_url must be http(s)')
         spec['cutoff'] = str(pd.Timestamp(str(spec['cutoff'])).date())
     return document
 

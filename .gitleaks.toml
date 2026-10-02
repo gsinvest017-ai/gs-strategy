@@ -1,0 +1,13 @@
+# gitleaks 自動讀取本檔（.github/workflows/secret-scan.yml 以 --source . 掃描）。
+# 預設規則全部保留，只放行 ledger 裡固定格式的 sha256 識別欄位：
+# backtest_key / graph_hash / config_sha256 是回測組態的內容 hash（64 位十六進位），
+# 不是金鑰，但 generic-api-key 規則會因欄位名含 "key" 而誤判。
+[extend]
+useDefault = true
+
+[allowlist]
+description = "graph ledger content hashes"
+regexTarget = "match"
+regexes = [
+  '''(?:backtest_key|graph_hash|config_sha256)"\s*:\s*"[0-9a-f]{64}"''',
+]
