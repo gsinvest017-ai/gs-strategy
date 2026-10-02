@@ -20,6 +20,7 @@ data/papers.db-journal
 data/pdfs/
 data/raw/
 data/cache/
+.claude/local/
 
 # pytest CI artifacts
 pytest-report.xml
@@ -28,3 +29,6 @@ pytest-report.xml
 # （2026-09-01：一次 `git add strategies/` 曾把 1436 個檔掃進 commit，
 #   而它們在別的分支不存在，切分支時被 git 刪掉，harness 就讀不到候選了。）
 strategies/_generated/
+
+# quantdata query cache (content-addressed, regenerable)
+data/qd_cache/

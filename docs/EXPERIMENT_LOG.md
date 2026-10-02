@@ -88,3 +88,399 @@
 | fed_feds | 15 | 2 | — |
 | aqr | 10 | 10 | — |
 | wiley | 28 | 28 | — |
+
+## Run @ 2026-05-27T22:30:12Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 23 | — |
+| nber | 35 | 5 | — |
+| repec | 58 | 13 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 22 | 22 | — |
+
+## Run @ 2026-05-28T22:47:51Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 0 | 0 | — |
+| nber | 35 | 5 | — |
+| repec | 58 | 13 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 22 | 22 | — |
+
+## Run @ 2026-05-29T22:39:24Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 26 | — |
+| nber | 35 | 5 | — |
+| repec | 58 | 13 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 23 | 23 | — |
+
+## Run @ 2026-05-30T22:30:11Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 26 | — |
+| nber | 35 | 5 | — |
+| repec | 58 | 13 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 23 | 23 | — |
+
+## Run @ 2026-05-31T22:30:12Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 26 | — |
+| nber | 35 | 5 | — |
+| repec | 58 | 13 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 23 | 23 | — |
+
+## Run @ 2026-06-01T22:30:14Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 28 | — |
+| nber | 35 | 4 | — |
+| repec | 58 | 13 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 24 | 24 | — |
+
+## Run @ 2026-06-02T22:30:12Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 29 | — |
+| nber | 35 | 4 | — |
+| repec | 48 | 7 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 24 | 24 | — |
+
+## Run @ 2026-06-03T22:30:25Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 29 | — |
+| nber | 35 | 4 | — |
+| repec | 48 | 7 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 24 | 24 | — |
+
+## Run @ 2026-06-04T22:54:24Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 0 | 0 | — |
+| nber | 35 | 4 | — |
+| repec | 48 | 7 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 24 | 24 | — |
+
+## Run @ 2026-06-05T22:30:14Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 27 | — |
+| nber | 35 | 4 | — |
+| repec | 48 | 7 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 25 | 25 | — |
+
+## Run @ 2026-06-06T22:47:07Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 0 | 0 | ReadTimeout: HTTPSConnectionPool(host='export.arxiv.org', port=443): Read timed  |
+| nber | 35 | 4 | — |
+| repec | 48 | 7 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 25 | 25 | — |
+
+## Run @ 2026-06-07T22:30:15Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 27 | — |
+| nber | 35 | 4 | — |
+| repec | 49 | 6 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 16 | 16 | — |
+
+## Run @ 2026-06-08T22:30:11Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 27 | — |
+| nber | 27 | 3 | — |
+| repec | 50 | 7 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 17 | 17 | — |
+
+## Run @ 2026-06-15T22:30:14Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 30 | — |
+| nber | 28 | 6 | — |
+| repec | 47 | 9 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 18 | 18 | — |
+
+## Run @ 2026-06-16T22:30:15Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 30 | — |
+| nber | 28 | 6 | — |
+| repec | 47 | 9 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 18 | 18 | — |
+
+## Run @ 2026-06-17T22:30:13Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 30 | — |
+| nber | 28 | 6 | — |
+| repec | 47 | 9 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 18 | 18 | — |
+
+## Run @ 2026-06-18T22:30:12Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 28 | — |
+| nber | 28 | 6 | — |
+| repec | 47 | 9 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 19 | 19 | — |
+
+## Run @ 2026-06-19T22:30:12Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 29 | — |
+| nber | 28 | 6 | — |
+| repec | 47 | 9 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 21 | 21 | — |
+
+## Run @ 2026-06-20T22:30:13Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 29 | — |
+| nber | 28 | 6 | — |
+| repec | 47 | 9 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 21 | 21 | — |
+
+## Run @ 2026-06-21T22:30:13Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 29 | — |
+| nber | 28 | 6 | — |
+| repec | 47 | 10 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 21 | 21 | — |
+
+## Run @ 2026-06-22T22:30:14Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 29 | — |
+| nber | 29 | 4 | — |
+| repec | 52 | 9 | — |
+| fed_feds | 15 | 2 | — |
+| aqr | 10 | 10 | — |
+| wiley | 21 | 21 | — |
+
+## Run @ 2026-06-23T22:30:16Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 22 | — |
+| nber | 29 | 4 | — |
+| repec | 61 | 17 | — |
+| fed_feds | 15 | 2 | — |
+| aqr | 10 | 10 | — |
+| wiley | 21 | 21 | — |
+
+## Run @ 2026-06-25T22:30:35Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 22 | — |
+| nber | 29 | 4 | — |
+| repec | 61 | 17 | — |
+| fed_feds | 15 | 2 | — |
+| aqr | 10 | 10 | — |
+| wiley | 21 | 21 | — |
+
+## Run @ 2026-06-30T22:30:25Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 27 | — |
+| nber | 22 | 4 | — |
+| repec | 53 | 17 | — |
+| fed_feds | 15 | 2 | — |
+| aqr | 10 | 10 | — |
+| wiley | 22 | 22 | — |
+
+## Run @ 2026-07-23T22:30:18Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 26 | — |
+| nber | 39 | 5 | — |
+| repec | 68 | 17 | — |
+| fed_feds | 15 | 2 | — |
+| aqr | 10 | 10 | — |
+| wiley | 20 | 20 | — |
+
+## Run @ 2026-07-24T22:30:17Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 27 | — |
+| nber | 39 | 5 | — |
+| repec | 65 | 14 | — |
+| fed_feds | 15 | 2 | — |
+| aqr | 10 | 10 | — |
+| wiley | 20 | 20 | — |
+
+## Run @ 2026-07-25T22:55:18Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 0 | 0 | ReadTimeout: HTTPSConnectionPool(host='export.arxiv.org', port=443): Read timed  |
+| nber | 39 | 5 | — |
+| repec | 65 | 14 | — |
+| fed_feds | 15 | 2 | — |
+| aqr | 10 | 10 | — |
+| wiley | 20 | 20 | — |
+
+## Run @ 2026-07-26T22:30:13Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 27 | — |
+| nber | 39 | 5 | — |
+| repec | 65 | 14 | — |
+| fed_feds | 15 | 2 | — |
+| aqr | 10 | 10 | — |
+| wiley | 20 | 20 | — |
+
+## Run @ 2026-08-15T22:30:20Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 33 | — |
+| nber | 22 | 5 | — |
+| repec | 37 | 6 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 17 | 17 | — |
+
+## Run @ 2026-08-16T22:30:16Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 33 | — |
+| nber | 22 | 5 | — |
+| repec | 37 | 6 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 17 | 17 | — |
+
+## Run @ 2026-08-17T22:30:12Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 32 | — |
+| nber | 42 | 5 | — |
+| repec | 62 | 16 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 18 | 18 | — |
+
+## Run @ 2026-08-18T22:30:15Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 29 | — |
+| nber | 42 | 5 | — |
+| repec | 62 | 16 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 18 | 18 | — |
+
+## Run @ 2026-08-19T22:30:14Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 25 | — |
+| nber | 42 | 5 | — |
+| repec | 62 | 16 | — |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 18 | 18 | — |
+
+## Run @ 2026-08-20T22:32:04Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 25 | — |
+| nber | 42 | 5 | — |
+| repec | 0 | 0 | ReadTimeout: HTTPSConnectionPool(host='nep.repec.org', port=443): Read timed out |
+| fed_feds | 15 | 3 | — |
+| aqr | 10 | 10 | — |
+| wiley | 18 | 18 | — |
+
+## Run @ 2026-08-24T22:30:19Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 25 | — |
+| nber | 26 | 1 | — |
+| repec | 57 | 8 | — |
+| fed_feds | 15 | 2 | — |
+| aqr | 10 | 10 | — |
+| wiley | 18 | 18 | — |
+
+## Run @ 2026-08-25T22:30:22Z
+
+| source | seen | kept | error |
+|--------|-----:|-----:|-------|
+| arxiv | 100 | 27 | — |
+| nber | 26 | 1 | — |
+| repec | 57 | 8 | — |
+| fed_feds | 15 | 2 | — |
+| aqr | 10 | 10 | — |
+| wiley | 18 | 18 | — |

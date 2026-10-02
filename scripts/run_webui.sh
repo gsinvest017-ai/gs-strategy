@@ -33,4 +33,4 @@ if [[ -n "${STALE_PIDS}" ]]; then
     sleep 1
 fi
 
-exec "${VENV_PY}" -m quant_crawler.webui --port "${PORT}" "$@"
+exec "${VENV_PY}" -m quant_crawler.webui --host "${HOST:-0.0.0.0}" --port "${PORT}" "$@"
