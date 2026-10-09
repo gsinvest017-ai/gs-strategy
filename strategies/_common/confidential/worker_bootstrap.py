@@ -1,6 +1,7 @@
 """Public container bootstrap. This module never receives broker secrets."""
 import contextlib
 import json
+import random
 import sys
 
 
@@ -19,8 +20,11 @@ def main():
         protocol_out.flush()
 
     setup = read()
-    if set(setup) != {'source', 'nonce'}:
+    if set(setup) != {'source', 'nonce', 'seed'} or type(setup['seed']) is not int or not 0 <= setup['seed'] < 2**64:
         raise ValueError('invalid setup')
+    # Initializes only the standard random module; untrusted code may override
+    # this or use other entropy sources. This is not deterministic enforcement.
+    random.seed(setup['seed'])
     namespace = {'__name__': '__strategy__'}
     with contextlib.redirect_stdout(sys.stderr):
         exec(compile(setup['source'], '<strategy>', 'exec'), namespace)

@@ -157,11 +157,14 @@ class DockerStreamingWorker:
             self.close()
             raise WorkerError('restricted worker failed') from None
 
-    def start(self, strategy_source: str, job_nonce: str):
+    def start(self, strategy_source: str, job_nonce: str, seed: int = 0):
+        """Initialize standard random only; arbitrary strategies may use other entropy."""
         if self.started or self.closed:
             raise WorkerError('restricted worker unavailable')
         if not isinstance(strategy_source, str) or not isinstance(job_nonce, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,128}', job_nonce):
             raise ValueError('strategy source and opaque nonce required')
+        if type(seed) is not int or not 0 <= seed < 2**64:
+            raise ValueError('seed must be an unsigned 64-bit integer')
         self.started = True
         self._nonce = job_nonce
         self._deadline = time.monotonic() + self.timeout
@@ -180,7 +183,7 @@ class DockerStreamingWorker:
             thread = threading.Thread(target=self._reader, args=(stream, stdout), daemon=True)
             thread.start()
             self._threads.append(thread)
-        response = self._exchange({'source': strategy_source, 'nonce': job_nonce})
+        response = self._exchange({'source': strategy_source, 'nonce': job_nonce, 'seed': seed})
         if response != {'nonce': job_nonce, 'ready': True} or type(response.get('ready')) is not bool:
             self.close()
             raise WorkerError('restricted worker failed')

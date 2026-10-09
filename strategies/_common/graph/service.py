@@ -258,7 +258,10 @@ class GraphService:
     def session(self):
         return {**self._session(), 'strategy': (self.graph or {}).get('strategy'),
                 'access_mode': 'isolated' if self.owner_subject is not None else 'legacy-shared',
-                'owner_subject': self.owner_subject, 'confidential_execution': False}
+                'owner_subject': self.owner_subject, 'confidential_execution': False,
+                'execution_assurance': 'research_only',
+                'confidential_verification': 'not_evaluated',
+                'external_pool_snapshot': 'not_pinned'}
 
     def authorize_strategy(self, strategy):
         if self.allowed_strategies is not None and strategy not in self.allowed_strategies:
@@ -627,6 +630,8 @@ class GraphService:
     def job(self, job_id):
         with self.lock:
             result = {**copy.deepcopy(self.jobs[job_id]),
+                      'execution_assurance': 'research_only',
+                      'confidential_verification': 'not_evaluated',
                       'node_states': {i: state['status'] for i, state in list(self.engine.states.items())}}
             if 'message' in result:
                 result['message'] = user_message(result['message'])

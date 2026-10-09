@@ -57,6 +57,23 @@ def test_protocol_iterations(local_protocol):
     assert worker.process.poll() is not None
 
 
+def test_standard_random_initialization_is_reproducible(local_protocol):
+    source = 'import random\ninitial = random.randrange(1000000)\ndef decide(history):\n return initial + random.randrange(1000000)'
+    def sample(seed):
+        with DockerStreamingWorker(IMAGE) as worker:
+            worker.start(source, NONCE, seed=seed)
+            return [worker.target([], seq, 2000000) for seq in range(3)]
+    assert sample(2**64 - 1) == sample(2**64 - 1)
+
+
+@pytest.mark.parametrize('seed', [True, -1, 2**64, 1.5, '1'])
+def test_seed_requires_unsigned_integer(seed):
+    worker = DockerStreamingWorker(IMAGE)
+    with pytest.raises(ValueError):
+        worker.start('def decide(history): return 0', NONCE, seed=seed)
+    assert worker.process is None
+
+
 def test_cleanup_uses_same_scrubbed_environment(local_protocol, monkeypatch):
     monkeypatch.setenv('DOCKER_HOST', 'tcp://wrong-daemon.invalid:1234')
     monkeypatch.setenv('STRATY_BROKER_SECRET_CANARY', 'never-in-worker')

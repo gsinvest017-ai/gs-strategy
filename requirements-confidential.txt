@@ -1,0 +1,2 @@
+# Trusted broker / researcher client only; never installed from strategy input.
+cryptography==49.0.0

@@ -11,6 +11,7 @@
 
 -r requirements.txt
 -r requirements-dev.txt
+-r requirements-confidential.txt
 -r requirements-rag.txt
 
 # Analysis stack used by strategies/_common/validation and quantdata.
