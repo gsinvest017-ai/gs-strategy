@@ -1,0 +1,28 @@
+name: confidential-verification
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sandbox-and-crypto:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install trusted test dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Resolve test runtime to an immutable local image
+        # This disposable CI image is not a production approval. Every broker
+        # request and worker is still bound to its resolved content digest.
+        run: |
+          docker pull python:3.12-slim
+          echo "STRATY_TEST_DOCKER_IMAGE=$(docker image inspect python:3.12-slim --format '{{.Id}}')" >> "$GITHUB_ENV"
+      - name: Exercise real sandbox and encrypted HTTP roundtrip
+        env:
+          STRATY_BROKER_SECRET_CANARY: ci-private-canary-not-a-real-secret
+        run: python -m pytest tests/test_graph_access.py tests/test_confidential*.py -q -rs

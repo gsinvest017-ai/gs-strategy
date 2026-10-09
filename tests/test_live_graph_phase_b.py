@@ -89,7 +89,11 @@ def test_new_http_routes_and_static_boundaries(tmp_path):
         assert call('/secret.txt')[0] == 404
         assert call('/', headers={'Host': 'evil.invalid'})[0] == 403
         assert call('/', headers={'Origin': 'https://evil.invalid'})[0] == 403
-        assert json.loads(call('/api/session')[1]) == {'fixture': False, 'label': '', 'active_job': None, 'strategy': 'tsmom_tx_mtx'}
+        assert json.loads(call('/api/session')[1]) == {
+            'fixture': False, 'label': '', 'active_job': None, 'strategy': 'tsmom_tx_mtx',
+            'access_mode': 'legacy-shared', 'owner_subject': None,
+            'confidential_execution': False, 'execution_assurance': 'research_only',
+            'confidential_verification': 'not_evaluated', 'external_pool_snapshot': 'not_pinned'}
         assert call('/api/run-estimate')[0] == 200
         assert call('/api/layout')[0] == 200
         assert call('/api/layout', {'positions': {'feature': {'x': 1, 'y': 2}}})[0] == 200

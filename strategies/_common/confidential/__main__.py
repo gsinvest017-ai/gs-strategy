@@ -9,7 +9,7 @@ import sys
 
 from . import crypto
 from .client import ClientError, pack_submission, verify_receipt, decrypt_result
-from .manifest import MAX_CONFIG_BYTES, MAX_SOURCE_BYTES, canonical_json, parse_json, sha256
+from .manifest import MAX_CONFIG_BYTES, MAX_SOURCE_BYTES, canonical_json, parse_json, sha256, trusted_package_fingerprint
 
 
 def _read(path, limit):
@@ -37,6 +37,8 @@ def _key(path):
 def main(argv=None):
     parser = argparse.ArgumentParser(description='StratyUI confidential local client')
     commands = parser.add_subparsers(dest='command', required=True)
+    measure = commands.add_parser('measure', help='measure installed broker package; does not approve it')
+    measure.add_argument('--image', required=True)
     generate = commands.add_parser('keygen')
     generate.add_argument('--kind', choices=('ed25519', 'x25519'), required=True)
     generate.add_argument('--private-out', type=Path, required=True)
@@ -62,7 +64,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         summary = {}
-        if args.command == 'keygen':
+        if args.command == 'measure':
+            summary = {'engine_sha256': trusted_package_fingerprint(Path(__file__).parent, args.image)}
+        elif args.command == 'keygen':
             if (args.private_out.resolve() == args.public_out.resolve() or
                     args.private_out.exists() or args.public_out.exists()):
                 raise ClientError('output already exists')
