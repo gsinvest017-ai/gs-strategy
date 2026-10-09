@@ -6,13 +6,15 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit, unquote
 
 from .core import GraphError
+from .access import AccessDenied
 from .service import GraphConflict, json_value, restore_sidecar, user_message
 
 
 class GraphHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
-    def __init__(self, address, service, ui_dist=None, public_hosts=()):
+    def __init__(self, address, service, ui_dist=None, public_hosts=(), access=None):
         self.service = service
+        self.access = access
         self.ui_dist = Path(ui_dist).resolve() if ui_dist else None
         # Names a trusted reverse proxy (e.g. Caddy + OIDC on the LAN) serves us
         # under. The socket itself stays bound to loopback; these only widen the
@@ -59,6 +61,8 @@ class Handler(BaseHTTPRequestHandler):
             # Identity is only trusted from the proxy, which strips client-sent copies
             # of this header before oauth2-proxy sets it (wiki-poc oidc_guard).
             actor = self.headers.get('X-Auth-Request-Email') if public else None
+            if self.server.access is not None:
+                actor, s = self.server.access.authenticate(self.headers, self.client_address[0])
             body = {}
             if mutation:
                 if self.headers.get_content_type() != 'application/json':
@@ -150,6 +154,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(data)
                     return
             return self.reply(404, {'error': 'unknown endpoint'})
+        except AccessDenied:
+            return self.reply(403, {'error': 'access denied'})
         except GraphConflict as exc:
             return self.reply(409, {'code': exc.code, 'error': str(exc), 'revision': exc.revision})
         except GraphError as exc:
