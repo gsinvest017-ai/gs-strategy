@@ -231,9 +231,18 @@ class GraphConflict(GraphError):
 
 
 class GraphService:
-    def __init__(self, root, *, registry=None, cache_dir=None, ledger_path=None):
+    def __init__(self, root, *, registry=None, cache_dir=None, ledger_path=None,
+                 owner_subject=None, allowed_strategies=None, allowed_node_types=None, source_root=None):
         self.root = Path(root).resolve()
+        self.owner_subject = owner_subject
+        self.allowed_strategies = None if allowed_strategies is None else frozenset(allowed_strategies)
+        self.allowed_node_types = None if allowed_node_types is None else frozenset(allowed_node_types)
+        self.source_root = Path(source_root).resolve() if source_root else self.root
         self.registry = registry or default_registry()
+        if owner_subject is not None:
+            if self.allowed_strategies is None or self.allowed_node_types is None or cache_dir or ledger_path:
+                raise ValueError('isolated service requires explicit grants and private storage')
+            self.registry.types = {k: v for k, v in self.registry.types.items() if k in self.allowed_node_types}
         self.engine = Engine(self.registry, cache_dir or self.root / '.cache/live-strategy-graph')
         self.ledger = SelectionLedger(ledger_path or self.root / 'log/trials.jsonl')
         self.revision = 0
@@ -247,7 +256,33 @@ class GraphService:
         self.fixture = False
 
     def session(self):
-        return {**self._session(), 'strategy': (self.graph or {}).get('strategy')}
+        return {**self._session(), 'strategy': (self.graph or {}).get('strategy'),
+                'access_mode': 'isolated' if self.owner_subject is not None else 'legacy-shared',
+                'owner_subject': self.owner_subject, 'confidential_execution': False,
+                'execution_assurance': 'research_only',
+                'confidential_verification': 'not_evaluated',
+                'external_pool_snapshot': 'not_pinned'}
+
+    def authorize_strategy(self, strategy):
+        if self.allowed_strategies is not None and strategy not in self.allowed_strategies:
+            from .access import AccessDenied
+            raise AccessDenied()
+
+    def authorize_graph(self, graph):
+        if self.allowed_strategies is None:
+            return
+        self.authorize_strategy(graph.get('strategy'))
+        for node in graph.get('nodes', []):
+            if node.get('type') not in self.allowed_node_types:
+                from .access import AccessDenied
+                raise AccessDenied()
+            if node.get('type') == 'data.pool_strategy':
+                self.authorize_strategy(node.get('params', {}).get('strategy_id'))
+            for key, value in node.get('params', {}).items():
+                if key.endswith(('_path', '_dir')) and isinstance(value, str):
+                    if not (self.root / value).resolve().is_relative_to(self.root):
+                        from .access import AccessDenied
+                        raise AccessDenied()
 
     def _session(self):
         with self.lock:
@@ -269,24 +304,40 @@ class GraphService:
         return {'graph_hash': document_hash, 'revision': revision, **self.estimate_prepared(graph)}
 
     def prepare(self, graph):
+        graph = self.registry.normalize(graph)[0]
+        self.authorize_graph(graph)
         with quiet_worker_output():
             return prepare_any(graph)
 
     def strategies(self, refresh=False):
         from strategies._common import pool
         listing = pool.pool(refresh=refresh)
+        if self.allowed_strategies is not None:
+            listing = {key: [dict(row) for row in listing.get(key, []) if row['id'] in self.allowed_strategies]
+                       for key in ('strategies', 'factors')}
         current = (self.graph or {}).get('strategy')
         return {**listing, 'current': current, 'fixture': bool(getattr(self, 'fixture', False))}
 
     def select_strategy(self, strategy_id, *, expected_revision=_UNSET):
         """Open a pool strategy: its own graph when it ships one, else a coarse graph."""
         from strategies._common import pool
+        self.authorize_strategy(strategy_id)
         if getattr(self, 'fixture', False):
             raise GraphError('測試資料模式只能檢視目前的圖，切換策略請用真實模式啟動')
         meta = pool.entry(strategy_id)
         if not meta.get('selectable'):
             raise GraphError('此策略 id 無法開啟')
         relative = meta.get('graph_path')
+        if relative and self.owner_subject is not None:
+            target = self.confined(relative)
+            if not target.exists():
+                source = (self.source_root / relative).resolve()
+                if not source.is_relative_to(self.source_root / 'strategies'):
+                    raise GraphError('path must be inside workspace')
+                graph = json.loads(source.read_text(encoding='utf-8'))
+                graph = self.registry.normalize(graph)[0]
+                self.authorize_graph(graph)
+                write_json(target, graph)
         if not relative:
             relative = f'strategies/_pool/{strategy_id}/graph.json'
             target = self.confined(relative)
@@ -405,9 +456,11 @@ class GraphService:
 
     def set_graph(self, graph, path=None, *, saved=False, expected_revision=_UNSET):
         with self.lock:
+            self.authorize_graph(graph)
             self.check_revision(expected_revision)
             self.idle()
             graph = self.registry.normalize(graph)[0]
+            self.authorize_graph(graph)
             new_path = self.confined(path) if path is not None else self.path
             self.graph = graph
             self.revision += 1
@@ -485,6 +538,7 @@ class GraphService:
                 raise GraphError('unknown node')
             node['params'].update(params)
             graph = self.registry.normalize(graph)[0]
+            self.authorize_graph(graph)
             self.engine.invalidate(graph, node_id)
             self.graph = graph
             self.revision += 1
@@ -492,6 +546,7 @@ class GraphService:
 
     def start(self, preview=False, *, expected_revision=_UNSET, expected_backtest_key=_UNSET, actor=None):
         with self.lock:
+            actor = self.owner_subject if self.owner_subject is not None else actor
             self.check_revision(expected_revision)
             self.idle()
             if self.graph is None:
@@ -505,7 +560,8 @@ class GraphService:
                 if expected_backtest_key != self.estimate_prepared(prepared_run)['backtest_key']:
                     raise GraphConflict('run_estimate_conflict', self.revision)
             job_id = uuid.uuid4().hex
-            job = {'id': job_id, 'status': 'running', 'preview': preview, 'progress': {}}
+            job = {'id': job_id, 'status': 'running', 'preview': preview, 'progress': {},
+                   'owner_subject': self.owner_subject}
             document_hash = self.engine.identity(graph)[0]
             def progress(value):
                 job.update(progress=value)
@@ -539,7 +595,7 @@ class GraphService:
                     if prepared_run is not None:
                         prepared = prepared_run
                     else:
-                        prepared = prepare_any(graph)
+                        prepared = self.prepare(graph)
                     values = self.engine.run(prepared, preview=preview, context=ctx)
                     inspected = {n['id'] for n in prepared['nodes'] if not preview or not n['type'].startswith(('backtest.', 'ledger.', 'validation.', 'stat.'))}
                     errors = [state for node_id, state in self.engine.states.items() if node_id in inspected and state['status'] in ('error','not_ready')]
@@ -574,6 +630,8 @@ class GraphService:
     def job(self, job_id):
         with self.lock:
             result = {**copy.deepcopy(self.jobs[job_id]),
+                      'execution_assurance': 'research_only',
+                      'confidential_verification': 'not_evaluated',
                       'node_states': {i: state['status'] for i, state in list(self.engine.states.items())}}
             if 'message' in result:
                 result['message'] = user_message(result['message'])

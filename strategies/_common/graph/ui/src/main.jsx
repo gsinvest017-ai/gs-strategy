@@ -18,6 +18,7 @@ import "@fontsource/noto-sans-tc/400.css";
 import "./style.css";
 import { Replay } from "./Replay";
 import { StrategyMenu, Results } from "./Pool";
+import { Confidential } from "./Confidential";
 import {
   api,
   compatible,
@@ -704,6 +705,7 @@ function App() {
     [showLoad, setShowLoad] = useState(false),
     [showReplay, setShowReplay] = useState(false),
     [showResults, setShowResults] = useState(false),
+    [showConfidential, setShowConfidential] = useState(false),
     [revision, setRevision] = useState(0),
     [flash, setFlash] = useState(false);
   const flow = useRef(null);
@@ -1172,6 +1174,7 @@ function App() {
         <button data-testid="results" onClick={() => setShowResults(true)}>
           結果
         </button>
+        <button data-testid="confidential" onClick={() => setShowConfidential(true)}>機密回測</button>
         {doc?.graph?.nodes?.some((n) => n.type === "agent.llm_view") && (
           <button data-testid="replay" onClick={() => setShowReplay(true)}>
             回放
@@ -1366,6 +1369,7 @@ function App() {
         )}
       </div>
       {showReplay && <Replay close={() => setShowReplay(false)} revision={revision} />}
+      {showConfidential && <Confidential close={() => setShowConfidential(false)} />}
       {showResults && (
         <Results strategy={doc?.graph?.strategy} close={() => setShowResults(false)} revision={revision} />
       )}
