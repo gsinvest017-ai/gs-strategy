@@ -12,9 +12,12 @@ from .service import GraphConflict, json_value, restore_sidecar, user_message
 
 class GraphHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
-    def __init__(self, address, service, ui_dist=None, public_hosts=(), access=None):
+    def __init__(self, address, service, ui_dist=None, public_hosts=(), access=None, broker=None):
+        if broker is not None and access is None:
+            raise ValueError('confidential broker requires authenticated workspace access')
         self.service = service
         self.access = access
+        self.broker = broker
         self.ui_dist = Path(ui_dist).resolve() if ui_dist else None
         # Names a trusted reverse proxy (e.g. Caddy + OIDC on the LAN) serves us
         # under. The socket itself stays bound to loopback; these only widen the
@@ -70,12 +73,30 @@ class Handler(BaseHTTPRequestHandler):
                 length = int(self.headers.get('Content-Length', '0'))
                 if not 0 < length <= 2_000_000:
                     return self.reply(413, {'error': 'JSON body required; maximum 2 MB'})
-                body = json.loads(self.rfile.read(length))
+                raw = self.rfile.read(length)
+                if urlsplit(self.path).path.startswith('/api/confidential/'):
+                    from strategies._common.confidential.manifest import parse_json
+                    body = parse_json(raw)
+                else:
+                    body = json.loads(raw)
                 if not isinstance(body, dict):
                     raise GraphError('body must be an object')
             url = urlsplit(self.path)
             parts = url.path.strip('/').split('/')
             query = parse_qs(url.query)
+            if parts[:2] == ['api', 'confidential']:
+                broker = self.server.broker
+                if broker is None:
+                    return self.reply(404, {'error': 'confidential broker unavailable'})
+                if not mutation and parts == ['api', 'confidential', 'capabilities']:
+                    return self.reply(200, broker.capabilities(actor))
+                if mutation and parts == ['api', 'confidential', 'jobs']:
+                    return self.reply(202, broker.submit(actor, body))
+                if not mutation and len(parts) == 4 and parts[:3] == ['api', 'confidential', 'jobs']:
+                    return self.reply(200, broker.status(actor, parts[3]))
+                if not mutation and len(parts) == 5 and parts[:3] == ['api', 'confidential', 'jobs'] and parts[4] == 'result':
+                    return self.reply(200, broker.result(actor, parts[3]))
+                return self.reply(404, {'error': 'unknown confidential endpoint'})
             if not mutation and parts == ['api','session']:
                 return self.reply(200, s.session())
             if not mutation and parts == ['api','run-estimate']:

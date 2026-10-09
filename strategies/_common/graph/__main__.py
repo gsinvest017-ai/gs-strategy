@@ -13,11 +13,14 @@ from strategies._common.validation.decision import UnderdeterminedError
 def serve_ui(args):
     from .fixture import fixture_service, close_fixture
     from .output_guard import quiet_worker_output
-    service = server = access = None
+    service = server = access = broker = None
     try:
         with quiet_worker_output():
             if args.access_policy:
                 access = WorkspaceServices(args.access_policy)
+                if args.broker_policy:
+                    from strategies._common.confidential.broker import Broker
+                    broker = Broker(args.broker_policy)
             elif args.fixture:
                 service = fixture_service(Path(__file__).resolve().parents[3], args.graph)
             else:
@@ -30,7 +33,7 @@ def serve_ui(args):
                     # endpoint so its controlled edge error remains reviewable.
                     pass
             server = GraphHTTPServer(('127.0.0.1', args.port), service, public_hosts=args.public_host,
-                                     ui_dist=Path(__file__).parent / 'ui' / 'dist', access=access)
+                                     ui_dist=Path(__file__).parent / 'ui' / 'dist', access=access, broker=broker)
         print(f'Live Strategy Graph UI: http://127.0.0.1:{server.server_port}', flush=True)
         server.serve_forever()
         return 0
@@ -44,6 +47,8 @@ def serve_ui(args):
             server.server_close()
         if access is not None:
             access.close()
+        if broker is not None:
+            broker.close()
         if service is not None:
             if service.active:
                 service._token.cancel()
@@ -68,9 +73,13 @@ def main(argv=None):
     parser.add_argument('--fixture', action='store_true')
     parser.add_argument('--access-policy', type=Path,
                         help='admin-owned straty-access/1 policy; enables isolated authenticated workspaces')
+    parser.add_argument('--broker-policy', type=Path,
+                        help='admin-owned straty-broker/1 policy; requires --access-policy')
     parser.add_argument('--public-host', action='append', default=[], metavar='NAME',
                         help='name a trusted reverse proxy serves this UI under (still binds 127.0.0.1)')
     args = parser.parse_args(argv)
+    if args.broker_policy and not args.access_policy:
+        parser.error('--broker-policy 必須搭配 --access-policy')
     if args.access_policy and (args.command not in ('ui', 'serve') or args.fixture or args.root or args.cache_dir or args.ledger):
         parser.error('--access-policy 僅適用於 ui/serve，且不可混用共享儲存位置或 fixture')
     import re
@@ -87,7 +96,11 @@ def main(argv=None):
         print(json.dumps(service.registry.describe(),ensure_ascii=False))
         return 0
     if args.command == 'serve':
-        server = GraphHTTPServer(('127.0.0.1',args.port),service,public_hosts=args.public_host,access=access)
+        broker = None
+        if args.broker_policy:
+            from strategies._common.confidential.broker import Broker
+            broker = Broker(args.broker_policy)
+        server = GraphHTTPServer(('127.0.0.1',args.port),service,public_hosts=args.public_host,access=access,broker=broker)
         print(f'Live Strategy Graph API: http://127.0.0.1:{server.server_port}',flush=True)
         try:
             server.serve_forever()
@@ -98,6 +111,8 @@ def main(argv=None):
             server.server_close()
             if access is not None:
                 access.close()
+            if broker is not None:
+                broker.close()
         return 0
     try:
         service.load(args.graph)
