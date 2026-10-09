@@ -112,7 +112,11 @@ def test_login_required_and_no_header_impersonation(running):
     assert request(server)[0] == 401
     assert request(server, headers={'X-Straty-Subject': 'kevin2-local', 'X-Straty-Proxy-Token': 'p' * 40})[0] == 401
     assert request(server, path='/')[0] == 303
-    assert request(server, path='/login')[0] == 200
+    status, headers, body = request(server, path='/login')
+    assert status == 200
+    # no-referrer turns browser form POST Origin into null, failing CSRF validation.
+    assert headers['Referrer-Policy'] == 'same-origin'
+    assert "form-action 'self'" in headers['Content-Security-Policy']
     assert received == []
 
 

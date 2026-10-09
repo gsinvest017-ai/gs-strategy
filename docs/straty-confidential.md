@@ -197,7 +197,7 @@ cookie，API 另要求 origin 專屬 session proof，防止僅取得其他 local
 目前憑證與金鑰註冊有效期為 90 天，須在 2027-01-07 前完成輪替並重新分發信任 pins。
 憑證指紋：`75BDCEF8A2514E03F4011102C92FC9948C771F9E`。
 部署 release：`/opt/straty/releases/9a12134-kevin2`（含本 PR 的 gateway 更新，名稱非完整版本證明）。
-實際批准的 engine digest：`9167a65409f378942cd277160f3cb62a95c1e2d3e5a74d7209a858349d6cd76a`。
+實際批准的 engine digest：`9eccfdd089da975e0050a3d1ac4d5356f748535fa2ed7f1e0a4d54597bf66bf6`。
 Docker image：`sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f`。
 改動執行程式後須重新核定 engine digest，不能只改目錄名稱或跳過 pin 比對。
 
