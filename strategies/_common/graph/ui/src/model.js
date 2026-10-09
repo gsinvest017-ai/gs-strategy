@@ -142,14 +142,20 @@ export const positions = {
   facts: { x: 1120, y: 295 },
   resolve: { x: 1120, y: 690 },
 };
+export function sessionHeaders() {
+  try {
+    const proof = globalThis.sessionStorage?.getItem("straty_session_proof");
+    return proof ? { "X-Straty-Session-Proof": proof } : {};
+  } catch { return {}; }
+}
 export async function api(path, body) {
   const r = await fetch(
     "/api" + path,
     body === undefined
-      ? {}
+      ? { headers: sessionHeaders() }
       : {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...sessionHeaders() },
           body: JSON.stringify(body),
         },
   );

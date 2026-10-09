@@ -175,3 +175,56 @@ UI 另跑現有 npm test 與 npm run build。
 AGENTS.md 的 L3 規則確認：批准 release 與 image、研究員 subject/公鑰、資料快照、
 專用服務帳號/ACL、OIDC header 映射與 HTTPS，再於維護窗口切換。舊部署保留供回退。
 現有前端 lockfile 的 source-map-js advisory 應另外處理；此次未改動其依賴版本。
+
+## Kevin2 本機部署（2026-10-09 已驗收）
+
+Kevin2 已建立獨立 WSL2 `Straty-Kevin2`，Docker 與兩個 systemd 服務已啟用。
+入口是 https://127.0.0.1:9113/；原 Kevin PC 正式服務未切換。
+Windows 登入後，Startup 的 `Straty Kevin2.lnk` 啟動此 distro；不承諾登入前提供服務。
+
+目前採單一研究員 `kevin2-local`，不是多人 OIDC 部署。登入密碼位於
+`%LOCALAPPDATA%\Straty\Kevin2\researcher\login.secret`；研究員私鑰、公開信任 pins
+與解密結果同在該目錄，ACL 僅允許目前 Windows 使用者、SYSTEM 和 Administrators。
+請勿把密碼或私鑰貼到 PR、聊天或一般共享目錄。
+
+Gateway 與 broker 使用不同 Linux 帳號；gateway 無 Docker 權限，也不能讀 broker 私鑰。
+研究員預設 Linux 帳號不能讀上述私鑰或 Docker socket。WSL 的 Windows 磁碟自動掛載、
+interop 已關閉。Windows/WSL 管理員及 broker/Docker daemon 仍屬可信邊界。
+Gateway 到 broker 的 HTTPS 連線驗證憑證及 hostname；瀏覽器登入使用 Secure/HttpOnly
+cookie，API 另要求 origin 專屬 session proof，防止僅取得其他 localhost port cookie
+的服務讀取研究資料。沒有提供 Windows 管理員防護或硬體 enclave 保證。
+
+目前憑證與金鑰註冊有效期為 90 天，須在 2027-01-07 前完成輪替並重新分發信任 pins。
+憑證指紋：`75BDCEF8A2514E03F4011102C92FC9948C771F9E`。
+部署 release：`/opt/straty/releases/9a12134-kevin2`（含本 PR 的 gateway 更新，名稱非完整版本證明）。
+實際批准的 engine digest：`9167a65409f378942cd277160f3cb62a95c1e2d3e5a74d7209a858349d6cd76a`。
+Docker image：`sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f`。
+改動執行程式後須重新核定 engine digest，不能只改目錄名稱或跳過 pin 比對。
+
+驗收資料為本機既有 TAIFEX MTX 202609 合約一般時段，2026-08-20 至 2026-09-08，
+共 14 根日線；來源四份 CSV 已與既有雜湊及 OHLC 紀錄核對。
+資料 digest：`9b425e38f3239bd8b5e9b0c01ebc1dd0e7cea5a36a6e706a1c9c38047dc6469b`。
+使用預定多空/空手循環測試策略驗證完整管線，不是 alpha 或 OOS 測試；
+手續費、滑價與保證金是驗收假設，未宣稱為交易所現行費率。
+未重新向官方下載驗證資料，亦不建模夜盤內保證金路徑。
+
+實際工作 `8e66d88de47f4d9db9bec28dd3d46e2b` 已完成 HTTPS 登入、簽署密文提交、
+真 Docker 執行、可信帳務、加密結果、簽署收據及研究員端驗簽解密。
+execution=succeeded、verification=passed、delivery=available；research_qualification=not_evaluated。
+完整 Linux 機密/身分 suite：238 passed、零 skipped；前端 31 tests 與 build 通過。
+
+本機工作區 `artifacts/kevin2-confidential-20261009/run_kevin2.py` 為研究員端提交工具，
+使用 `--source PATH --config PATH --decrypt` 明確儲存驗簽後的明文。
+驗收結果位於研究員私有目錄的
+`jobs/8955c7d4147141bca3b19425efc937d4/verified-result.json`。
+
+管理員可用下列指令檢查或重新啟動（不刪除資料與防重放 ledger）：
+
+```powershell
+wsl -d Straty-Kevin2 -u root --exec systemctl status straty-broker straty-gateway --no-pager
+wsl -d Straty-Kevin2 -u root --exec systemctl restart straty-broker straty-gateway
+```
+
+Broker 設定在 `/etc/straty/broker`，gateway 在 `/etc/straty/gateway`，
+密文 store 在 `/var/lib/straty-broker/private`。備份需包含金鑰與 ledger 並限制存取。
+停用本機入口時停止兩個服務並停用對應 Startup 捷徑；不要刪除歷史金鑰與 ledger。

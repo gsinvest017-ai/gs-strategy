@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { api } from "./model";
+import { api, sessionHeaders } from "./model";
 import "./Confidential.css";
 
 export const MAX_SUBMISSION_BYTES = 1000000;
@@ -54,7 +54,7 @@ export function Confidential({ close }) {
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
-    fetch("/api/confidential/capabilities").then(async (response) => {
+    fetch("/api/confidential/capabilities", { headers: sessionHeaders() }).then(async (response) => {
       if ([401, 403, 404].includes(response.status)) {
         if (mounted.current) setAvailability("disabled");
         return;
@@ -85,14 +85,14 @@ export function Confidential({ close }) {
     if (!file || file.size > MAX_SUBMISSION_BYTES) throw new Error("invalid file");
     const raw = validateSubmission(await file.text());
     const response = await fetch("/api/confidential/jobs", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: raw,
+      method: "POST", headers: { "Content-Type": "application/json", ...sessionHeaders() }, body: raw,
     });
     if (!response.ok) throw new Error("submission failed");
     retain(await response.json());
     if (mounted.current) setFile(null);
   });
   const download = () => action(async () => {
-    const response = await fetch(`/api/confidential/jobs/${encodeURIComponent(job.id)}/result`);
+    const response = await fetch(`/api/confidential/jobs/${encodeURIComponent(job.id)}/result`, { headers: sessionHeaders() });
     if (!response.ok) throw new Error("result unavailable");
     const raw = await response.text();
     const result = JSON.parse(raw);

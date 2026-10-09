@@ -2,12 +2,22 @@
 import argparse
 import json
 from pathlib import Path
+import ssl
 
 from .api import GraphHTTPServer
 from .service import GraphService, json_value, user_message
 from .core import GraphError
 from .access import WorkspaceServices
 from strategies._common.validation.decision import UnderdeterminedError
+
+
+def configure_tls(server, args):
+    if args.tls_cert:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(args.tls_cert, args.tls_key)
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+    return 'https' if args.tls_cert else 'http'
 
 
 def serve_ui(args):
@@ -34,7 +44,8 @@ def serve_ui(args):
                     pass
             server = GraphHTTPServer(('127.0.0.1', args.port), service, public_hosts=args.public_host,
                                      ui_dist=Path(__file__).parent / 'ui' / 'dist', access=access, broker=broker)
-        print(f'Live Strategy Graph UI: http://127.0.0.1:{server.server_port}', flush=True)
+            scheme = configure_tls(server, args)
+        print(f'Live Strategy Graph UI: {scheme}://127.0.0.1:{server.server_port}', flush=True)
         server.serve_forever()
         return 0
     except KeyboardInterrupt:
@@ -75,9 +86,13 @@ def main(argv=None):
                         help='admin-owned straty-access/1 policy; enables isolated authenticated workspaces')
     parser.add_argument('--broker-policy', type=Path,
                         help='admin-owned straty-broker/1 policy; requires --access-policy')
+    parser.add_argument('--tls-cert', type=Path, help='server certificate chain for a TLS listener')
+    parser.add_argument('--tls-key', type=Path, help='private TLS key readable only by the service')
     parser.add_argument('--public-host', action='append', default=[], metavar='NAME',
                         help='name a trusted reverse proxy serves this UI under (still binds 127.0.0.1)')
     args = parser.parse_args(argv)
+    if bool(args.tls_cert) != bool(args.tls_key) or (args.tls_cert and args.command not in ('ui', 'serve')):
+        parser.error('--tls-cert/--tls-key 必須成對提供，且僅適用 ui/serve')
     if args.broker_policy and not args.access_policy:
         parser.error('--broker-policy 必須搭配 --access-policy')
     if args.access_policy and (args.command not in ('ui', 'serve') or args.fixture or args.root or args.cache_dir or args.ledger):
@@ -101,7 +116,8 @@ def main(argv=None):
             from strategies._common.confidential.broker import Broker
             broker = Broker(args.broker_policy)
         server = GraphHTTPServer(('127.0.0.1',args.port),service,public_hosts=args.public_host,access=access,broker=broker)
-        print(f'Live Strategy Graph API: http://127.0.0.1:{server.server_port}',flush=True)
+        scheme = configure_tls(server, args)
+        print(f'Live Strategy Graph API: {scheme}://127.0.0.1:{server.server_port}',flush=True)
         try:
             server.serve_forever()
         except KeyboardInterrupt:
